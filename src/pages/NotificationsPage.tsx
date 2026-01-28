@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck, Trash2, Settings, Mail, Filter, FileText, Clock, ChevronRight, ChevronDown, FolderKanban, Receipt, Eye, Send, AlertTriangle, DollarSign, UserPlus, Rocket, TestTube, Smartphone, Sparkles, RefreshCw } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, Settings, Mail, Filter, FileText, Clock, ChevronRight, ChevronDown, FolderKanban, Receipt, Eye, Send, AlertTriangle, DollarSign, UserPlus, Rocket, TestTube, Smartphone, Sparkles, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { notificationsApi } from '../lib/api';
 import { NotificationService } from '../lib/notificationService';
@@ -123,7 +123,7 @@ export default function NotificationsPage() {
   // INSTANT LOADING: Start with false, render cached data immediately
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'proposals' | 'projects' | 'invoices' | 'settings'>('proposals');
+  const [activeTab, setActiveTab] = useState<'proposals' | 'projects' | 'invoices' | 'collaborations' | 'settings'>('proposals');
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['proposals', 'invoices', 'projects', 'other']));
@@ -274,6 +274,9 @@ export default function NotificationsPage() {
     if (type.includes('task_assigned')) return <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><CheckCheck className="w-5 h-5 text-blue-600" /></div>;
     if (type.includes('project')) return <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0"><FolderKanban className="w-5 h-5 text-purple-600" /></div>;
     
+    // Collaborations
+    if (type.includes('collaboration')) return <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center shrink-0"><Users className="w-5 h-5 text-teal-600" /></div>;
+    
     // Other
     if (type.includes('client')) return <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><UserPlus className="w-5 h-5 text-blue-600" /></div>;
     
@@ -286,6 +289,7 @@ export default function NotificationsPage() {
     if (activeTab === 'proposals') categoryNotifs = notifications.filter(n => n.type?.includes('proposal'));
     else if (activeTab === 'projects') categoryNotifs = notifications.filter(n => n.type?.includes('project'));
     else if (activeTab === 'invoices') categoryNotifs = notifications.filter(n => n.type?.includes('invoice'));
+    else if (activeTab === 'collaborations') categoryNotifs = notifications.filter(n => n.type?.includes('collaboration'));
     return filter === 'unread' ? categoryNotifs.filter(n => !n.is_read) : categoryNotifs;
   };
   const filteredNotifications = getCategoryNotifications();
@@ -414,6 +418,20 @@ export default function NotificationsPage() {
           {notifications.filter(n => n.type?.includes('invoice') && !n.is_read).length > 0 && (
             <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
               {notifications.filter(n => n.type?.includes('invoice') && !n.is_read).length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('collaborations')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'collaborations' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          Collaborations
+          {notifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length > 0 && (
+            <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+              {notifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length}
             </span>
           )}
         </button>
