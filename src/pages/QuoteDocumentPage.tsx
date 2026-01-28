@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info } from 'lucide-react';
+import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, Quote, Client, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -2488,8 +2488,8 @@ export default function QuoteDocumentPage() {
                 </div>
               </div>
               
-              {/* Pending Collaborators List */}
-              {pendingCollaborators.length > 0 && (
+              {/* Pending Collaborators List (hide after invitations sent) */}
+              {pendingCollaborators.length > 0 && !invitationsSent && (
                 <div className="mb-6">
                   <h4 className="text-sm font-medium text-neutral-700 mb-3">Invited Collaborators</h4>
                   <div className="space-y-2">
@@ -2516,26 +2516,28 @@ export default function QuoteDocumentPage() {
                 </div>
               )}
 
-              {/* Info Box - Context-aware */}
-              <div className={`rounded-lg p-4 mb-6 flex gap-3 ${pendingCollaborators.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-blue-50 border border-blue-100'}`}>
-                <Info className={`w-5 h-5 flex-shrink-0 mt-0.5 ${pendingCollaborators.length > 0 ? 'text-amber-500' : 'text-blue-500'}`} />
-                <p className={`text-sm ${pendingCollaborators.length > 0 ? 'text-amber-700' : 'text-blue-700'}`}>
-                  {pendingCollaborators.length > 0 ? (
-                    <>
-                      <strong>Next step:</strong> Click "Save & Send Invitations" below to invite {pendingCollaborators.length} collaborator{pendingCollaborators.length > 1 ? 's' : ''}. 
-                      Once they submit their quotes, you'll be able to merge everything and send the final proposal to your client.
-                    </>
-                  ) : (
-                    <>
-                      <strong>How it works:</strong> Add collaborators who need to provide pricing for parts of this project. 
-                      They'll receive an email, submit their quotes, and you can merge everything into one proposal.
-                    </>
-                  )}
-                </p>
-              </div>
+              {/* Info Box - Context-aware (hide after invitations sent) */}
+              {!invitationsSent && (
+                <div className={`rounded-lg p-4 mb-6 flex gap-3 ${pendingCollaborators.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-blue-50 border border-blue-100'}`}>
+                  <Info className={`w-5 h-5 flex-shrink-0 mt-0.5 ${pendingCollaborators.length > 0 ? 'text-amber-500' : 'text-blue-500'}`} />
+                  <p className={`text-sm ${pendingCollaborators.length > 0 ? 'text-amber-700' : 'text-blue-700'}`}>
+                    {pendingCollaborators.length > 0 ? (
+                      <>
+                        <strong>Next step:</strong> Click "Save & Send Invitations" below to invite {pendingCollaborators.length} collaborator{pendingCollaborators.length > 1 ? 's' : ''}. 
+                        Once they submit their quotes, you'll be able to merge everything and send the final proposal to your client.
+                      </>
+                    ) : (
+                      <>
+                        <strong>How it works:</strong> Add collaborators who need to provide pricing for parts of this project. 
+                        They'll receive an email, submit their quotes, and you can merge everything into one proposal.
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
 
-              {/* Previously Used Collaborators - Quick Select */}
-              {previousCollaborators.length > 0 && !showAddCollaboratorModal && (
+              {/* Previously Used Collaborators - Quick Select (hide after invitations sent) */}
+              {previousCollaborators.length > 0 && !showAddCollaboratorModal && !invitationsSent && (
                 <div className="mb-6">
                   <h4 className="text-sm font-medium text-neutral-700 mb-3">Quick Select from Previous Collaborators</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -2578,8 +2580,8 @@ export default function QuoteDocumentPage() {
                 </div>
               )}
 
-              {/* Add Collaborator Form */}
-              {showAddCollaboratorModal ? (
+              {/* Add Collaborator Form (hide after invitations sent) */}
+              {!invitationsSent && showAddCollaboratorModal ? (
                 <div className="border border-neutral-200 rounded-lg p-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -2746,7 +2748,7 @@ export default function QuoteDocumentPage() {
                     </button>
                   </div>
                 </div>
-              ) : (
+              ) : !invitationsSent ? (
                 <button
                   onClick={() => setShowAddCollaboratorModal(true)}
                   className="w-full py-3 border-2 border-dashed border-neutral-300 rounded-lg text-neutral-600 hover:border-[#476E66] hover:text-[#476E66] transition-colors flex items-center justify-center gap-2"
@@ -2754,43 +2756,43 @@ export default function QuoteDocumentPage() {
                   <Plus className="w-4 h-4" />
                   Add Collaborator
                 </button>
-              )}
+              ) : null}
             </div>
 
             {/* Action Bar - Context-aware based on collaborators state */}
             <div className="bg-white rounded-xl border border-neutral-200 p-4">
               {invitationsSent ? (
-                // STATE 3: Invitations have been sent - show status and two path options
-                <div className="space-y-4">
-                  {/* Success header */}
-                  <div className="flex items-center gap-3 pb-4 border-b border-neutral-100">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <Check className="w-5 h-5 text-green-600" />
+                // STATE 3: Invitations sent - Clean waiting state (Option A)
+                <div className="space-y-5">
+                  {/* Success header - centered and prominent */}
+                  <div className="text-center py-2">
+                    <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Check className="w-7 h-7 text-green-600" />
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-neutral-800">Invitations Sent!</h4>
-                      <p className="text-sm text-neutral-500">Waiting for responses from {sentCollaborators.length} collaborator{sentCollaborators.length > 1 ? 's' : ''}</p>
-                    </div>
+                    <h4 className="text-lg font-semibold text-neutral-800">Invitations Sent!</h4>
+                    <p className="text-sm text-neutral-500 mt-1">
+                      Waiting for {sentCollaborators.length} collaborator{sentCollaborators.length > 1 ? 's' : ''} to respond
+                    </p>
                   </div>
                   
                   {/* Collaborators status list */}
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Collaborator Status</p>
+                    <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Status</p>
                     {sentCollaborators.map((collab, idx) => (
                       <div key={idx} className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-                            <UserPlus className="w-4 h-4 text-amber-600" />
+                          <div className="w-9 h-9 bg-[#476E66]/10 rounded-full flex items-center justify-center">
+                            <UserPlus className="w-4 h-4 text-[#476E66]" />
                           </div>
                           <div>
                             <p className="text-sm font-medium text-neutral-800">{collab.name || collab.email}</p>
                             <p className="text-xs text-neutral-500">{collab.company && `${collab.company} • `}{collab.categoryName}</p>
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                           collab.status === 'submitted' ? 'bg-green-100 text-green-700' :
                           collab.status === 'accepted' ? 'bg-blue-100 text-blue-700' :
-                          'bg-amber-100 text-amber-700'
+                          'bg-neutral-200 text-neutral-600'
                         }`}>
                           {collab.status === 'submitted' ? 'Responded' :
                            collab.status === 'accepted' ? 'Viewed' : 'Pending'}
@@ -2799,31 +2801,29 @@ export default function QuoteDocumentPage() {
                     ))}
                   </div>
 
-                  {/* Action options */}
-                  <div className="pt-4 border-t border-neutral-100">
-                    <p className="text-sm text-neutral-600 mb-4">
-                      <strong>What would you like to do?</strong> You can wait for all collaborators to respond, or send the proposal to your client now.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <button
-                        onClick={saveAndWaitForResponses}
-                        className="flex-1 px-4 py-3 text-sm font-medium border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Users className="w-4 h-4" />
-                        Wait for All Responses
-                      </button>
-                      <button
-                        onClick={() => setCurrentStep(5)}
-                        className="flex-1 px-4 py-3 text-sm font-medium bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors flex items-center justify-center gap-2"
-                      >
-                        Send to Client Anyway
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-neutral-500 mt-3 text-center">
-                      Tip: If you send to client now, you can add collaborator responses later as amendments.
+                  {/* Reassurance message */}
+                  <div className="bg-[#476E66]/5 rounded-lg p-3 flex items-start gap-2.5">
+                    <Bell className="w-4 h-4 text-[#476E66] mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-neutral-600">
+                      You'll be notified when collaborators respond. You can then merge their quotes and send the final proposal.
                     </p>
                   </div>
+
+                  {/* Primary Action - Single clear button */}
+                  <button
+                    onClick={saveAndWaitForResponses}
+                    className="w-full px-4 py-3.5 text-sm font-semibold bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors flex items-center justify-center gap-2"
+                  >
+                    Done — Back to Proposals
+                  </button>
+
+                  {/* Secondary Action - Text link style */}
+                  <button
+                    onClick={() => setCurrentStep(5)}
+                    className="w-full text-sm text-neutral-500 hover:text-[#476E66] transition-colors py-1"
+                  >
+                    Send to client without waiting →
+                  </button>
                 </div>
               ) : pendingCollaborators.length > 0 ? (
                 // STATE 2: Collaborators added but not yet invited
