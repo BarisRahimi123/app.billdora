@@ -242,11 +242,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(cachedProfile);
           } else {
             // No valid cached profile, fetch from database
-            setUser(session.user);
+            // FIX: Don't set user until profile is also fetched to prevent race condition
+            // where Dashboard sees user but no profile and shows error
             logger.auth('Fetching profile from database for', session.user.email);
             const profileData = await fetchProfile(session.user.id);
             logger.auth('Profile loaded on state change:', profileData?.email, 'companyId:', profileData?.company_id);
             if (mounted) {
+              // Set both together so Dashboard sees complete state
+              setUser(session.user);
               setProfile(profileData);
               if (profileData) {
                 setCachedProfile(profileData);

@@ -112,6 +112,7 @@ const SESSION_CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds max
 // Track consecutive API failures to detect stale sessions
 let consecutiveFailures = 0;
 const MAX_CONSECUTIVE_FAILURES = 3; // After 3 failures, force full session re-validation
+const MAX_FAILURES_BEFORE_RELOAD = 10; // After 10 failures with hung SDK, force page reload
 
 // Track if we need to force a full session validation (set after visibility change)
 let forceFullValidation = false;
@@ -123,6 +124,9 @@ const SDK_HUNG_RECOVERY_TIME = 60 * 1000; // Try again after 60 seconds
 
 // Timeout for SDK calls to prevent hanging
 const SDK_CALL_TIMEOUT = 15000; // 15 seconds (increased for slow networks)
+
+// Lock for session validation to prevent concurrent validations causing race conditions
+let sessionValidationPromise: Promise<boolean> | null = null;
 
 /**
  * Helper to wrap SDK calls with timeout - returns null on timeout instead of throwing
@@ -163,8 +167,26 @@ async function withSdkTimeout<T>(
  * 
  * FIX: Added timeout handling to prevent SDK hangs from blocking API calls.
  * When SDK is detected as hung, we skip SDK validation and use cached auth.
+ * FIX: Added lock to prevent concurrent validations from causing race conditions.
  */
 export async function ensureValidSession(): Promise<boolean> {
+  // FIX: If a validation is already in progress, wait for it instead of starting a new one
+  // This prevents race conditions when multiple API calls start simultaneously
+  if (sessionValidationPromise) {
+    return sessionValidationPromise;
+  }
+  
+  // Create and store the validation promise
+  sessionValidationPromise = doEnsureValidSession();
+  
+  try {
+    return await sessionValidationPromise;
+  } finally {
+    sessionValidationPromise = null;
+  }
+}
+
+async function doEnsureValidSession(): Promise<boolean> {
   const now = Date.now();
   
   // FIX: Quick check using direct localStorage read (bypasses SDK deadlock)
@@ -179,17 +201,13 @@ export async function ensureValidSession(): Promise<boolean> {
   if (sdkIsHung) {
     const hungDuration = now - sdkHungAt;
     if (hungDuration < SDK_HUNG_RECOVERY_TIME) {
-      console.log('[API] SDK is hung, using cached auth (hung for', Math.round(hungDuration/1000), 's)');
-      // FIX: Set the session on the Supabase client so API calls work
-      try {
-        await supabase.auth.setSession({
-          access_token: storedAuth.accessToken,
-          refresh_token: storedAuth.refreshToken
-        });
-        console.log('[API] Session restored from cached auth');
-      } catch (e) {
-        console.warn('[API] Failed to restore session from cache:', e);
+      // Only log occasionally to avoid spam
+      if (hungDuration % 10000 < 1000) {
+        console.log('[API] SDK is hung, using cached auth (hung for', Math.round(hungDuration/1000), 's)');
       }
+      // NOTE: Don't call setSession() here - it can also hang and make things worse.
+      // The supabase client is configured with custom storage that already has the token,
+      // so API calls should work. If they don't, the retry logic will handle it.
       return true;
     } else {
       console.log('[API] SDK recovery attempt after', Math.round(hungDuration/1000), 's');
@@ -409,6 +427,17 @@ export async function withRetry<T>(
         hint: error?.hint,
         status: error?.status
       });
+      
+      // FIX: If SDK is hung and we have too many failures, force a page reload
+      // This is a last-resort recovery mechanism to reset the SDK state
+      if (sdkIsHung && consecutiveFailures >= MAX_FAILURES_BEFORE_RELOAD) {
+        console.error('[API] SDK is hung with', consecutiveFailures, 'consecutive failures - forcing page reload to recover');
+        // Small delay to allow the log to be written
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+        throw error;
+      }
       
       // On auth errors, try refreshing the session once
       if (!hasTriedRefresh && isAuthError(error)) {

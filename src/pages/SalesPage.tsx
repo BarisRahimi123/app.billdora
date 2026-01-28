@@ -14,8 +14,9 @@ import { supabase } from '../lib/supabase';
 import { LeadModal, ConvertToClientModal } from '../components/leads';
 import { QuoteModal } from '../components/quotes';
 
-type Tab = 'leads' | 'clients' | 'quotes' | 'inbox';
-type QuotesSubTab = 'all' | 'responses' | 'templates' | 'collaborations';
+type Tab = 'leads' | 'clients' | 'proposals';
+type ProposalsSubTab = 'all' | 'inbox' | 'templates' | 'collaborations';
+type LeadsViewMode = 'list' | 'kanban';
 
 type LeadStage = 'all' | 'new' | 'contacted' | 'qualified' | 'proposal_sent' | 'won' | 'lost';
 
@@ -59,7 +60,9 @@ export default function SalesPage() {
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<LeadStage>('all');
   const [responses, setResponses] = useState<any[]>([]);
   const [templates, setTemplates] = useState<ProposalTemplate[]>([]);
-  const [quotesSubTab, setQuotesSubTab] = useState<QuotesSubTab>('all');
+  const [proposalsSubTab, setProposalsSubTab] = useState<ProposalsSubTab>('all');
+  const [leadsViewMode, setLeadsViewMode] = useState<LeadsViewMode>('list');
+  const [showWonConvertModal, setShowWonConvertModal] = useState<Lead | null>(null);
   
   const [collaborationInbox, setCollaborationInbox] = useState<ProposalCollaboration[]>([]);
   const [sentCollaborations, setSentCollaborations] = useState<ProposalCollaboration[]>([]);
@@ -463,10 +466,10 @@ export default function SalesPage() {
   return (
     <div className="space-y-3 lg:space-y-4">
       
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold text-neutral-900">Sales</h1>
-          <p className="text-xs text-neutral-500 mt-0.5">Manage clients and quotes</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Sales Pipeline</h1>
+          <p className="text-sm text-neutral-500 mt-1">Manage your leads, clients, and proposals</p>
         </div>
         <button
           onClick={() => {
@@ -478,7 +481,7 @@ export default function SalesPage() {
                 setSelectedClient(null);
                 setIsAddingNewClient(true);
               });
-            } else if (activeTab === 'quotes') {
+            } else if (activeTab === 'proposals') {
               setShowProposalChoiceModal({ type: 'client' });
             } else {
               navigate('/quotes/new/document');
@@ -487,7 +490,7 @@ export default function SalesPage() {
           className="flex items-center gap-1.5 px-3 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Add {activeTab === 'leads' ? 'Lead' : activeTab === 'clients' ? 'Client' : 'Quote'}</span>
+          <span className="hidden sm:inline">Add {activeTab === 'leads' ? 'Lead' : activeTab === 'clients' ? 'Client' : 'Proposal'}</span>
           <span className="sm:hidden">Add</span>
         </button>
       </div>
@@ -496,46 +499,44 @@ export default function SalesPage() {
       <div className="flex gap-0.5 p-0.5 bg-neutral-100 rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('leads')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-            activeTab === 'leads' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'leads' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
           <span>Leads</span>
-          <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 text-[10px] sm:text-xs rounded-full min-w-[20px] text-center">
+          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+            activeTab === 'leads' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
+          }`}>
             {leads.filter(l => l.status !== 'won' && l.status !== 'lost').length}
           </span>
         </button>
         <button
           onClick={() => setActiveTab('clients')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-            activeTab === 'clients' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'clients' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
           <span>Clients</span>
-          <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 text-[10px] sm:text-xs rounded-full min-w-[20px] text-center">
+          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+            activeTab === 'clients' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
+          }`}>
             {clients.length}
           </span>
         </button>
         <button
-          onClick={() => setActiveTab('quotes')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
-            activeTab === 'quotes' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+          onClick={() => setActiveTab('proposals')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+            activeTab === 'proposals' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
-          <span>Quotes</span>
-          <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 text-[10px] sm:text-xs rounded-full min-w-[20px] text-center">
+          <span>Proposals</span>
+          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+            activeTab === 'proposals' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
+          }`}>
             {quotes.length}
           </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('inbox')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === 'inbox' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          <span>Inbox</span>
           {collaborationInbox.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-[#476E66] text-white text-[10px] sm:text-xs rounded-full min-w-[20px] text-center">
+            <span className="px-1.5 py-0.5 bg-[#476E66] text-white text-xs rounded-full min-w-[20px] text-center">
               {collaborationInbox.length}
             </span>
           )}
@@ -558,7 +559,7 @@ export default function SalesPage() {
           <Filter className="w-4 h-4" />
           <span className="hidden md:inline">Filters</span>
         </button>
-        {activeTab === 'quotes' && (
+        {activeTab === 'proposals' && (
           <>
           <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg flex-shrink-0">
             <button
@@ -597,202 +598,293 @@ export default function SalesPage() {
           <span className="hidden xl:inline">Export</span>
         </button>
         {activeTab === 'leads' && (
-          <button 
-            onClick={async () => {
-              if (!profile?.company_id) return;
-              try {
-                const form = await leadFormsApi.getOrCreateDefaultForm(profile.company_id);
-                const link = `${window.location.origin}/lead/${form.id}`;
-                setLeadFormLink(link);
-                setShowLeadFormLinkModal(true);
-              } catch (err) {
-                showToast('Failed to get lead form link', 'error');
-              }
-            }}
-            className="flex items-center gap-1.5 px-4 py-2.5 border border-[#476E66] text-[#476E66] rounded-lg hover:bg-[#476E66]/5 transition-colors text-sm flex-shrink-0"
-          >
-            <Link2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Lead Form</span>
-          </button>
+          <>
+            {/* View mode toggle for leads */}
+            <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg flex-shrink-0">
+              <button
+                onClick={() => setLeadsViewMode('list')}
+                className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setLeadsViewMode('kanban')}
+                className={`p-1.5 rounded-md transition-colors ${leadsViewMode === 'kanban' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+                title="Board View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+            <button 
+              onClick={async () => {
+                if (!profile?.company_id) return;
+                try {
+                  const form = await leadFormsApi.getOrCreateDefaultForm(profile.company_id);
+                  const link = `${window.location.origin}/lead/${form.id}`;
+                  setLeadFormLink(link);
+                  setShowLeadFormLinkModal(true);
+                } catch (err) {
+                  showToast('Failed to get lead form link', 'error');
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-[#476E66] text-[#476E66] rounded-lg hover:bg-[#476E66]/5 transition-colors text-sm flex-shrink-0"
+            >
+              <Link2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Lead Form</span>
+            </button>
+          </>
         )}
       </div>
 
       {/* Leads Section */}
       {activeTab === 'leads' && (
-        <div className="space-y-2">
-          {/* Pipeline Header */}
-          <div className="flex gap-0.5 overflow-x-auto scrollbar-hide pb-1">
-            {PIPELINE_STAGES.map((stage) => {
-              const count = stage.key === 'all' 
-                ? leads.length 
-                : leads.filter(l => l.status === stage.key).length;
-              const isSelected = selectedPipelineStage === stage.key;
-              return (
-                <button
-                  key={stage.key}
-                  onClick={() => setSelectedPipelineStage(stage.key)}
-                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-medium transition-all flex-shrink-0 ${
-                    isSelected 
-                      ? `${stage.bgColor} ${stage.color} ring-1 ring-current` 
-                      : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
-                  }`}
-                >
-                  <span className="whitespace-nowrap">{stage.label}</span>
-                  <span className={`px-0.5 py-0 rounded text-[8px] min-w-[12px] text-center ${isSelected ? 'bg-white/50' : 'bg-neutral-100'}`}>
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Leads List */}
-          <div className="bg-white rounded-lg overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="space-y-4">
+          {/* Empty State */}
           {leads.length === 0 ? (
-            <div className="p-8 text-center">
-              <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                <User className="w-6 h-6 text-amber-600" />
+            <div className="bg-white rounded-xl p-12 text-center" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <User className="w-8 h-8 text-amber-600" />
               </div>
-              <h3 className="text-base font-semibold text-neutral-900 mb-1">No leads yet</h3>
-              <p className="text-xs text-neutral-500 mb-3">Start tracking your potential clients</p>
+              <h3 className="text-lg font-semibold text-neutral-900 mb-2">No leads yet</h3>
+              <p className="text-sm text-neutral-500 mb-4 max-w-sm mx-auto">Start tracking your potential clients and watch your pipeline grow</p>
               <button
                 onClick={() => { setEditingLead(null); setShowLeadModal(true); }}
-                className="px-3 py-2 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors"
+                className="px-4 py-2.5 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors font-medium"
               >
                 Add Your First Lead
               </button>
             </div>
-          ) : (
-            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-              <table className="w-full min-w-0">
-                <thead className="bg-neutral-50 border-b border-neutral-100">
-                  <tr>
-                    <th className="text-left px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide">Lead</th>
-                    <th className="text-left px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Source</th>
-                    <th className="text-left px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
-                    <th className="text-left px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Est. Value</th>
-                    <th className="text-left px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide hidden lg:table-cell">Created</th>
-                    <th className="text-right px-2 sm:px-3 py-2 text-[10px] font-semibold text-neutral-500 uppercase tracking-wide w-10 sm:w-auto"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leads.filter(l => {
-                      const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-                      const matchesStage = selectedPipelineStage === 'all' || l.status === selectedPipelineStage;
-                      return matchesSearch && matchesStage;
-                    }).map((lead) => (
-                    <tr key={lead.id} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors">
-                      <td className="px-2 sm:px-3 py-2.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-medium text-xs flex-shrink-0">
-                            {lead.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 max-w-[100px] sm:max-w-[150px]">
-                            <p className="font-medium text-neutral-900 text-sm truncate">{lead.name}</p>
-                            <p className="text-xs text-neutral-500 truncate">{lead.company_name || lead.email || '-'}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-2 sm:px-3 py-2.5 hidden sm:table-cell">
-                        <span className="text-xs text-neutral-600 capitalize">{lead.source?.replace('_', ' ') || '-'}</span>
-                        {lead.source_details && <p className="text-[10px] text-neutral-400 truncate max-w-[100px]">{lead.source_details}</p>}
-                      </td>
-                      <td className="px-2 sm:px-3 py-2.5">
-                        <select
-                          value={lead.status || 'new'}
-                          onChange={async (e) => {
-                            try {
-                              await leadsApi.updateLead(lead.id, { status: e.target.value as Lead['status'] });
-                              loadData();
-                            } catch (error) {
-                              console.error('Failed to update lead:', error);
-                            }
-                          }}
-                          className={`text-[10px] font-medium px-1.5 sm:px-2 py-1 rounded-full border-0 cursor-pointer appearance-none bg-no-repeat bg-right pr-5 ${
-                            lead.status === 'new' ? 'bg-blue-50 text-blue-700' :
-                            lead.status === 'contacted' ? 'bg-purple-50 text-purple-700' :
-                            lead.status === 'qualified' ? 'bg-amber-50 text-amber-700' :
-                            lead.status === 'proposal_sent' ? 'bg-cyan-50 text-cyan-700' :
-                            lead.status === 'won' ? 'bg-emerald-50 text-emerald-700' :
-                            lead.status === 'lost' ? 'bg-red-50 text-red-700' :
-                            'bg-neutral-100 text-neutral-600'
-                          }`}
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundPosition: 'right 4px center', backgroundSize: '10px' }}
+          ) : leadsViewMode === 'kanban' ? (
+            /* Kanban Board View */
+            <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+              {PIPELINE_STAGES.filter(s => s.key !== 'all').map((stage) => {
+                const stageLeads = leads.filter(l => {
+                  const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+                  return matchesSearch && l.status === stage.key;
+                });
+                return (
+                  <div key={stage.key} className="flex-shrink-0 w-72">
+                    {/* Column Header */}
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-t-lg ${stage.bgColor}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-semibold ${stage.color}`}>{stage.label}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${stage.color} bg-white/60`}>
+                          {stageLeads.length}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Column Body */}
+                    <div className="bg-neutral-50 rounded-b-lg p-2 min-h-[400px] space-y-2">
+                      {stageLeads.map((lead) => (
+                        <div
+                          key={lead.id}
+                          className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-neutral-100"
+                          onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
                         >
-                          <option value="new">New</option>
-                          <option value="contacted">Contacted</option>
-                          <option value="qualified">Qualified</option>
-                          <option value="proposal_sent">Proposal</option>
-                          <option value="won">Won</option>
-                          <option value="lost">Lost</option>
-                        </select>
-                      </td>
-                      <td className="px-2 sm:px-3 py-2.5 text-xs text-neutral-600 hidden md:table-cell">
-                        {lead.estimated_value ? `$${lead.estimated_value.toLocaleString()}` : '-'}
-                      </td>
-                      <td className="px-2 sm:px-3 py-2.5 text-xs text-neutral-500 hidden lg:table-cell">
-                        {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="px-2 sm:px-3 py-2.5">
-                        <div className="flex items-center justify-end gap-0.5 sm:gap-1">
-                          {lead.status !== 'won' && lead.status !== 'lost' && (
-                            <>
-                              <button
-                                onClick={() => setShowProposalChoiceModal({
-                                  type: 'lead',
-                                  id: lead.id,
-                                  name: lead.name,
-                                  email: lead.email || '',
-                                  company: lead.company_name || ''
-                                })}
-                                className="p-1.5 sm:px-2 sm:py-1 text-[10px] font-medium text-[#476E66] bg-[#476E66]/10 rounded-lg hover:bg-[#476E66]/20 transition-colors"
-                                title="Create Proposal"
-                              >
-                                <Send className="w-3.5 h-3.5 sm:hidden" />
-                                <span className="hidden sm:flex sm:items-center sm:gap-1"><Send className="w-3 h-3" />Proposal</span>
-                              </button>
-                              <button
-                                onClick={() => { setConvertingLead(lead); setShowConvertModal(true); }}
-                                className="p-1.5 sm:px-2 sm:py-1 text-[10px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors hidden sm:flex sm:items-center sm:gap-1"
-                                title="Convert to Client"
-                              >
-                                <User className="w-3 h-3" />
-                                <span className="hidden md:inline">Convert</span>
-                              </button>
-                            </>
+                          <div className="flex items-start gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-medium text-xs flex-shrink-0">
+                              {lead.name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-neutral-900 text-sm truncate">{lead.name}</p>
+                              <p className="text-xs text-neutral-500 truncate">{lead.company_name || lead.email || '-'}</p>
+                            </div>
+                          </div>
+                          {lead.estimated_value && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-neutral-500">Est. Value</span>
+                              <span className="font-medium text-neutral-700">${lead.estimated_value.toLocaleString()}</span>
+                            </div>
                           )}
-                          <button
-                            onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
-                            className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (confirm('Delete this lead?')) {
-                                try {
-                                  await leadsApi.deleteLead(lead.id);
-                                  loadData();
-                                } catch (error) {
-                                  console.error('Failed to delete lead:', error);
-                                }
-                              }
-                            }}
-                            className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors hidden sm:block"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {lead.source && (
+                            <div className="mt-2 pt-2 border-t border-neutral-100">
+                              <span className="text-[10px] text-neutral-400 uppercase tracking-wide">{lead.source.replace('_', ' ')}</span>
+                            </div>
+                          )}
+                          {/* Quick Actions */}
+                          <div className="mt-2 pt-2 border-t border-neutral-100 flex gap-1">
+                            {lead.status !== 'won' && lead.status !== 'lost' && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' }); }}
+                                  className="flex-1 px-2 py-1 text-[10px] font-medium text-[#476E66] bg-[#476E66]/10 rounded hover:bg-[#476E66]/20 transition-colors"
+                                >
+                                  Proposal
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setConvertingLead(lead); setShowConvertModal(true); }}
+                                  className="flex-1 px-2 py-1 text-[10px] font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                                >
+                                  Convert
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      ))}
+                      {stageLeads.length === 0 && (
+                        <div className="text-center py-8 text-neutral-400 text-xs">
+                          No leads in this stage
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* List View */
+            <div className="space-y-3">
+              {/* Pipeline Stage Filter Pills */}
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                {PIPELINE_STAGES.map((stage) => {
+                  const count = stage.key === 'all' 
+                    ? leads.length 
+                    : leads.filter(l => l.status === stage.key).length;
+                  const isSelected = selectedPipelineStage === stage.key;
+                  return (
+                    <button
+                      key={stage.key}
+                      onClick={() => setSelectedPipelineStage(stage.key)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all flex-shrink-0 ${
+                        isSelected 
+                          ? `${stage.bgColor} ${stage.color}` 
+                          : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <span>{stage.label}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/50' : 'bg-neutral-100'}`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Leads Table */}
+              <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-neutral-50 border-b border-neutral-100">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Lead</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Source</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Est. Value</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden lg:table-cell">Created</th>
+                        <th className="text-right px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {leads.filter(l => {
+                        const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+                        const matchesStage = selectedPipelineStage === 'all' || l.status === selectedPipelineStage;
+                        return matchesSearch && matchesStage;
+                      }).map((lead) => (
+                        <tr key={lead.id} className="hover:bg-neutral-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-semibold text-sm flex-shrink-0">
+                                {lead.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-neutral-900 text-sm">{lead.name}</p>
+                                <p className="text-xs text-neutral-500 truncate max-w-[180px]">{lead.company_name || lead.email || '-'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            <span className="text-sm text-neutral-600 capitalize">{lead.source?.replace('_', ' ') || '-'}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={lead.status || 'new'}
+                              onChange={async (e) => {
+                                const newStatus = e.target.value as Lead['status'];
+                                try {
+                                  await leadsApi.updateLead(lead.id, { status: newStatus });
+                                  loadData();
+                                  if (newStatus === 'won') {
+                                    setShowWonConvertModal({ ...lead, status: newStatus });
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to update lead:', error);
+                                }
+                              }}
+                              className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer ${
+                                lead.status === 'new' ? 'bg-blue-50 text-blue-700' :
+                                lead.status === 'contacted' ? 'bg-purple-50 text-purple-700' :
+                                lead.status === 'qualified' ? 'bg-amber-50 text-amber-700' :
+                                lead.status === 'proposal_sent' ? 'bg-cyan-50 text-cyan-700' :
+                                lead.status === 'won' ? 'bg-emerald-50 text-emerald-700' :
+                                lead.status === 'lost' ? 'bg-red-50 text-red-700' :
+                                'bg-neutral-100 text-neutral-600'
+                              }`}
+                            >
+                              <option value="new">New</option>
+                              <option value="contacted">Contacted</option>
+                              <option value="qualified">Qualified</option>
+                              <option value="proposal_sent">Proposal</option>
+                              <option value="won">Won</option>
+                              <option value="lost">Lost</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-neutral-600 hidden md:table-cell">
+                            {lead.estimated_value ? `$${lead.estimated_value.toLocaleString()}` : '-'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-neutral-500 hidden lg:table-cell">
+                            {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {lead.status !== 'won' && lead.status !== 'lost' && (
+                                <>
+                                  <button
+                                    onClick={() => setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' })}
+                                    className="px-2.5 py-1.5 text-xs font-medium text-[#476E66] bg-[#476E66]/10 rounded-lg hover:bg-[#476E66]/20 transition-colors hidden sm:block"
+                                  >
+                                    Proposal
+                                  </button>
+                                  <button
+                                    onClick={() => { setConvertingLead(lead); setShowConvertModal(true); }}
+                                    className="px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors hidden md:block"
+                                  >
+                                    Convert
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
+                                className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Delete this lead?')) {
+                                    try {
+                                      await leadsApi.deleteLead(lead.id);
+                                      loadData();
+                                    } catch (error) {
+                                      console.error('Failed to delete lead:', error);
+                                    }
+                                  }
+                                }}
+                                className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors hidden sm:block"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
-          </div>
         </div>
       )}
 
@@ -859,47 +951,53 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Quotes Section with Subtabs */}
-      {activeTab === 'quotes' && (
+      {/* Proposals Section with Subtabs */}
+      {activeTab === 'proposals' && (
         <>
-          {/* Quotes Subtabs */}
-          <div className="flex items-center gap-2 mb-4">
+          {/* Proposals Subtabs */}
+          <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg w-fit">
             <button
-              onClick={() => setQuotesSubTab('all')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                quotesSubTab === 'all' ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              onClick={() => setProposalsSubTab('all')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                proposalsSubTab === 'all' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
-              All Quotes ({quotes.length})
+              All Proposals
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${proposalsSubTab === 'all' ? 'bg-neutral-100' : 'bg-neutral-200/50'}`}>{quotes.length}</span>
             </button>
             <button
-              onClick={() => setQuotesSubTab('responses')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                quotesSubTab === 'responses' ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              onClick={() => setProposalsSubTab('inbox')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${
+                proposalsSubTab === 'inbox' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
-              Responses ({responses.length})
+              Inbox
+              {collaborationInbox.length > 0 && (
+                <span className="px-1.5 py-0.5 bg-[#476E66] text-white text-xs rounded-full">{collaborationInbox.length}</span>
+              )}
             </button>
             <button
-              onClick={() => setQuotesSubTab('templates')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                quotesSubTab === 'templates' ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              onClick={() => setProposalsSubTab('templates')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                proposalsSubTab === 'templates' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
-              Templates ({templates.length})
+              Templates
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${proposalsSubTab === 'templates' ? 'bg-neutral-100' : 'bg-neutral-200/50'}`}>{templates.length}</span>
             </button>
             <button
-              onClick={() => setQuotesSubTab('collaborations')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                quotesSubTab === 'collaborations' ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              onClick={() => setProposalsSubTab('collaborations')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                proposalsSubTab === 'collaborations' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
-              Collaborations ({sentCollaborations.length})
+              Sent
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${proposalsSubTab === 'collaborations' ? 'bg-neutral-100' : 'bg-neutral-200/50'}`}>{sentCollaborations.length}</span>
             </button>
           </div>
 
           {/* All Quotes View */}
-          {quotesSubTab === 'all' && (
+          {proposalsSubTab === 'all' && (
             quoteViewMode === 'list' ? (
           <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
             {/* Mobile Card View */}
@@ -1413,7 +1511,7 @@ export default function SalesPage() {
           )}
 
           {/* Responses Subtab */}
-          {quotesSubTab === 'responses' && (
+          {proposalsSubTab === 'responses' && (
         <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
           <table className="w-full">
             <thead className="bg-neutral-50 border-b border-neutral-100">
@@ -1495,7 +1593,7 @@ export default function SalesPage() {
           )}
 
           {/* Templates Subtab */}
-          {quotesSubTab === 'templates' && (
+          {proposalsSubTab === 'templates' && (
         <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
           {templates.length === 0 ? (
             <div className="text-center py-16 px-4">
@@ -1600,7 +1698,7 @@ export default function SalesPage() {
           )}
 
           {/* Collaborations Subtab */}
-          {quotesSubTab === 'collaborations' && (
+          {proposalsSubTab === 'collaborations' && (
             <div className="space-y-4">
               {sentCollaborations.length === 0 ? (
                 <div className="bg-white rounded-xl border border-neutral-200 p-8 text-center">
@@ -1707,8 +1805,8 @@ export default function SalesPage() {
         </>
       )}
 
-      {/* Collaboration Inbox Tab - Shows received collaboration requests */}
-      {activeTab === 'inbox' && (
+      {/* Collaboration Inbox - Shows received collaboration requests (now inside Proposals tab) */}
+      {activeTab === 'proposals' && proposalsSubTab === 'inbox' && (
         <div className="space-y-4">
           {collaborationInbox.length === 0 ? (
             <div className="bg-white rounded-xl border border-neutral-200 p-12 text-center">
@@ -2043,6 +2141,41 @@ export default function SalesPage() {
           onClose={() => { setShowConvertModal(false); setConvertingLead(null); }}
           onSave={() => { loadData(); setShowConvertModal(false); setConvertingLead(null); }}
         />
+      )}
+
+      {/* Won Lead - Prompt to Convert Modal */}
+      {showWonConvertModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-7 h-7 text-emerald-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-neutral-900 mb-2">Lead Won!</h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                Congratulations on winning <span className="font-medium text-neutral-700">{showWonConvertModal.name}</span>! Would you like to convert them to a client now?
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowWonConvertModal(null)} 
+                  className="flex-1 px-4 py-2.5 border border-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors text-sm font-medium"
+                >
+                  Later
+                </button>
+                <button 
+                  onClick={() => {
+                    setConvertingLead(showWonConvertModal);
+                    setShowConvertModal(true);
+                    setShowWonConvertModal(null);
+                  }} 
+                  className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
+                >
+                  Convert Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Proposal Choice Modal - Select Template or Create New */}

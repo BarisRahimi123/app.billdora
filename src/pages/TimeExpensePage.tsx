@@ -180,6 +180,11 @@ export default function TimeExpensePage() {
   const [pendingExpenses, setPendingExpenses] = useState<Expense[]>([]);
   const [approvedTimeEntries, setApprovedTimeEntries] = useState<TimeEntry[]>([]);
   const [approvedExpenses, setApprovedExpenses] = useState<Expense[]>([]);
+  // Collapsible state for approved history sections
+  const [expandedTimeProjects, setExpandedTimeProjects] = useState<Set<string>>(new Set());
+  const [expandedTimeUsers, setExpandedTimeUsers] = useState<Set<string>>(new Set());
+  const [expandedExpenseProjects, setExpandedExpenseProjects] = useState<Set<string>>(new Set());
+  const [expandedExpenseUsers, setExpandedExpenseUsers] = useState<Set<string>>(new Set());
   // Unified date range for approvals and approved tabs
   const [dateRange, setDateRange] = useState(() => {
     const now = new Date();
@@ -1898,16 +1903,18 @@ export default function TimeExpensePage() {
             />
           </div>
 
-          {/* Approved Time Entries - Grouped by Project then User */}
+          {/* Approved Time Entries - Collapsible by Project then User */}
           <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="px-3 sm:px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-sm sm:text-base font-semibold text-neutral-900">Approved Time Entries</h3>
-              <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
-                Total: {approvedTimeEntries.reduce((sum, e) => sum + Number(e.hours), 0).toFixed(1)} hours
+            <div className="px-4 py-4 border-b border-neutral-100">
+              <h3 className="text-base font-semibold text-neutral-900">Approved Time Entries</h3>
+              <p className="text-sm text-neutral-500 mt-1">
+                Total: {approvedTimeEntries.reduce((sum, e) => sum + Number(e.hours), 0).toFixed(1)} hours across {
+                  new Set(approvedTimeEntries.map(e => e.project?.id)).size
+                } projects
               </p>
             </div>
             {approvedTimeEntries.length === 0 ? (
-              <div className="p-8 text-center text-neutral-500 text-sm">No approved time entries for this period</div>
+              <div className="p-12 text-center text-neutral-400 text-sm">No approved time entries for this period</div>
             ) : (
               <div className="divide-y divide-neutral-100">
                 {/* Group by project */}
@@ -1918,65 +1925,110 @@ export default function TimeExpensePage() {
                     if (!groups[projectId]) {
                       groups[projectId] = { name: projectName, users: {} };
                     }
-                    const userId = entry.user?.id || 'unknown';
+                    const oduserId = entry.user?.id || 'unknown';
                     const userName = entry.user?.full_name || entry.user?.email || 'Unknown User';
-                    if (!groups[projectId].users[userId]) {
-                      groups[projectId].users[userId] = { name: userName, entries: [] };
+                    if (!groups[projectId].users[oduserId]) {
+                      groups[projectId].users[oduserId] = { name: userName, entries: [] };
                     }
-                    groups[projectId].users[userId].entries.push(entry);
+                    groups[projectId].users[oduserId].entries.push(entry);
                     return groups;
                   }, {} as Record<string, { name: string; users: Record<string, { name: string; entries: TimeEntry[] }> }>)
                 ).map(([projectId, project]) => {
                   const projectTotalHours = Object.values(project.users).reduce(
                     (sum, user) => sum + user.entries.reduce((s, e) => s + Number(e.hours), 0), 0
                   );
+                  const userCount = Object.keys(project.users).length;
+                  const entryCount = Object.values(project.users).reduce((sum, u) => sum + u.entries.length, 0);
+                  const isProjectExpanded = expandedTimeProjects.has(projectId);
                   
                   return (
                     <div key={projectId}>
-                      {/* Project Header */}
-                      <div className="bg-neutral-50 px-6 py-3 flex items-center justify-between">
-                        <span className="font-semibold text-neutral-900">{project.name}</span>
-                        <div className="text-sm">
-                          <span className="text-neutral-500">Total: </span>
-                          <span className="font-medium text-neutral-900">{projectTotalHours.toFixed(2)}h</span>
-                        </div>
-                      </div>
-                      {/* Users under project */}
-                      {Object.entries(project.users).map(([userId, user]) => {
-                        const userTotalHours = user.entries.reduce((sum, e) => sum + Number(e.hours), 0);
-                        return (
-                          <div key={userId} className="border-l-4 border-emerald-200 ml-4">
-                            {/* User Header */}
-                            <div className="bg-emerald-50/50 px-6 py-2 flex items-center justify-between">
-                              <span className="font-medium text-neutral-800">{user.name}</span>
-                              <span className="text-sm font-medium text-emerald-600">{userTotalHours.toFixed(2)}h</span>
-                            </div>
-                            {/* Entries Table */}
-                            <table className="w-full">
-                              <thead className="bg-white border-b border-neutral-100">
-                                <tr>
-                                  <th className="text-left px-6 py-2 text-xs font-medium text-neutral-500 uppercase">Date</th>
-                                  <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Task</th>
-                                  <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Hours</th>
-                                  <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Approved By</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-neutral-50">
-                                {user.entries.map(entry => (
-                                  <tr key={entry.id} className="hover:bg-neutral-50">
-                                    <td className="px-6 py-3 text-neutral-600">{entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString() : '-'}</td>
-                                    <td className="px-4 py-3 text-neutral-600">{entry.task?.name || entry.description || '-'}</td>
-                                    <td className="px-4 py-3 text-right font-medium text-neutral-900">{Number(entry.hours).toFixed(2)}</td>
-                                    <td className="px-4 py-3 text-neutral-500 text-sm">
-                                      {entry.approved_at ? new Date(entry.approved_at).toLocaleDateString() : '-'}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                      {/* Project Header - Clickable */}
+                      <button
+                        onClick={() => {
+                          const next = new Set(expandedTimeProjects);
+                          if (next.has(projectId)) {
+                            next.delete(projectId);
+                          } else {
+                            next.add(projectId);
+                          }
+                          setExpandedTimeProjects(next);
+                        }}
+                        className="w-full bg-neutral-50 hover:bg-neutral-100 px-4 py-3 flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isProjectExpanded ? '' : '-rotate-90'}`} />
+                          <div className="text-left">
+                            <span className="font-semibold text-neutral-900">{project.name}</span>
+                            <p className="text-xs text-neutral-500 mt-0.5">{userCount} team member{userCount !== 1 ? 's' : ''} • {entryCount} entries</p>
                           </div>
-                        );
-                      })}
+                        </div>
+                        <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{projectTotalHours.toFixed(1)}h</span>
+                      </button>
+                      
+                      {/* Users under project - Collapsible */}
+                      {isProjectExpanded && (
+                        <div className="border-l-2 border-[#476E66]/20 ml-4">
+                          {Object.entries(project.users).map(([oduserId, user]) => {
+                            const userTotalHours = user.entries.reduce((sum, e) => sum + Number(e.hours), 0);
+                            const userKey = `${projectId}-${oduserId}`;
+                            const isUserExpanded = expandedTimeUsers.has(userKey);
+                            
+                            return (
+                              <div key={oduserId}>
+                                {/* User Header - Clickable */}
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedTimeUsers);
+                                    if (next.has(userKey)) {
+                                      next.delete(userKey);
+                                    } else {
+                                      next.add(userKey);
+                                    }
+                                    setExpandedTimeUsers(next);
+                                  }}
+                                  className="w-full bg-emerald-50/50 hover:bg-emerald-50 px-4 py-2.5 flex items-center justify-between transition-colors"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isUserExpanded ? '' : '-rotate-90'}`} />
+                                    <span className="font-medium text-neutral-800">{user.name}</span>
+                                    <span className="text-xs text-neutral-500">({user.entries.length} entries)</span>
+                                  </div>
+                                  <span className="text-sm font-medium text-emerald-600">{userTotalHours.toFixed(2)}h</span>
+                                </button>
+                                
+                                {/* Entries Table - Collapsible */}
+                                {isUserExpanded && (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                      <thead className="bg-white border-b border-neutral-100">
+                                        <tr>
+                                          <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Date</th>
+                                          <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Task</th>
+                                          <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Hours</th>
+                                          <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Approved</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-neutral-50">
+                                        {user.entries.map(entry => (
+                                          <tr key={entry.id} className="hover:bg-neutral-50">
+                                            <td className="px-4 py-2.5 text-sm text-neutral-600">{entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString() : '-'}</td>
+                                            <td className="px-4 py-2.5 text-sm text-neutral-600">{entry.task?.name || entry.description || '-'}</td>
+                                            <td className="px-4 py-2.5 text-right text-sm font-medium text-neutral-900">{Number(entry.hours).toFixed(2)}</td>
+                                            <td className="px-4 py-2.5 text-xs text-neutral-500">
+                                              {entry.approved_at ? new Date(entry.approved_at).toLocaleDateString() : '-'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1984,16 +2036,18 @@ export default function TimeExpensePage() {
             )}
           </div>
 
-          {/* Approved Expenses - Grouped by Project then User */}
+          {/* Approved Expenses - Collapsible by Project then User */}
           <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="px-3 sm:px-4 py-3 border-b border-neutral-100">
-              <h3 className="text-sm sm:text-base font-semibold text-neutral-900">Approved Expenses</h3>
-              <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
-                Total: {formatCurrency(approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0))}
+            <div className="px-4 py-4 border-b border-neutral-100">
+              <h3 className="text-base font-semibold text-neutral-900">Approved Expenses</h3>
+              <p className="text-sm text-neutral-500 mt-1">
+                Total: {formatCurrency(approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0))} across {
+                  new Set(approvedExpenses.map(e => e.project?.id)).size
+                } projects
               </p>
             </div>
             {approvedExpenses.length === 0 ? (
-              <div className="p-8 text-center text-neutral-500 text-sm">No approved expenses for this period</div>
+              <div className="p-12 text-center text-neutral-400 text-sm">No approved expenses for this period</div>
             ) : (
               <div className="divide-y divide-neutral-100">
                 {Object.entries(
@@ -2003,82 +2057,131 @@ export default function TimeExpensePage() {
                     if (!groups[projectId]) {
                       groups[projectId] = { name: projectName, users: {} };
                     }
-                    const userId = expense.user?.id || 'unknown';
+                    const oduserId = expense.user?.id || 'unknown';
                     const userName = expense.user?.full_name || expense.user?.email || 'Unknown User';
-                    if (!groups[projectId].users[userId]) {
-                      groups[projectId].users[userId] = { name: userName, expenses: [] };
+                    if (!groups[projectId].users[oduserId]) {
+                      groups[projectId].users[oduserId] = { name: userName, expenses: [] };
                     }
-                    groups[projectId].users[userId].expenses.push(expense);
+                    groups[projectId].users[oduserId].expenses.push(expense);
                     return groups;
                   }, {} as Record<string, { name: string; users: Record<string, { name: string; expenses: Expense[] }> }>)
                 ).map(([projectId, project]) => {
                   const projectTotal = Object.values(project.users).reduce(
                     (sum, user) => sum + user.expenses.reduce((s, e) => s + Number(e.amount), 0), 0
                   );
+                  const userCount = Object.keys(project.users).length;
+                  const expenseCount = Object.values(project.users).reduce((sum, u) => sum + u.expenses.length, 0);
+                  const isProjectExpanded = expandedExpenseProjects.has(projectId);
                   
                   return (
                     <div key={projectId}>
-                      <div className="bg-neutral-50 px-3 sm:px-4 py-2.5 flex items-center justify-between">
-                        <span className="font-semibold text-sm text-neutral-900">{project.name}</span>
-                        <div className="text-xs sm:text-sm">
-                          <span className="text-neutral-500">Total: </span>
-                          <span className="font-medium text-neutral-900">{formatCurrency(projectTotal)}</span>
-                        </div>
-                      </div>
-                      {Object.entries(project.users).map(([userId, user]) => {
-                        const userTotal = user.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-                        return (
-                          <div key={userId} className="border-l-2 border-[#476E66]/20 ml-2 sm:ml-4">
-                            <div className="bg-[#476E66]/5 px-3 sm:px-4 py-2 flex items-center justify-between">
-                              <span className="font-medium text-sm text-neutral-900">{user.name}</span>
-                              <span className="text-xs sm:text-sm font-medium text-[#476E66]">{formatCurrency(userTotal)}</span>
-                            </div>
-                            {/* Mobile Cards */}
-                            <div className="block md:hidden divide-y divide-neutral-50">
-                              {user.expenses.map(expense => (
-                                <div key={expense.id} className="p-3">
-                                  <div className="font-medium text-sm text-neutral-900 mb-1">{expense.description}</div>
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-xs text-neutral-500">
-                                      <span>{expense.date ? new Date(expense.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</span>
-                                      {expense.category && (
-                                        <>
-                                          <span>•</span>
-                                          <span>{expense.category}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <div className="text-sm font-semibold text-[#476E66]">{formatCurrency(expense.amount)}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            {/* Desktop Table */}
-                            <div className="hidden md:block overflow-x-auto">
-                              <table className="w-full">
-                                <thead className="bg-white border-b border-neutral-100">
-                                  <tr>
-                                    <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Date</th>
-                                    <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Description</th>
-                                    <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Category</th>
-                                    <th className="text-right px-3 py-2 text-xs font-medium text-neutral-600">Amount</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-50">
-                                  {user.expenses.map(expense => (
-                                    <tr key={expense.id} className="hover:bg-neutral-50/50">
-                                      <td className="px-2 py-2.5 text-xs text-neutral-600">{expense.date ? new Date(expense.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                                      <td className="px-2 py-2.5 text-sm text-neutral-900">{expense.description}</td>
-                                      <td className="px-2 py-2.5 text-xs text-neutral-600">{expense.category || '-'}</td>
-                                      <td className="px-3 py-2.5 text-right text-sm font-semibold text-[#476E66]">{formatCurrency(expense.amount)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
+                      {/* Project Header - Clickable */}
+                      <button
+                        onClick={() => {
+                          const next = new Set(expandedExpenseProjects);
+                          if (next.has(projectId)) {
+                            next.delete(projectId);
+                          } else {
+                            next.add(projectId);
+                          }
+                          setExpandedExpenseProjects(next);
+                        }}
+                        className="w-full bg-neutral-50 hover:bg-neutral-100 px-4 py-3 flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isProjectExpanded ? '' : '-rotate-90'}`} />
+                          <div className="text-left">
+                            <span className="font-semibold text-neutral-900">{project.name}</span>
+                            <p className="text-xs text-neutral-500 mt-0.5">{userCount} team member{userCount !== 1 ? 's' : ''} • {expenseCount} expenses</p>
                           </div>
-                        );
-                      })}
+                        </div>
+                        <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{formatCurrency(projectTotal)}</span>
+                      </button>
+                      
+                      {/* Users under project - Collapsible */}
+                      {isProjectExpanded && (
+                        <div className="border-l-2 border-[#476E66]/20 ml-4">
+                          {Object.entries(project.users).map(([oduserId, user]) => {
+                            const userTotal = user.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+                            const userKey = `expense-${projectId}-${oduserId}`;
+                            const isUserExpanded = expandedExpenseUsers.has(userKey);
+                            
+                            return (
+                              <div key={oduserId}>
+                                {/* User Header - Clickable */}
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(expandedExpenseUsers);
+                                    if (next.has(userKey)) {
+                                      next.delete(userKey);
+                                    } else {
+                                      next.add(userKey);
+                                    }
+                                    setExpandedExpenseUsers(next);
+                                  }}
+                                  className="w-full bg-[#476E66]/5 hover:bg-[#476E66]/10 px-4 py-2.5 flex items-center justify-between transition-colors"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isUserExpanded ? '' : '-rotate-90'}`} />
+                                    <span className="font-medium text-neutral-800">{user.name}</span>
+                                    <span className="text-xs text-neutral-500">({user.expenses.length} expenses)</span>
+                                  </div>
+                                  <span className="text-sm font-medium text-[#476E66]">{formatCurrency(userTotal)}</span>
+                                </button>
+                                
+                                {/* Expenses - Collapsible */}
+                                {isUserExpanded && (
+                                  <>
+                                    {/* Mobile Cards */}
+                                    <div className="block md:hidden divide-y divide-neutral-50">
+                                      {user.expenses.map(expense => (
+                                        <div key={expense.id} className="p-3 hover:bg-neutral-50">
+                                          <div className="font-medium text-sm text-neutral-900 mb-1">{expense.description}</div>
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-xs text-neutral-500">
+                                              <span>{expense.date ? new Date(expense.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</span>
+                                              {expense.category && (
+                                                <>
+                                                  <span>•</span>
+                                                  <span>{expense.category}</span>
+                                                </>
+                                              )}
+                                            </div>
+                                            <div className="text-sm font-semibold text-[#476E66]">{formatCurrency(expense.amount)}</div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {/* Desktop Table */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                      <table className="w-full">
+                                        <thead className="bg-white border-b border-neutral-100">
+                                          <tr>
+                                            <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Date</th>
+                                            <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Description</th>
+                                            <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Category</th>
+                                            <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Amount</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-neutral-50">
+                                          {user.expenses.map(expense => (
+                                            <tr key={expense.id} className="hover:bg-neutral-50">
+                                              <td className="px-4 py-2.5 text-sm text-neutral-600">{expense.date ? new Date(expense.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
+                                              <td className="px-4 py-2.5 text-sm text-neutral-900">{expense.description}</td>
+                                              <td className="px-4 py-2.5 text-xs text-neutral-600">{expense.category || '-'}</td>
+                                              <td className="px-4 py-2.5 text-right text-sm font-semibold text-[#476E66]">{formatCurrency(expense.amount)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -651,7 +651,7 @@ export default function ProjectsPage() {
           )}
 
           {activeTab === 'billing' && (
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-4 sm:space-y-6">
               {viewingBillingInvoice ? (
                 <InlineBillingInvoiceView
                   invoice={viewingBillingInvoice}
@@ -669,7 +669,7 @@ export default function ProjectsPage() {
                 />
               ) : (
                 <>
-                  {/* Billing Summary Card */}
+                  {/* Billing Progress Hero Card */}
                   {(() => {
                     const projectBudget = selectedProject.budget || 0;
                     const tasksBudgetTotal = tasks.reduce((sum, t) => sum + (t.total_budget || t.estimated_fees || 0), 0);
@@ -680,171 +680,236 @@ export default function ProjectsPage() {
                     const remainingToBill = Math.max(0, totalBudget - totalInvoiced);
                     const billedPercentage = totalBudget > 0 ? Math.min(100, (totalInvoiced / totalBudget) * 100) : 0;
                     const paidPercentage = totalBudget > 0 ? Math.min(100, (totalPaid / totalBudget) * 100) : 0;
+                    const pendingPercentage = totalBudget > 0 ? Math.min(100, (totalPending / totalBudget) * 100) : 0;
                     
                     return (
-                      <div className="bg-gradient-to-br from-[#476E66]/5 to-[#476E66]/10 rounded-lg p-3 border border-[#476E66]/20">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-semibold text-neutral-900">Billing Summary</h4>
-                          {totalBudget > 0 && (
-                            <span className="text-xs font-medium text-[#476E66] bg-[#476E66]/10 px-2 py-0.5 rounded-full">
-                              {billedPercentage.toFixed(0)}% Invoiced
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        {totalBudget > 0 && (
-                          <div className="mb-4">
-                            <div className="h-2.5 bg-neutral-200 rounded-full overflow-hidden">
-                              <div className="h-full flex">
-                                <div 
-                                  className="bg-emerald-500 transition-all duration-500" 
-                                  style={{ width: `${paidPercentage}%` }}
-                                  title={`Paid: ${formatCurrency(totalPaid)}`}
+                      <div className="bg-white rounded-xl p-5 sm:p-6" style={{ boxShadow: 'var(--shadow-card)' }}>
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                          {/* Progress Circle */}
+                          <div className="flex items-center gap-5">
+                            <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0">
+                              <svg className="w-full h-full transform -rotate-90">
+                                <circle cx="50%" cy="50%" r="45%" fill="none" stroke="#F3F4F6" strokeWidth="8" />
+                                {/* Paid segment */}
+                                <circle
+                                  cx="50%" cy="50%" r="45%" fill="none" stroke="#10B981" strokeWidth="8"
+                                  strokeDasharray={`${paidPercentage * 2.83} 283`}
+                                  strokeLinecap="round"
                                 />
-                                <div 
-                                  className="bg-[#476E66]/60 transition-all duration-500" 
-                                  style={{ width: `${Math.max(0, billedPercentage - paidPercentage)}%` }}
-                                  title={`Pending: ${formatCurrency(totalPending)}`}
+                                {/* Pending segment */}
+                                <circle
+                                  cx="50%" cy="50%" r="45%" fill="none" stroke="#476E66" strokeWidth="8"
+                                  strokeDasharray={`${pendingPercentage * 2.83} 283`}
+                                  strokeDashoffset={`${-paidPercentage * 2.83}`}
+                                  strokeLinecap="round"
                                 />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-2xl font-bold text-neutral-900">{billedPercentage.toFixed(0)}%</span>
+                                <span className="text-xs text-neutral-500">Invoiced</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3 mt-1.5 text-[10px]">
-                              <div className="flex items-center gap-1">
+                            <div className="lg:hidden">
+                              <p className="text-lg font-semibold text-neutral-900">{formatCurrency(totalInvoiced)}</p>
+                              <p className="text-sm text-neutral-500">of {formatCurrency(totalBudget)} budget</p>
+                            </div>
+                          </div>
+
+                          {/* Metrics Grid */}
+                          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                            <div className="bg-neutral-50 rounded-xl p-3 sm:p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 rounded-full bg-neutral-400"></div>
+                                <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Budget</span>
+                              </div>
+                              <p className="text-lg sm:text-xl font-bold text-neutral-900">{formatCurrency(totalBudget)}</p>
+                            </div>
+                            <div className="bg-neutral-50 rounded-xl p-3 sm:p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 rounded-full bg-[#476E66]"></div>
+                                <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Invoiced</span>
+                              </div>
+                              <p className="text-lg sm:text-xl font-bold text-[#476E66]">{formatCurrency(totalInvoiced)}</p>
+                            </div>
+                            <div className="bg-neutral-50 rounded-xl p-3 sm:p-4">
+                              <div className="flex items-center gap-2 mb-1">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                <span className="text-neutral-500">Paid</span>
+                                <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Collected</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 rounded-full bg-[#476E66]/60"></div>
-                                <span className="text-neutral-500">Pending</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 rounded-full bg-neutral-200"></div>
-                                <span className="text-neutral-500">Remaining</span>
-                              </div>
+                              <p className="text-lg sm:text-xl font-bold text-emerald-600">{formatCurrency(totalPaid)}</p>
                             </div>
-                          </div>
-                        )}
-                        
-                        {/* Summary Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          <div className="bg-white/60 rounded-md p-2">
-                            <p className="text-[10px] uppercase tracking-wide text-neutral-500 ">Total Budget</p>
-                            <p className="text-sm font-semibold text-neutral-900">{formatCurrency(totalBudget)}</p>
-                          </div>
-                          <div className="bg-white/60 rounded-md p-2">
-                            <p className="text-[10px] uppercase tracking-wide text-neutral-500 ">Total Invoiced</p>
-                            <p className="text-sm font-semibold text-[#476E66]">{formatCurrency(totalInvoiced)}</p>
-                          </div>
-                          <div className="bg-white/60 rounded-md p-2">
-                            <p className="text-[10px] uppercase tracking-wide text-neutral-500 ">Collected</p>
-                            <p className="text-sm font-semibold text-emerald-600">{formatCurrency(totalPaid)}</p>
-                          </div>
-                          <div className="bg-white/60 rounded-md p-2">
-                            <p className="text-[10px] uppercase tracking-wide text-neutral-500 ">Remaining</p>
-                            <p className={`text-sm font-semibold ${remainingToBill > 0 ? 'text-amber-600' : 'text-neutral-400'}`}>
-                              {formatCurrency(remainingToBill)}
-                            </p>
+                            <div className="bg-neutral-50 rounded-xl p-3 sm:p-4">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Remaining</span>
+                              </div>
+                              <p className={`text-lg sm:text-xl font-bold ${remainingToBill > 0 ? 'text-amber-600' : 'text-neutral-400'}`}>
+                                {formatCurrency(remainingToBill)}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        
-                        {/* Task Billing Breakdown */}
-                        {tasks.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-[#476E66]/10">
-                            <p className="text-[10px] uppercase tracking-wide text-neutral-500 mb-2">Task Breakdown</p>
-                            <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                              {tasks.map(task => {
-                                const taskBudget = task.total_budget || task.estimated_fees || 0;
-                                const billedPct = task.billed_percentage || 0;
-                                const billedAmt = task.billed_amount || (taskBudget * billedPct / 100);
-                                return (
-                                  <div key={task.id} className="flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                                      <span className="text-neutral-700 truncate">{task.name}</span>
-                                      {billedPct > 0 && (
-                                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                                          billedPct >= 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-[#476E66]/10 text-[#476E66]'
-                                        }`}>
-                                          {billedPct}%
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-right flex-shrink-0 ml-2">
-                                      <span className="text-neutral-500">{formatCurrency(billedAmt)}</span>
-                                      <span className="text-neutral-300 mx-1">/</span>
-                                      <span className="text-neutral-700">{formatCurrency(taskBudget)}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })()}
-                  
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base sm:text-lg font-semibold text-neutral-900">Invoice History</h3>
-                    <button 
-                      onClick={() => setShowInvoiceModal(true)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#476E66] text-white text-xs sm:text-sm rounded-lg hover:bg-[#3A5B54]"
-                    >
-                      <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Create Invoice</span><span className="sm:hidden">New</span>
-                    </button>
-                  </div>
-                  {invoices.length === 0 ? (
-                    <div className="text-center py-8 sm:py-12">
-                      <FileText className="w-10 h-10 sm:w-12 sm:h-12 text-neutral-300 mx-auto mb-2 sm:mb-3" />
-                      <p className="text-sm text-neutral-500">No invoices yet</p>
-                      <p className="text-xs text-neutral-400 mt-1">Create an invoice to bill for this project</p>
+
+                  {/* Billable Tasks Section */}
+                  {tasks.length > 0 && (
+                    <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+                      <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-neutral-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-neutral-900">Billable Tasks</h3>
+                          <p className="text-xs text-neutral-500 mt-0.5">{tasks.length} task{tasks.length !== 1 ? 's' : ''} in this project</p>
+                        </div>
+                      </div>
+                      <div className="divide-y divide-neutral-100">
+                        {tasks.map(task => {
+                          const taskBudget = task.total_budget || task.estimated_fees || 0;
+                          const billedPct = task.billed_percentage || 0;
+                          const billedAmt = task.billed_amount || (taskBudget * billedPct / 100);
+                          const remainingAmt = Math.max(0, taskBudget - billedAmt);
+                          
+                          return (
+                            <div key={task.id} className="px-4 sm:px-5 py-3 sm:py-4 hover:bg-neutral-50 transition-colors">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-neutral-900 truncate">{task.name}</p>
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500">
+                                    <span>Budget: <span className="font-medium text-neutral-700">{formatCurrency(taskBudget)}</span></span>
+                                    <span>Billed: <span className="font-medium text-[#476E66]">{formatCurrency(billedAmt)}</span></span>
+                                    <span className="hidden sm:inline">Remaining: <span className="font-medium text-amber-600">{formatCurrency(remainingAmt)}</span></span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                    billedPct >= 100 ? 'bg-emerald-100 text-emerald-700' : 
+                                    billedPct > 0 ? 'bg-[#476E66]/10 text-[#476E66]' : 
+                                    'bg-neutral-100 text-neutral-500'
+                                  }`}>
+                                    {billedPct}% billed
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Mini progress bar */}
+                              <div className="mt-3 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-[#476E66] rounded-full transition-all duration-300"
+                                  style={{ width: `${Math.min(100, billedPct)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {invoices.map(invoice => (
-                        <div 
-                          key={invoice.id} 
-                          className="flex items-center justify-between p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
-                          onClick={() => setViewingBillingInvoice(invoice)}
+                  )}
+                  
+                  {/* Invoice History Section */}
+                  <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+                    <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-neutral-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-neutral-900">Invoices</h3>
+                        <p className="text-xs text-neutral-500 mt-0.5">
+                          {invoices.length === 0 ? 'No invoices created yet' : `${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`}
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setShowInvoiceModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#476E66] text-white text-sm font-medium rounded-lg hover:bg-[#3A5B54] transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="hidden sm:inline">Create Invoice</span>
+                        <span className="sm:hidden">New</span>
+                      </button>
+                    </div>
+                    
+                    {invoices.length === 0 ? (
+                      <div className="px-4 py-12 sm:py-16 text-center">
+                        <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <FileText className="w-7 h-7 text-neutral-400" />
+                        </div>
+                        <h4 className="text-base font-semibold text-neutral-900 mb-1">No invoices yet</h4>
+                        <p className="text-sm text-neutral-500 max-w-xs mx-auto">
+                          Create your first invoice to start billing for this project
+                        </p>
+                        <button 
+                          onClick={() => setShowInvoiceModal(true)}
+                          className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-[#476E66] text-white text-sm font-medium rounded-lg hover:bg-[#3A5B54] transition-colors"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-neutral-900">{invoice.invoice_number}</p>
-                            <p className="text-xs text-neutral-500">{new Date(invoice.created_at || '').toLocaleDateString()}</p>
-                          </div>
-                          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-neutral-900">{formatCurrency(invoice.total)}</p>
-                              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                                invoice.status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
-                                invoice.status === 'sent' ? 'bg-blue-50 text-blue-700' : 'bg-neutral-100 text-neutral-700'
+                          <Plus className="w-4 h-4" />
+                          Create Invoice
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-neutral-100">
+                        {invoices.map(invoice => (
+                          <div 
+                            key={invoice.id} 
+                            className="flex items-center gap-4 px-4 sm:px-5 py-3 sm:py-4 hover:bg-neutral-50 transition-colors cursor-pointer group"
+                            onClick={() => setViewingBillingInvoice(invoice)}
+                          >
+                            {/* Invoice Icon */}
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              invoice.status === 'paid' ? 'bg-emerald-100' :
+                              invoice.status === 'sent' ? 'bg-blue-100' : 'bg-neutral-100'
+                            }`}>
+                              <FileText className={`w-5 h-5 ${
+                                invoice.status === 'paid' ? 'text-emerald-600' :
+                                invoice.status === 'sent' ? 'text-blue-600' : 'text-neutral-500'
+                              }`} />
+                            </div>
+                            
+                            {/* Invoice Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-neutral-900">{invoice.invoice_number}</p>
+                              <p className="text-xs text-neutral-500 mt-0.5">
+                                {new Date(invoice.created_at || '').toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </p>
+                            </div>
+                            
+                            {/* Amount & Status */}
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-semibold text-neutral-900">{formatCurrency(invoice.total)}</p>
+                              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                                invoice.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
+                                invoice.status === 'sent' ? 'bg-blue-100 text-blue-700' : 
+                                'bg-neutral-100 text-neutral-600'
                               }`}>
                                 {invoice.status || 'draft'}
                               </span>
                             </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm('Are you sure you want to delete this invoice?')) {
-                                  try {
-                                    await api.deleteInvoice(invoice.id);
-                                    if (projectId) loadProjectDetails(projectId);
-                                  } catch (err) {
-                                    console.error('Failed to delete invoice:', err);
-                                    alert('Failed to delete invoice');
+                            
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Delete this invoice?')) {
+                                    try {
+                                      await api.deleteInvoice(invoice.id);
+                                      if (projectId) loadProjectDetails(projectId);
+                                    } catch (err) {
+                                      console.error('Failed to delete invoice:', err);
+                                      alert('Failed to delete invoice');
+                                    }
                                   }
-                                }
-                              }}
-                              className="p-1 sm:p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors hidden sm:block"
-                              title="Delete invoice"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                            <ChevronRight className="w-4 h-4 text-neutral-400" />
+                                }}
+                                className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                              <ChevronRight className="w-5 h-5 text-neutral-300 group-hover:text-neutral-400" />
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -2308,8 +2373,368 @@ function ClientTabContent({ client, onClientUpdate, canViewFinancials = true, is
   );
 }
 
-// Tasks Tab Component with BigTime-style layout
+// Tasks Tab Component - Clean Unified Design
 function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true }: {
+  tasks: Task[];
+  timeEntries?: TimeEntry[];
+  projectId: string;
+  companyId: string;
+  onTasksChange: () => void;
+  onEditTask: (task: Task) => void;
+  onAddTask: () => void;
+  canViewFinancials?: boolean;
+}) {
+  const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [quickAddName, setQuickAddName] = useState('');
+  const [teamMembers, setTeamMembers] = useState<{id: string; full_name: string; avatar_url?: string}[]>([]);
+
+  useEffect(() => {
+    async function loadTeam() {
+      try {
+        const profiles = await api.getCompanyProfiles(companyId);
+        setTeamMembers(profiles?.map((p: any) => ({ id: p.id, full_name: p.full_name || "Unknown", avatar_url: p.avatar_url })) || []);
+      } catch (e) { console.error("Load team failed:", e); }
+    }
+    loadTeam();
+  }, [companyId]);
+
+  // Stats
+  const stats = {
+    total: tasks.length,
+    notStarted: tasks.filter(t => t.status === 'not_started' || !t.status).length,
+    inProgress: tasks.filter(t => t.status === 'in_progress').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+  };
+  const progressPercent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+
+  // Filtered tasks
+  const filteredTasks = tasks.filter(task => {
+    if (statusFilter !== 'all' && task.status !== statusFilter) {
+      if (statusFilter === 'not_started' && task.status) return false;
+      if (statusFilter !== 'not_started' && task.status !== statusFilter) return false;
+    }
+    if (searchTerm && !task.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleQuickAdd = async () => {
+    if (!quickAddName.trim()) return;
+    try {
+      await api.createTask({ name: quickAddName.trim(), project_id: projectId, company_id: companyId, status: 'not_started' });
+      setQuickAddName('');
+      onTasksChange();
+    } catch (error) {
+      console.error('Failed to add task:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Delete this task?')) return;
+    try {
+      await api.deleteTask(taskId);
+      onTasksChange();
+    } catch (error) {
+      console.error('Failed to delete:', error);
+    }
+    setMenuOpen(null);
+  };
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+    try {
+      await api.updateTask(taskId, { 
+        status: newStatus,
+        completion_percentage: newStatus === 'completed' ? 100 : (newStatus === 'in_progress' ? 50 : 0)
+      });
+      onTasksChange();
+    } catch (err) { console.error(err); }
+  };
+
+  const toggleExpand = (taskId: string) => {
+    const newSet = new Set(expandedTasks);
+    if (newSet.has(taskId)) newSet.delete(taskId);
+    else newSet.add(taskId);
+    setExpandedTasks(newSet);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header with Stats & Actions */}
+      <div className="bg-white rounded-xl p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Progress Summary */}
+          <div className="flex items-center gap-4">
+            {/* Progress Circle */}
+            <div className="relative w-14 h-14 flex-shrink-0">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="28" cy="28" r="24" fill="none" stroke="#F3F4F6" strokeWidth="4" />
+                <circle
+                  cx="28" cy="28" r="24" fill="none" stroke="#476E66" strokeWidth="4"
+                  strokeDasharray={`${progressPercent * 1.51} 151`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-sm font-bold text-neutral-900">{progressPercent}%</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-neutral-900">{stats.completed} of {stats.total} complete</p>
+              <p className="text-xs text-neutral-500">{stats.inProgress} in progress</p>
+            </div>
+          </div>
+
+          {/* Add Task Button */}
+          <button
+            onClick={onAddTask}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Add Task
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Pills & Search */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {/* Status Filter Pills */}
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              statusFilter === 'all' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            All <span className="ml-1 text-xs opacity-60">{stats.total}</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter('not_started')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              statusFilter === 'not_started' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            To Do <span className="ml-1 text-xs opacity-60">{stats.notStarted}</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter('in_progress')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              statusFilter === 'in_progress' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            In Progress <span className="ml-1 text-xs opacity-60">{stats.inProgress}</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter('completed')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              statusFilter === 'completed' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+            }`}
+          >
+            Done <span className="ml-1 text-xs opacity-60">{stats.completed}</span>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Tasks List */}
+      <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
+        {filteredTasks.length === 0 && !quickAddName ? (
+          <div className="p-12 text-center">
+            <div className="w-14 h-14 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckSquare className="w-6 h-6 text-neutral-400" />
+            </div>
+            <h3 className="text-base font-semibold text-neutral-900 mb-1">
+              {statusFilter === 'all' ? 'No tasks yet' : `No ${statusFilter.replace('_', ' ')} tasks`}
+            </h3>
+            <p className="text-sm text-neutral-500 mb-4">
+              {statusFilter === 'all' ? 'Create your first task to get started' : 'Tasks will appear here when their status matches'}
+            </p>
+            {statusFilter === 'all' && (
+              <button
+                onClick={onAddTask}
+                className="px-4 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
+              >
+                Create Task
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-neutral-100">
+            {filteredTasks.map(task => {
+              const assignee = teamMembers.find(m => m.id === task.assigned_to);
+              const isCompleted = task.status === 'completed';
+              const taskTimeEntries = timeEntries.filter(te => te.task_id === task.id);
+              const isExpanded = expandedTasks.has(task.id);
+
+              return (
+                <div key={task.id}>
+                  <div className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors group ${isCompleted ? 'opacity-60' : ''}`}>
+                    {/* Completion Toggle */}
+                    <button
+                      onClick={() => handleStatusChange(task.id, isCompleted ? 'not_started' : 'completed')}
+                      className={`flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all hover:scale-110 flex-shrink-0 ${
+                        isCompleted ? 'border-[#476E66] bg-[#476E66]' : 'border-neutral-300 hover:border-[#476E66]'
+                      }`}
+                    >
+                      {isCompleted && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                    </button>
+
+                    {/* Task Info */}
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEditTask(task)}>
+                      <p className={`text-sm font-medium ${isCompleted ? 'line-through text-neutral-400' : 'text-neutral-900'}`}>
+                        {task.name}
+                      </p>
+                      {task.description && (
+                        <p className="text-xs text-neutral-500 line-clamp-1 mt-0.5">{task.description}</p>
+                      )}
+                    </div>
+
+                    {/* Time Entries Badge */}
+                    {taskTimeEntries.length > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                        className="flex items-center gap-1 px-2 py-1 bg-neutral-100 hover:bg-neutral-200 rounded-lg text-xs text-neutral-600 transition-colors"
+                      >
+                        <Clock className="w-3 h-3" />
+                        {taskTimeEntries.length}
+                      </button>
+                    )}
+
+                    {/* Status Dropdown */}
+                    <select
+                      value={task.status || 'not_started'}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-lg border-0 cursor-pointer transition-colors ${
+                        task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                        task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                        'bg-neutral-100 text-neutral-600'
+                      }`}
+                    >
+                      <option value="not_started">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Done</option>
+                    </select>
+
+                    {/* Assignee */}
+                    <div className="hidden sm:flex items-center gap-2 w-28">
+                      {assignee ? (
+                        <>
+                          {assignee.avatar_url ? (
+                            <img src={assignee.avatar_url} alt="" className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-[#476E66]/20 flex items-center justify-center text-xs font-medium text-[#476E66]">
+                              {assignee.full_name?.charAt(0) || '?'}
+                            </div>
+                          )}
+                          <span className="text-xs text-neutral-600 truncate">{assignee.full_name}</span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-neutral-400">Unassigned</span>
+                      )}
+                    </div>
+
+                    {/* Hours */}
+                    <span className="hidden sm:block text-xs font-medium text-neutral-500 w-12 text-right">
+                      {task.estimated_hours ? `${task.estimated_hours}h` : '-'}
+                    </span>
+
+                    {/* Actions Menu */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === task.id ? null : task.id); }}
+                        className="p-1.5 hover:bg-neutral-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <MoreVertical className="w-4 h-4 text-neutral-400" />
+                      </button>
+                      {menuOpen === task.id && (
+                        <div className="absolute right-0 top-full mt-1 bg-white rounded-xl py-1 z-20 min-w-[120px] border border-neutral-100" style={{ boxShadow: 'var(--shadow-dropdown)' }}>
+                          <button
+                            onClick={() => { onEditTask(task); setMenuOpen(null); }}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 flex items-center gap-2 transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-neutral-50 text-red-600 flex items-center gap-2 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Arrow */}
+                    <ChevronRight 
+                      className="w-4 h-4 text-neutral-300 cursor-pointer hidden sm:block" 
+                      onClick={() => onEditTask(task)} 
+                    />
+                  </div>
+
+                  {/* Expanded Time Entries */}
+                  {isExpanded && taskTimeEntries.length > 0 && (
+                    <div className="bg-neutral-50 border-t border-neutral-100 px-4 py-3 ml-9">
+                      <p className="text-xs font-semibold text-neutral-700 mb-2">Work Logs</p>
+                      <div className="space-y-2">
+                        {taskTimeEntries.map(entry => (
+                          <div key={entry.id} className="flex items-center gap-3 text-xs bg-white p-2 rounded-lg">
+                            <span className="text-neutral-500 w-20">{new Date(entry.date).toLocaleDateString()}</span>
+                            <span className="font-semibold text-neutral-900 w-12">{entry.hours}h</span>
+                            <span className="text-neutral-600 flex-1 truncate">{entry.description || 'No description'}</span>
+                            <span className="text-neutral-400">{entry.user?.full_name || 'Unknown'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Quick Add Row */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-neutral-50/50">
+              <div className="w-6 h-6 rounded-full border-2 border-dashed border-neutral-300 flex items-center justify-center">
+                <Plus className="w-3 h-3 text-neutral-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Add a task..."
+                value={quickAddName}
+                onChange={(e) => setQuickAddName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAdd()}
+                className="flex-1 bg-transparent text-sm border-none outline-none placeholder:text-neutral-400"
+              />
+              {quickAddName && (
+                <button
+                  onClick={handleQuickAdd}
+                  className="px-3 py-1 bg-[#476E66] text-white text-xs font-medium rounded-lg hover:bg-[#3A5B54] transition-colors"
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Legacy Tasks Tab Component kept for reference - remove later
+function TasksTabContentLegacy({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true }: {
   tasks: Task[];
   timeEntries?: TimeEntry[];
   projectId: string;
@@ -4961,7 +5386,7 @@ function InlineBillingInvoiceView({
 }
 
 
-// Project Details Tab Component - Simplified
+// Project Details Tab Component - Refined UI
 function ProjectDetailsTab({ 
   project, 
   companyId,
@@ -4980,6 +5405,7 @@ function ProjectDetailsTab({
   });
   
   const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     setFormData({
@@ -4989,7 +5415,13 @@ function ProjectDetailsTab({
       due_date: project.due_date || '',
       status_notes: project.status_notes || '',
     });
+    setHasChanges(false);
   }, [project]);
+
+  function updateField(field: string, value: string) {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setHasChanges(true);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -5001,7 +5433,7 @@ function ProjectDetailsTab({
         status_notes: formData.status_notes || null,
       };
       await onUpdate(cleanedData);
-      alert('Project details saved successfully!');
+      setHasChanges(false);
     } catch (error) {
       console.error('Failed to save:', error);
       alert('Failed to save changes. Please try again.');
@@ -5010,98 +5442,152 @@ function ProjectDetailsTab({
   }
 
   const STATUS_OPTIONS = [
-    { value: 'not_started', label: 'Not Started' },
-    { value: 'active', label: 'Active' },
-    { value: 'on_hold', label: 'On Hold' },
-    { value: 'completed', label: 'Completed' },
+    { value: 'not_started', label: 'Not Started', color: 'bg-neutral-100 text-neutral-600', activeColor: 'bg-neutral-600 text-white' },
+    { value: 'active', label: 'Active', color: 'bg-emerald-50 text-emerald-600', activeColor: 'bg-emerald-500 text-white' },
+    { value: 'on_hold', label: 'On Hold', color: 'bg-amber-50 text-amber-600', activeColor: 'bg-amber-500 text-white' },
+    { value: 'completed', label: 'Completed', color: 'bg-blue-50 text-blue-600', activeColor: 'bg-blue-500 text-white' },
   ];
 
+  const formatDateDisplay = (dateStr: string) => {
+    if (!dateStr) return 'Not set';
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base sm:text-lg font-semibold text-neutral-900">Project Details</h3>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-3 py-1.5 text-xs sm:text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-
-      {/* Status */}
-      <div>
-        <label className="block text-xs font-medium text-neutral-500 mb-2">Status</label>
-        <select
-          value={formData.status}
-          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-          className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none bg-white"
-        >
+    <div className="space-y-6">
+      {/* Status Section - Prominent */}
+      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <label className="block text-sm font-semibold text-neutral-900 mb-3">Project Status</label>
+        <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>
+            <button
+              key={opt.value}
+              onClick={() => updateField('status', opt.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                formData.status === opt.value 
+                  ? opt.activeColor + ' shadow-sm' 
+                  : opt.color + ' hover:opacity-80'
+              }`}
+            >
               {opt.label}
-            </option>
+            </button>
           ))}
-        </select>
-      </div>
-
-      {/* Category */}
-      <div>
-        <label className="block text-xs font-medium text-neutral-500 mb-2">Category</label>
-        <select
-          value={formData.category}
-          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-          className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none bg-white"
-        >
-          {PROJECT_CATEGORIES.map(cat => (
-            <option key={cat.value} value={cat.value}>
-              {cat.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Dates */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-neutral-500 mb-2">Start Date</label>
-          <div className="relative">
-            <input
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              className="w-full pl-3 pr-10 py-2.5 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none bg-white appearance-none"
-              style={{ colorScheme: 'light' }}
-            />
-            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-neutral-500 mb-2">Due Date</label>
-          <div className="relative">
-            <input
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full pl-3 pr-10 py-2.5 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none bg-white appearance-none"
-              style={{ colorScheme: 'light' }}
-            />
-            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
-          </div>
         </div>
       </div>
 
-      {/* Notes */}
-      <div>
-        <label className="block text-xs font-medium text-neutral-500 mb-2">Notes</label>
+      {/* Category & Timeline Section */}
+      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="space-y-5">
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-semibold text-neutral-900 mb-3">Category</label>
+            <div className="flex flex-wrap gap-2">
+              {PROJECT_CATEGORIES.slice(0, 8).map(cat => (
+                <button
+                  key={cat.value}
+                  onClick={() => updateField('category', cat.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    formData.category === cat.value 
+                      ? 'bg-[#476E66] text-white shadow-sm' 
+                      : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+              {/* More categories dropdown */}
+              {PROJECT_CATEGORIES.length > 8 && (
+                <select
+                  value={PROJECT_CATEGORIES.slice(0, 8).some(c => c.value === formData.category) ? '' : formData.category}
+                  onChange={(e) => e.target.value && updateField('category', e.target.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer ${
+                    !PROJECT_CATEGORIES.slice(0, 8).some(c => c.value === formData.category)
+                      ? 'bg-[#476E66] text-white'
+                      : 'bg-neutral-100 text-neutral-600'
+                  }`}
+                >
+                  <option value="">More...</option>
+                  {PROJECT_CATEGORIES.slice(8).map(cat => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div className="pt-4 border-t border-neutral-100">
+            <label className="block text-sm font-semibold text-neutral-900 mb-3">Timeline</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-neutral-50 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Start Date</span>
+                </div>
+                <input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => updateField('start_date', e.target.value)}
+                  className="w-full bg-transparent text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
+                  style={{ colorScheme: 'light' }}
+                />
+                {!formData.start_date && (
+                  <p className="text-xs text-neutral-400 mt-1">Click to set</p>
+                )}
+              </div>
+              <div className="p-4 bg-neutral-50 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Due Date</span>
+                </div>
+                <input
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => updateField('due_date', e.target.value)}
+                  className="w-full bg-transparent text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
+                  style={{ colorScheme: 'light' }}
+                />
+                {!formData.due_date && (
+                  <p className="text-xs text-neutral-400 mt-1">Click to set</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notes Section */}
+      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <label className="block text-sm font-semibold text-neutral-900 mb-3">Project Notes</label>
         <textarea
           value={formData.status_notes}
-          onChange={(e) => setFormData({ ...formData, status_notes: e.target.value })}
-          rows={3}
-          className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none resize-none"
-          placeholder="Add any notes about this project..."
+          onChange={(e) => updateField('status_notes', e.target.value)}
+          rows={4}
+          className="w-full px-4 py-3 text-sm border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none resize-none bg-neutral-50 placeholder:text-neutral-400"
+          placeholder="Add any notes, context, or important information about this project..."
         />
+        {formData.status_notes && (
+          <p className="text-xs text-neutral-400 mt-2 text-right">{formData.status_notes.length} characters</p>
+        )}
       </div>
+
+      {/* Save Button */}
+      {hasChanges && (
+        <div className="flex items-center justify-between p-4 bg-[#476E66]/5 rounded-xl border border-[#476E66]/20">
+          <p className="text-sm text-[#476E66] font-medium">You have unsaved changes</p>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-5 py-2 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50 font-medium transition-colors"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
