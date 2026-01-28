@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, Task, TimeEntry, Expense } from '../lib/api';
-import { Plus, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, X, Edit2, Play, Pause, Square, Copy, CheckCircle, XCircle, AlertCircle, Send, Save, Calendar, ChevronDown } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, X, Edit2, Play, Pause, Square, Copy, Paperclip, CheckCircle, XCircle, AlertCircle, Send, Save, Calendar, ChevronDown } from 'lucide-react';
 import { ExpenseModal } from '../components/ExpenseModal';
 
 type TimeTab = 'timesheet' | 'expenses' | 'approvals' | 'approved';
