@@ -57,5 +57,7 @@
 	<string>BillDora needs photo library access to upload receipt images</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>BillDora needs permission to save receipt images to your photo library</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>BillDora sends notifications for invoice updates, payment reminders, task deadlines, and team activity</string>
 </dict>
 </plist>
