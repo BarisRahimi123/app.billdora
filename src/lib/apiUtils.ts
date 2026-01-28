@@ -79,7 +79,8 @@ async function forceLogoutOnExpiredJwt(): Promise<void> {
     clearStorageCache();
     
     // Clear localStorage auth data
-    localStorage.removeItem('sb-bqxnagmmegdbqrzhheip-auth-token');
+    const projectRef = import.meta.env.VITE_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'supabase';
+    localStorage.removeItem(`sb-${projectRef}-auth-token`);
     localStorage.removeItem('billdora-profile-cache');
     
     // Try to sign out via SDK (may fail if SDK is hung, but try anyway)

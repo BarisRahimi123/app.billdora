@@ -3,13 +3,17 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { logger } from './logger';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://bqxnagmmegdbqrzhheip.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Security warning: Remove hardcoded fallback keys before production deployment
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  console.warn('[Security] Using fallback Supabase keys. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env for production.');
+// Fail fast if env vars are missing
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing required environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
 }
+
+// Extract project ref from URL for auth token key (e.g., "bqxnagmmegdbqrzhheip" from "https://bqxnagmmegdbqrzhheip.supabase.co")
+const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'supabase';
+export const AUTH_TOKEN_KEY = `sb-${projectRef}-auth-token`;
 
 // FIX: Store supabase client on window to survive HMR (Hot Module Reloading)
 // This prevents "Multiple GoTrueClient instances" error during development
@@ -136,8 +140,7 @@ export function clearStorageCache(): void {
 
 // Export function to invalidate specific auth key (forces disk read on next access)
 export function invalidateAuthCache(): void {
-  const authKey = 'sb-bqxnagmmegdbqrzhheip-auth-token';
-  memoryCache.delete(authKey);
+  memoryCache.delete(AUTH_TOKEN_KEY);
   logger.log('[Storage]', 'Invalidated auth token cache');
 }
 
@@ -303,7 +306,7 @@ export type Profile = {
 // directly from localStorage and using direct REST API calls.
 // ============================================================
 
-const AUTH_TOKEN_KEY = 'sb-bqxnagmmegdbqrzhheip-auth-token';
+// AUTH_TOKEN_KEY is exported from top of file
 const PROFILE_CACHE_KEY = 'billdora-profile-cache';
 
 /**

@@ -58,7 +58,7 @@ interface SubscriptionContextType {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
-const SUPABASE_URL = 'https://bqxnagmmegdbqrzhheip.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuth();

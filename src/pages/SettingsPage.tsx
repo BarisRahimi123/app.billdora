@@ -4784,8 +4784,8 @@ function IntegrationsTab({ companyId }: { companyId: string }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
 
-  const SUPABASE_URL = 'https://bqxnagmmegdbqrzhheip.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   useEffect(() => {
     loadStripeStatus();
@@ -4985,8 +4985,8 @@ function BigTimeIntegrationCard({ companyId }: { companyId: string }) {
   const [importStaff, setImportStaff] = useState(true);
   const [importTimeEntries, setImportTimeEntries] = useState(false);
   
-  const SUPABASE_URL = 'https://bqxnagmmegdbqrzhheip.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   useEffect(() => {
     loadBigTimeStatus();
@@ -5530,8 +5530,8 @@ function SubscriptionTab() {
     return () => { mounted = false; };
   }, [profile?.company_id]);
 
-  const SUPABASE_URL = 'https://bqxnagmmegdbqrzhheip.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY';
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   const PRICE_IDS = {
     monthly: 'price_1SmkmUGi0VDXirSGgQBI28x7',

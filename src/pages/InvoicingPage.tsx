@@ -2048,11 +2048,13 @@ function PaymentReminderSection({
     }
     setSchedulingReminder(true);
     try {
-      const res = await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/send-payment-reminder', {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-payment-reminder`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY'
+          'Authorization': `Bearer ${supabaseAnonKey}`
         },
         body: JSON.stringify({
           invoiceId: invoice.id,
@@ -3666,11 +3668,13 @@ function InvoiceDetailView({
                   }
                   setSendingInvoice(true);
                   try {
-                    const res = await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/send-invoice', {
+                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                    const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
                       method: 'POST',
                       headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY'
+                        'Authorization': `Bearer ${supabaseAnonKey}`
                       },
                       body: JSON.stringify({
                         invoiceId: invoice.id,

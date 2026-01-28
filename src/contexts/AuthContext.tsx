@@ -48,16 +48,20 @@ async function setupPushNotifications(userId: string, companyId: string, authTok
     
     const token = fcmToken || apnsToken;
     if (token) {
-      await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/rest/v1/device_tokens', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY',
-          'Authorization': `Bearer ${authToken}`,
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ device_token: token, user_id: userId, company_id: companyId, platform: 'ios' })
-      });
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseAnonKey) {
+        await fetch(`${supabaseUrl}/rest/v1/device_tokens`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${authToken}`,
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({ device_token: token, user_id: userId, company_id: companyId, platform: 'ios' })
+        });
+      }
     }
   } catch (e) {
     console.error('[Push] Setup failed:', e);
@@ -450,11 +454,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {}
       
       // HubSpot sync (fire and forget)
-      fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/hubspot-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, full_name: fullName, phone_number: phone, company_name: companyName }),
-      }).catch(() => {});
+      const hubspotUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (hubspotUrl) {
+        fetch(`${hubspotUrl}/functions/v1/hubspot-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, full_name: fullName, phone_number: phone, company_name: companyName }),
+        }).catch(() => {});
+      }
       
       if (!emailConfirmationRequired) setUser(data.user);
       return { error: null, emailConfirmationRequired, userId: data.user.id };

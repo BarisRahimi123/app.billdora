@@ -45,11 +45,13 @@ export default function LeadFormPage() {
 
       try {
         // Fetch form config from Supabase directly (public read)
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
         const response = await fetch(
-          `https://bqxnagmmegdbqrzhheip.supabase.co/rest/v1/lead_forms?id=eq.${formId}&is_active=eq.true&select=id,slug,heading,description,button_text,success_message,logo_url,accent_color,show_phone,show_company,show_message,require_phone,require_company`,
+          `${supabaseUrl}/rest/v1/lead_forms?id=eq.${formId}&is_active=eq.true&select=id,slug,heading,description,button_text,success_message,logo_url,accent_color,show_phone,show_company,show_message,require_phone,require_company`,
           {
             headers: {
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY',
+              'apikey': supabaseAnonKey,
             },
           }
         );
@@ -79,8 +81,9 @@ export default function LeadFormPage() {
     setError(null);
 
     try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const response = await fetch(
-        'https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/lead-form-submit',
+        `${supabaseUrl}/functions/v1/lead-form-submit`,
         {
           method: 'POST',
           headers: {

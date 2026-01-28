@@ -199,11 +199,14 @@ export default function LoginPage() {
             // Successfully logged in - now link the collaboration
             const { data: { user: currentUser } } = await supabase.auth.getUser();
             if (currentUser) {
-              await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/confirm-collaborator', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentUser.id, collaborationId })
-              });
+              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+              if (supabaseUrl) {
+                await fetch(`${supabaseUrl}/functions/v1/confirm-collaborator`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: currentUser.id, collaborationId })
+                });
+              }
               navigate('/dashboard');
               return;
             }
@@ -217,7 +220,8 @@ export default function LoginPage() {
             const { supabase } = await import('../lib/supabase');
             
             // Call edge function to auto-confirm collaborator and link them
-            const response = await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/confirm-collaborator', {
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const response = await fetch(`${supabaseUrl}/functions/v1/confirm-collaborator`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ userId: result.userId, collaborationId })
@@ -272,11 +276,14 @@ export default function LoginPage() {
           const { supabase } = await import('../lib/supabase');
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           if (currentUser) {
-            await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/confirm-collaborator', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: currentUser.id, collaborationId })
-            });
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            if (supabaseUrl) {
+              await fetch(`${supabaseUrl}/functions/v1/confirm-collaborator`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUser.id, collaborationId })
+              });
+            }
           }
         }
         navigate('/dashboard');
@@ -300,12 +307,14 @@ export default function LoginPage() {
     
     try {
       // Use custom edge function for password reset (uses SendGrid)
-      const response = await fetch('https://bqxnagmmegdbqrzhheip.supabase.co/functions/v1/request-password-reset', {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/request-password-reset`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY'
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
         },
         body: JSON.stringify({
           email,

@@ -1,7 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Building2, Link2, RefreshCw, CheckCircle2, Trash2 } from 'lucide-react';
 
-const SUPABASE_URL = 'https://bqxnagmmegdbqrzhheip.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Get auth token key dynamically
+const getAuthTokenKey = () => {
+  const projectRef = SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'supabase';
+  return `sb-${projectRef}-auth-token`;
+};
 
 interface PlaidItem {
   id: string;
@@ -50,8 +57,8 @@ export default function PlaidLink({ userId, companyId, onSuccess }: PlaidLinkPro
         `${SUPABASE_URL}/rest/v1/plaid_items?company_id=eq.${companyId}&select=*,plaid_accounts(*)`,
         {
           headers: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxeG5hZ21tZWdkYnFyemhoZWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2OTM5NTgsImV4cCI6MjA2ODI2OTk1OH0.LBb7KaCSs7LpsD9NZCOcartkcDIIALBIrpnYcv5Y0yY',
-            'Authorization': `Bearer ${localStorage.getItem('sb-bqxnagmmegdbqrzhheip-auth-token') ? JSON.parse(localStorage.getItem('sb-bqxnagmmegdbqrzhheip-auth-token')!).access_token : ''}`
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${localStorage.getItem(getAuthTokenKey()) ? JSON.parse(localStorage.getItem(getAuthTokenKey())!).access_token : ''}`
           }
         }
       );
@@ -67,7 +74,7 @@ export default function PlaidLink({ userId, companyId, onSuccess }: PlaidLinkPro
     setLoading(true);
     try {
       // Get link token
-      const authToken = localStorage.getItem('sb-bqxnagmmegdbqrzhheip-auth-token');
+      const authToken = localStorage.getItem(getAuthTokenKey());
       const accessToken = authToken ? JSON.parse(authToken).access_token : '';
       
       const tokenResponse = await fetch(`${SUPABASE_URL}/functions/v1/plaid-link-token`, {
@@ -90,7 +97,7 @@ export default function PlaidLink({ userId, companyId, onSuccess }: PlaidLinkPro
         onSuccess: async (public_token: string, metadata: any) => {
           try {
             // Exchange token
-            const authToken = localStorage.getItem('sb-bqxnagmmegdbqrzhheip-auth-token');
+            const authToken = localStorage.getItem(getAuthTokenKey());
             const accessToken = authToken ? JSON.parse(authToken).access_token : '';
             await fetch(`${SUPABASE_URL}/functions/v1/plaid-exchange-token`, {
               method: 'POST',
@@ -126,7 +133,7 @@ export default function PlaidLink({ userId, companyId, onSuccess }: PlaidLinkPro
   async function syncTransactions(itemId: string) {
     setSyncing(itemId);
     try {
-      const authToken = localStorage.getItem('sb-bqxnagmmegdbqrzhheip-auth-token');
+      const authToken = localStorage.getItem(getAuthTokenKey());
       const accessToken = authToken ? JSON.parse(authToken).access_token : '';
       const response = await fetch(`${SUPABASE_URL}/functions/v1/plaid-sync-transactions`, {
         method: 'POST',
