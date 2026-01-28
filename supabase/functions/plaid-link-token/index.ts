@@ -2,8 +2,11 @@
 import { getCorsHeaders } from '../_shared/cors.ts';
 import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
 
-const PLAID_CLIENT_ID = '69640aa94ce2010021c692f4';
-const PLAID_SECRET = Deno.env.get('PLAID_SECRET') || 'fe920cd0eeaa862ba239bbadab07f8';
+const PLAID_CLIENT_ID = Deno.env.get('PLAID_CLIENT_ID') || '';
+const PLAID_SECRET = Deno.env.get('PLAID_SECRET') || '';
+if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
+  console.error('[SECURITY] PLAID_CLIENT_ID or PLAID_SECRET not set in environment variables');
+}
 const PLAID_ENV = 'sandbox'; // Change to 'production' for live
 
 const PLAID_BASE_URL = PLAID_ENV === 'sandbox' 
