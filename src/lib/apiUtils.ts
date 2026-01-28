@@ -122,7 +122,7 @@ let sdkHungAt = 0;
 const SDK_HUNG_RECOVERY_TIME = 60 * 1000; // Try again after 60 seconds
 
 // Timeout for SDK calls to prevent hanging
-const SDK_CALL_TIMEOUT = 5000; // 5 seconds
+const SDK_CALL_TIMEOUT = 15000; // 15 seconds (increased for slow networks)
 
 /**
  * Helper to wrap SDK calls with timeout - returns null on timeout instead of throwing
