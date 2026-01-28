@@ -1,0 +1,221 @@
+{
+  "color": {
+    "primary": {
+      "red": {
+        "base": {
+          "value": "#DC143C",
+          "type": "color",
+          "description": "Primary brand color for CTAs and highlights"
+        },
+        "dark": {
+          "value": "#A01028", 
+          "type": "color",
+          "description": "Hover and pressed states"
+        }
+      }
+    },
+    "background": {
+      "main": {
+        "value": "#F9FAFB",
+        "type": "color",
+        "description": "Main page background"
+      },
+      "surface": {
+        "value": "#FFFFFF",
+        "type": "color",
+        "description": "Card backgrounds, elevated surfaces"
+      }
+    },
+    "border": {
+      "subtle": {
+        "value": "#E5E7EB",
+        "type": "color",
+        "description": "Subtle borders"
+      },
+      "divider": {
+        "value": "#D1D5DB",
+        "type": "color",
+        "description": "Dividers, separators"
+      }
+    },
+    "text": {
+      "primary": {
+        "value": "#111827",
+        "type": "color",
+        "description": "Primary text, headings"
+      },
+      "secondary": {
+        "value": "#4B5563",
+        "type": "color",
+        "description": "Secondary text, body content"
+      },
+      "muted": {
+        "value": "#9CA3AF",
+        "type": "color",
+        "description": "Muted text, hints, placeholders"
+      }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "primary": {
+        "value": "'Helvetica Neue', Helvetica, Arial, sans-serif",
+        "type": "fontFamily",
+        "description": "Swiss design system font stack"
+      }
+    },
+    "fontSize": {
+      "display": {
+        "value": "64px",
+        "type": "dimension",
+        "description": "Hero headlines"
+      },
+      "headline": {
+        "value": "48px", 
+        "type": "dimension",
+        "description": "Section headers"
+      },
+      "subhead": {
+        "value": "32px",
+        "type": "dimension", 
+        "description": "Feature titles"
+      },
+      "bodyLarge": {
+        "value": "24px",
+        "type": "dimension",
+        "description": "Hero subtext, introductions"
+      },
+      "body": {
+        "value": "18px",
+        "type": "dimension",
+        "description": "Standard content"
+      },
+      "small": {
+        "value": "14px", 
+        "type": "dimension",
+        "description": "Captions, metadata"
+      },
+      "caption": {
+        "value": "12px",
+        "type": "dimension", 
+        "description": "Credits, fine print"
+      }
+    },
+    "fontWeight": {
+      "regular": {
+        "value": 400,
+        "type": "number",
+        "description": "Body text, standard content"
+      },
+      "medium": {
+        "value": 500,
+        "type": "number",
+        "description": "Subheadings, emphasis"
+      },
+      "bold": {
+        "value": 700,
+        "type": "number", 
+        "description": "Headings, navigation, buttons"
+      }
+    },
+    "lineHeight": {
+      "tight": {
+        "value": 1.1,
+        "type": "number",
+        "description": "Display headings"
+      },
+      "normal": {
+        "value": 1.2,
+        "type": "number",
+        "description": "Headlines"
+      },
+      "relaxed": {
+        "value": 1.5,
+        "type": "number", 
+        "description": "Body text"
+      },
+      "loose": {
+        "value": 1.6,
+        "type": "number",
+        "description": "Large body text"
+      }
+    }
+  },
+  "spacing": {
+    "micro": {
+      "value": "8px",
+      "type": "dimension",
+      "description": "Inline element spacing"
+    },
+    "small": {
+      "value": "16px", 
+      "type": "dimension",
+      "description": "Related element gaps"
+    },
+    "base": {
+      "value": "24px",
+      "type": "dimension",
+      "description": "Paragraph spacing"
+    },
+    "medium": {
+      "value": "32px",
+      "type": "dimension", 
+      "description": "Section padding"
+    },
+    "large": {
+      "value": "48px",
+      "type": "dimension",
+      "description": "Major section spacing"
+    },
+    "xl": {
+      "value": "64px",
+      "type": "dimension",
+      "description": "Section boundaries"
+    },
+    "xxl": {
+      "value": "96px", 
+      "type": "dimension",
+      "description": "Dramatic section breaks"
+    }
+  },
+  "borderRadius": {
+    "none": {
+      "value": "0px",
+      "type": "dimension",
+      "description": "Sharp corners, default Swiss style"
+    },
+    "subtle": {
+      "value": "2px",
+      "type": "dimension",
+      "description": "Buttons only, minimal rounding"
+    }
+  },
+  "boxShadow": {
+    "card": {
+      "value": "0 1px 3px rgba(0, 0, 0, 0.12)",
+      "type": "shadow", 
+      "description": "Minimal card elevation"
+    }
+  },
+  "animation": {
+    "duration": {
+      "fast": {
+        "value": "150ms",
+        "type": "duration",
+        "description": "Button interactions"
+      },
+      "normal": {
+        "value": "200ms",
+        "type": "duration",
+        "description": "Standard transitions"
+      }
+    },
+    "easing": {
+      "linear": {
+        "value": "linear",
+        "type": "cubicBezier",
+        "description": "Honest, mechanical timing"
+      }
+    }
+  }
+}

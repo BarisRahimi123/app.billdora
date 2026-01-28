@@ -1,0 +1,291 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   DESIGN SYSTEM - Based on Modern Portal Design
+   ============================================ */
+
+/* iOS Safe Area Support */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
+  --sar: env(safe-area-inset-right);
+  
+  /* Design Tokens */
+  --color-accent: #476E66;
+  --color-accent-light: #5A8A80;
+  --color-accent-dark: #3A5B54;
+  
+  /* Background Colors */
+  --bg-page: #F5F5F3;
+  --bg-card: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  
+  /* Shadows - Soft Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+  --shadow-elevated: 0 4px 16px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-dropdown: 0 8px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  
+  /* Spacing Scale (8px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  
+  /* Typography */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+}
+
+/* Apply safe area to body - iOS only needs bottom padding */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  background-color: var(--bg-page);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Modern Card Styles */
+@layer components {
+  .card-elevated {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  
+  .card-flat {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid #E5E7EB;
+  }
+  
+  /* Soft Badge Styles */
+  .badge-success {
+    background: #ECFDF5;
+    color: #047857;
+  }
+  
+  .badge-warning {
+    background: #FFFBEB;
+    color: #B45309;
+  }
+  
+  .badge-error {
+    background: #FEF2F2;
+    color: #DC2626;
+  }
+  
+  .badge-info {
+    background: #EFF6FF;
+    color: #2563EB;
+  }
+  
+  .badge-neutral {
+    background: #F3F4F6;
+    color: #4B5563;
+  }
+  
+  /* Input Styles */
+  .input-modern {
+    height: 42px;
+    padding: 0 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid #E5E7EB;
+    background: #FFFFFF;
+    font-size: var(--text-base);
+    transition: all 0.15s ease;
+  }
+  
+  .input-modern:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(71, 110, 102, 0.1);
+    outline: none;
+  }
+  
+  /* Button Styles */
+  .btn-primary {
+    background: var(--color-accent);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: var(--text-base);
+    transition: all 0.15s ease;
+  }
+  
+  .btn-primary:hover {
+    background: var(--color-accent-dark);
+  }
+  
+  .btn-secondary {
+    background: transparent;
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: var(--text-base);
+    transition: all 0.15s ease;
+  }
+  
+  .btn-secondary:hover {
+    background: rgba(71, 110, 102, 0.05);
+  }
+  
+  .btn-ghost {
+    background: transparent;
+    color: #6B7280;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    font-size: var(--text-base);
+    transition: all 0.15s ease;
+  }
+  
+  .btn-ghost:hover {
+    background: #F3F4F6;
+    color: #374151;
+  }
+}
+
+/* iOS-specific touch optimizations */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select, button {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+  
+  /* Smooth scrolling for iOS */
+  .overflow-y-auto, .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%
+  }
+
+  .dark {
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%
+  }
+}
+
+
+
+img {
+  object-position: top;
+}
+
+.fixed {
+  position: fixed;
+}
+
+/* Print styles for proposal */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  .hidden.print\\:block {
+    display: block !important;
+  }
+  
+  header {
+    display: none !important;
+  }
+  
+  .fixed {
+    display: none !important;
+  }
+  
+  main {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  
+  /* Table spacing fix for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  table th,
+  table td {
+    padding: 12px 16px !important;
+    border: 1px solid #e5e5e5 !important;
+  }
+  
+  table thead th {
+    background-color: #f5f5f5 !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+  }
+  
+  table tfoot td {
+    background-color: #f5f5f5 !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Timeline fix for print - add borders for grayscale printing */
+  .bg-neutral-100 {
+    background-color: #f5f5f5 !important;
+    border: 1px solid #d4d4d4 !important;
+  }
+  
+  /* Timeline bars - ensure they have borders */
+  [style*="backgroundColor"] {
+    border: 1px solid #333 !important;
+  }
+}
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

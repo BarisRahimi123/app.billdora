@@ -1,0 +1,145 @@
+{
+  "redirects": [
+    {
+      "source": "/login",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/login",
+      "permanent": false
+    },
+    {
+      "source": "/login",
+      "has": [{ "type": "host", "value": "www.billdora.com" }],
+      "destination": "https://app.billdora.com/login",
+      "permanent": false
+    },
+    {
+      "source": "/check-email",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/check-email",
+      "permanent": false
+    },
+    {
+      "source": "/dashboard/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/dashboard/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/sales/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/sales/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/projects/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/projects/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/invoicing/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/invoicing/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/time-expense/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/time-expense/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/resourcing/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/resourcing/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/analytics/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/analytics/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/reports/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/reports/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/financials/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/financials/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/company-expenses/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/company-expenses/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/receipts/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/receipts/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/notifications/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/notifications/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/settings/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/settings/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/quotes/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/quotes/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/proposal/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/proposal/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/invoice-view/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/invoice-view/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/portal/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/portal/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/lead/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/lead/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/collaborate/:path*",
+      "has": [{ "type": "host", "value": "billdora.com" }],
+      "destination": "https://app.billdora.com/collaborate/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "app.billdora.com" }],
+      "destination": "https://app.billdora.com/dashboard",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
