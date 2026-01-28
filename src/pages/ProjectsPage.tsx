@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FieldError } from '../components/ErrorBoundary';
 import { validateEmail } from '../lib/validation';
+import { ExpenseModal } from '../components/ExpenseModal';
 
 type TaskSubTab = 'overview' | 'editor' | 'schedule' | 'allocations' | 'checklist';
 
@@ -70,6 +71,7 @@ export default function ProjectsPage() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState<ProjectTeamMember[]>([]);
   const [companyProfiles, setCompanyProfiles] = useState<{id: string; full_name?: string; avatar_url?: string; email?: string; role?: string}[]>([]);
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false);
@@ -615,7 +617,16 @@ export default function ProjectsPage() {
               
               {/* Expenses - Compact List */}
               <div>
-                <h4 className="text-sm font-semibold text-neutral-900 mb-2">Expenses</h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-neutral-900">Expenses</h4>
+                  <button
+                    onClick={() => setShowExpenseModal(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#476E66] hover:bg-[#476E66]/10 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add
+                  </button>
+                </div>
                 {expenses.length === 0 ? (
                   <p className="text-xs text-neutral-400 text-center py-4">No expenses for this project</p>
                 ) : (
@@ -962,6 +973,22 @@ export default function ProjectsPage() {
             onSave={async (invoiceId) => { 
               if (projectId) await loadProjectDetails(projectId);
               setShowInvoiceModal(false);
+            }}
+          />
+        )}
+
+        {/* Expense Modal */}
+        {showExpenseModal && selectedProject && (
+          <ExpenseModal
+            expense={null}
+            projects={projects}
+            companyId={profile?.company_id || ''}
+            userId={profile?.id || ''}
+            defaultProjectId={selectedProject.id}
+            onClose={() => setShowExpenseModal(false)}
+            onSave={() => {
+              if (projectId) loadProjectDetails(projectId);
+              setShowExpenseModal(false);
             }}
           />
         )}
