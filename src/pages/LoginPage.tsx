@@ -55,6 +55,12 @@ export default function LoginPage() {
     const companyParam = searchParams.get('company');
     const collaboratorParam = searchParams.get('collaborator');
     const collaborationIdParam = searchParams.get('collaboration_id');
+    const expiredParam = searchParams.get('expired');
+    
+    // Show message if session expired
+    if (expiredParam === 'true') {
+      setError('Your session has expired. Please sign in again.');
+    }
     
     // If visiting signup page and there's an existing session from a DIFFERENT flow,
     // sign out first. But only do this ONCE on initial load, not after successful login.

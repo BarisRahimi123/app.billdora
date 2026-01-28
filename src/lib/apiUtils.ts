@@ -48,6 +48,63 @@ function isAuthError(error: unknown): boolean {
   return false;
 }
 
+// Check if error is specifically a JWT expiration error - requires fresh login
+function isJwtExpiredError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('jwt expired') ||
+      message.includes('pgrst301') ||
+      (message.includes('jwt') && message.includes('expired'))
+    );
+  }
+  return false;
+}
+
+// Track if we've already triggered a forced logout to prevent loops
+let forcedLogoutTriggered = false;
+
+// Force logout and redirect to login page when JWT is expired and unrecoverable
+async function forceLogoutOnExpiredJwt(): Promise<void> {
+  if (forcedLogoutTriggered) {
+    console.log('[API] Force logout already triggered, skipping');
+    return;
+  }
+  
+  forcedLogoutTriggered = true;
+  console.warn('[API] JWT expired and unrecoverable - forcing logout');
+  
+  try {
+    // Clear all storage
+    clearStorageCache();
+    
+    // Clear localStorage auth data
+    localStorage.removeItem('sb-bqxnagmmegdbqrzhheip-auth-token');
+    localStorage.removeItem('billdora-profile-cache');
+    
+    // Try to sign out via SDK (may fail if SDK is hung, but try anyway)
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.log('[API] SDK signOut failed (expected if hung):', e);
+    }
+    
+    // Redirect to login with a message
+    const currentPath = window.location.pathname;
+    if (currentPath !== '/login' && currentPath !== '/') {
+      console.log('[API] Redirecting to login...');
+      window.location.href = '/login?expired=true';
+    } else {
+      // Just reload to clear state
+      window.location.reload();
+    }
+  } catch (e) {
+    console.error('[API] Error during force logout:', e);
+    // Last resort - just reload
+    window.location.reload();
+  }
+}
+
 function isRetryableError(error: unknown): boolean {
   if (error instanceof ApiError) return error.retryable;
   if (error instanceof Error) {
@@ -321,6 +378,7 @@ export function resetSdkState(): void {
   sdkHungAt = 0;
   consecutiveFailures = 0;
   lastSessionCheck = 0;
+  forcedLogoutTriggered = false; // Reset forced logout flag
   console.log('[API] SDK state reset');
 }
 
@@ -439,6 +497,16 @@ export async function withRetry<T>(
         throw error;
       }
       
+      // FIX: Check for JWT expired error specifically - this requires a fresh login
+      if (isJwtExpiredError(error)) {
+        console.error('[API] JWT expired error detected');
+        // If SDK is hung, we can't refresh - force logout immediately
+        if (sdkIsHung) {
+          await forceLogoutOnExpiredJwt();
+          throw error;
+        }
+      }
+      
       // On auth errors, try refreshing the session once
       if (!hasTriedRefresh && isAuthError(error)) {
         console.log('[API] Auth error detected, refreshing session...');
@@ -447,6 +515,11 @@ export async function withRetry<T>(
         if (refreshed) {
           console.log('[API] Session refreshed, retrying...');
           continue; // Retry with new token
+        }
+        // If refresh failed and it's a JWT expired error, force logout
+        if (isJwtExpiredError(error)) {
+          await forceLogoutOnExpiredJwt();
+          throw error;
         }
         // If refresh failed, redirect to login
         console.warn('[API] Session refresh failed, redirecting to login');
