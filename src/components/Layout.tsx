@@ -20,7 +20,6 @@ const mainNavItems = [
   { path: '/time-expense', icon: Clock, label: 'Time' },
   { path: '/invoicing', icon: FileText, label: 'Invoicing' },
   { path: '/resourcing', icon: Calendar, label: 'Team' },
-  { path: '/company-expenses', icon: Wallet, label: 'Expenses' },
 ];
 
 const financialsSubItems = [

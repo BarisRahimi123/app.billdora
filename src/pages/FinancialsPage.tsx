@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, FileText, Calendar, AlertCircle, Users, Wallet, ArrowUpRight, ArrowDownRight, Plus, Upload, X, Check, Link2, Edit2, Trash2, Building2, CreditCard, RefreshCw, ChevronDown, ChevronRight, Search, Filter, Download, Printer, BarChart3, PieChart, ClipboardList, Landmark } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { DollarSign, TrendingUp, TrendingDown, FileText, Calendar, AlertCircle, Users, Wallet, ArrowUpRight, ArrowDownRight, Plus, Upload, X, Check, Link2, Edit2, Trash2, Building2, CreditCard, RefreshCw, ChevronDown, ChevronRight, Search, Filter, Download, Printer, BarChart3, PieChart, ClipboardList, Landmark, Monitor, Megaphone, Briefcase, Shield, Plane, Phone, Car, MoreHorizontal, Eye, EyeOff } from 'lucide-react';
 import BankStatementsPage from './BankStatementsPage';
 import { useAuth } from '../contexts/AuthContext';
-import { api, Invoice, Expense, companyExpensesApi } from '../lib/api';
+import { api, Invoice, Expense, companyExpensesApi, CompanyExpense } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
 interface PayrollData {
@@ -54,12 +55,14 @@ interface PlatformTransaction {
   status?: string;
 }
 
-type FinancialTab = 'pnl' | 'bank' | 'transactions' | 'reports' | 'taxreports';
+type FinancialTab = 'pnl' | 'bank' | 'transactions' | 'reports' | 'taxreports' | 'operating';
 
 export default function FinancialsPage() {
   const { profile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<FinancialTab>('pnl');
+  const initialTab = (searchParams.get('tab') as FinancialTab) || 'pnl';
+  const [activeTab, setActiveTab] = useState<FinancialTab>(initialTab);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [companyExpenses, setCompanyExpenses] = useState<any[]>([]);
@@ -321,6 +324,7 @@ export default function FinancialsPage() {
       <div className="flex gap-0.5 p-0.5 bg-neutral-100 rounded-lg overflow-x-auto scrollbar-hide">
         {[
           { key: 'pnl', label: 'P&L', fullLabel: 'Profit & Loss' },
+          { key: 'operating', label: 'Overhead', fullLabel: 'Operating Expenses' },
           { key: 'bank', label: 'Bank', fullLabel: 'Bank & Receipts' },
           { key: 'transactions', label: 'Trans', fullLabel: 'Transactions' },
           { key: 'reports', label: 'Reports', fullLabel: 'Reports' },
@@ -376,6 +380,14 @@ export default function FinancialsPage() {
           companyExpenses={companyExpenses}
           payrollData={payrollData}
           formatCurrency={formatCurrency}
+        />
+      )}
+
+      {activeTab === 'operating' && (
+        <OperatingExpensesTab 
+          companyId={profile?.company_id || ''}
+          formatCurrency={formatCurrency}
+          onUpdate={loadData}
         />
       )}
 
@@ -2041,6 +2053,341 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Operating Expenses Tab - Company Overhead
+const EXPENSE_CATEGORIES = [
+  { value: 'software', label: 'Software & Subscriptions', icon: Monitor },
+  { value: 'office', label: 'Office & Facilities', icon: Building2 },
+  { value: 'marketing', label: 'Marketing & Advertising', icon: Megaphone },
+  { value: 'professional', label: 'Professional Services', icon: Briefcase },
+  { value: 'insurance', label: 'Insurance', icon: Shield },
+  { value: 'travel', label: 'Travel & Entertainment', icon: Plane },
+  { value: 'payroll', label: 'Payroll & HR', icon: Users },
+  { value: 'banking', label: 'Banking & Financial', icon: CreditCard },
+  { value: 'equipment', label: 'Equipment & Technology', icon: Monitor },
+  { value: 'telecom', label: 'Phone & Internet', icon: Phone },
+  { value: 'vehicles', label: 'Vehicles', icon: Car },
+  { value: 'other', label: 'Other', icon: MoreHorizontal },
+];
+
+function OperatingExpensesTab({ companyId, formatCurrency, onUpdate }: {
+  companyId: string;
+  formatCurrency: (n: number) => string;
+  onUpdate: () => void;
+}) {
+  const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [editingExpense, setEditingExpense] = useState<CompanyExpense | null>(null);
+
+  useEffect(() => {
+    loadExpenses();
+  }, [companyId]);
+
+  async function loadExpenses() {
+    if (!companyId) return;
+    setLoading(true);
+    try {
+      const data = await companyExpensesApi.getExpenses(companyId);
+      setExpenses(data);
+      // Auto-expand categories with expenses
+      const catsWithExpenses = new Set(data.map(e => e.category));
+      setExpandedCategories(catsWithExpenses);
+    } catch (err) {
+      console.error('Failed to load expenses:', err);
+    }
+    setLoading(false);
+  }
+
+  const totalMonthly = useMemo(() => {
+    return expenses.reduce((sum, exp) => sum + companyExpensesApi.getMonthlyAmount(exp), 0);
+  }, [expenses]);
+
+  const expensesByCategory = useMemo(() => {
+    const grouped: Record<string, CompanyExpense[]> = {};
+    expenses.forEach(exp => {
+      const cat = exp.category || 'other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(exp);
+    });
+    return grouped;
+  }, [expenses]);
+
+  const toggleCategory = (cat: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this expense?')) return;
+    try {
+      await companyExpensesApi.deleteExpense(id);
+      loadExpenses();
+      onUpdate();
+    } catch (err) {
+      console.error('Failed to delete:', err);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin w-6 h-6 border-2 border-[#476E66] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-neutral-900">Operating Expenses</h3>
+          <p className="text-xs text-neutral-500">Track recurring company overhead costs</p>
+        </div>
+        <button
+          onClick={() => { setSelectedCategory(null); setEditingExpense(null); setShowAddModal(true); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#476E66] text-white text-xs font-medium rounded-lg hover:bg-[#3A5B54] transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Add Expense</span>
+          <span className="sm:hidden">Add</span>
+        </button>
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-gradient-to-r from-[#476E66]/10 to-[#476E66]/5 rounded-xl p-3 border border-[#476E66]/20">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-neutral-600">Total Monthly Overhead</p>
+            <p className="text-xl font-bold text-[#476E66]">{formatCurrency(totalMonthly)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-neutral-600">Annual Projection</p>
+            <p className="text-sm font-semibold text-neutral-900">{formatCurrency(totalMonthly * 12)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Categories */}
+      <div className="space-y-2">
+        {EXPENSE_CATEGORIES.map(cat => {
+          const catExpenses = expensesByCategory[cat.value] || [];
+          const catTotal = catExpenses.reduce((s, e) => s + companyExpensesApi.getMonthlyAmount(e), 0);
+          const isExpanded = expandedCategories.has(cat.value);
+          const Icon = cat.icon;
+
+          if (catExpenses.length === 0) return null;
+
+          return (
+            <div key={cat.value} className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
+              <button
+                onClick={() => toggleCategory(cat.value)}
+                className="w-full flex items-center justify-between p-3 hover:bg-neutral-50"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-neutral-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-neutral-900">{cat.label}</p>
+                    <p className="text-[10px] text-neutral-500">{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-neutral-900">{formatCurrency(catTotal)}<span className="text-[10px] text-neutral-400 font-normal">/mo</span></p>
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronRight className="w-4 h-4 text-neutral-400" />}
+                </div>
+              </button>
+              
+              {isExpanded && (
+                <div className="border-t border-neutral-100 divide-y divide-neutral-50">
+                  {catExpenses.map(exp => (
+                    <div key={exp.id} className="flex items-center justify-between px-3 py-2 hover:bg-neutral-50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-neutral-800 truncate">{exp.name}</p>
+                        <p className="text-[10px] text-neutral-500 capitalize">{exp.frequency}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium text-neutral-900">{formatCurrency(exp.amount)}</p>
+                        <button
+                          onClick={() => { setEditingExpense(exp); setSelectedCategory(exp.category); setShowAddModal(true); }}
+                          className="p-1 text-neutral-400 hover:text-neutral-600"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(exp.id)}
+                          className="p-1 text-neutral-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => { setSelectedCategory(cat.value); setEditingExpense(null); setShowAddModal(true); }}
+                    className="w-full px-3 py-2 text-xs text-[#476E66] hover:bg-[#476E66]/5 flex items-center justify-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add to {cat.label}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Empty state */}
+      {expenses.length === 0 && (
+        <div className="text-center py-8 bg-neutral-50 rounded-xl border-2 border-dashed border-neutral-200">
+          <Wallet className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
+          <h3 className="text-sm font-medium text-neutral-700 mb-1">No Operating Expenses</h3>
+          <p className="text-xs text-neutral-500 mb-3">Track your recurring business costs like rent, software, utilities</p>
+          <button
+            onClick={() => { setSelectedCategory(null); setEditingExpense(null); setShowAddModal(true); }}
+            className="px-4 py-2 bg-[#476E66] text-white text-xs font-medium rounded-lg hover:bg-[#3A5B54]"
+          >
+            Add First Expense
+          </button>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showAddModal && (
+        <OperatingExpenseModal
+          expense={editingExpense}
+          defaultCategory={selectedCategory}
+          companyId={companyId}
+          onClose={() => { setShowAddModal(false); setEditingExpense(null); }}
+          onSave={() => { setShowAddModal(false); setEditingExpense(null); loadExpenses(); onUpdate(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Operating Expense Modal
+function OperatingExpenseModal({ expense, defaultCategory, companyId, onClose, onSave }: {
+  expense: CompanyExpense | null;
+  defaultCategory: string | null;
+  companyId: string;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  type FrequencyType = 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'daily' | 'one-time';
+  const [name, setName] = useState(expense?.name || '');
+  const [category, setCategory] = useState(expense?.category || defaultCategory || 'software');
+  const [amount, setAmount] = useState(expense?.amount?.toString() || '');
+  const [frequency, setFrequency] = useState<FrequencyType>(expense?.frequency as FrequencyType || 'monthly');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name || !amount) return;
+    setSaving(true);
+    try {
+      const data = {
+        name,
+        category,
+        amount: parseFloat(amount),
+        frequency: frequency as FrequencyType,
+        date: new Date().toISOString().split('T')[0],
+      };
+      if (expense) {
+        await companyExpensesApi.updateExpense(expense.id, data);
+      } else {
+        await companyExpensesApi.createExpense({ ...data, company_id: companyId });
+      }
+      onSave();
+    } catch (err) {
+      console.error('Failed to save expense:', err);
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md sm:mx-4">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-100">
+          <h2 className="text-lg font-semibold text-neutral-900">{expense ? 'Edit' : 'Add'} Operating Expense</h2>
+          <button onClick={onClose} className="p-1.5 hover:bg-neutral-100 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">Expense Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g., Office Rent, Adobe Creative Cloud"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Category</label>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none bg-white"
+              >
+                {EXPENSE_CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1">Frequency</label>
+              <select
+                value={frequency}
+                onChange={e => setFrequency(e.target.value as FrequencyType)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none bg-white"
+              >
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="weekly">Weekly</option>
+                <option value="one-time">One-time</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1">Amount *</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-sm">$</span>
+              <input
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-7 pr-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50 font-medium">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving || !name || !amount} className="flex-1 px-4 py-2.5 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50 font-medium">
+              {saving ? 'Saving...' : expense ? 'Update' : 'Add Expense'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
