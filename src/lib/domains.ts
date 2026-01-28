@@ -7,12 +7,13 @@ export const DOMAINS = {
   APP: 'https://app.billdora.com',
 } as const;
 
-// Check if we're in development mode
+// Check if we're in development mode or test deployment
 const isDev = typeof window !== 'undefined' && (
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1' ||
   window.location.hostname.includes('192.168.') ||
-  window.location.hostname.includes('.space.minimax.io') // Test deployments
+  window.location.hostname.includes('.space.minimax.io') || // Test deployments
+  window.location.hostname.includes('.vercel.app') // Vercel preview/test deployments
 );
 
 // Check if we're in a Capacitor native app
