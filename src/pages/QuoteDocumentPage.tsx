@@ -2308,8 +2308,8 @@ export default function QuoteDocumentPage() {
                 </div>
                 {lineItems.some(i => i.description.startsWith('[')) && (
                   <div className="flex items-center gap-4 text-xs text-neutral-500">
-                    <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#476E66]"></div> Your Tasks</div>
-                    <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-purple-500"></div> Collaborator Tasks</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-gradient-to-r from-[#476E66] to-[#5A8078] shadow-sm"></div> Your Tasks</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-md bg-gradient-to-r from-amber-500 to-amber-400 shadow-sm"></div> Collaborator Tasks</div>
                   </div>
                 )}
               </div>
@@ -2368,25 +2368,29 @@ export default function QuoteDocumentPage() {
                             const normalizedStart = startDay - minStart;
                             const widthPercent = (item.estimatedDays / timelineRange) * 100;
                             const leftPercent = (normalizedStart / timelineRange) * 100;
-                            const colors = ['bg-[#476E66]', 'bg-[#5A8078]', 'bg-[#6B8B82]', 'bg-[#7A9C93]'];
+                            const isCollaboratorTask = item.description.startsWith('[');
                             const actualStartDay = startDay + 1;
                             
                             return (
-                              <div key={item.id} className="flex items-center gap-2 py-1">
-                                <div className="w-32 sm:w-40 flex-shrink-0 text-[11px] sm:text-sm text-neutral-700 truncate" title={item.description}>
+                              <div key={item.id} className="flex items-center gap-2 py-1.5 group">
+                                <div className="w-32 sm:w-40 flex-shrink-0 text-[11px] sm:text-sm text-neutral-700 truncate font-medium" title={item.description}>
                                   {item.description.length > 25 ? item.description.substring(0, 25) + '...' : item.description}
                                 </div>
-                                <div className="flex-1 h-7 sm:h-8 bg-neutral-50 rounded-md relative border border-neutral-200">
+                                <div className="flex-1 h-8 sm:h-9 bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-lg relative border border-neutral-200/60 overflow-hidden">
                                   <div 
-                                    className={`absolute h-full ${colors[idx % colors.length]} rounded-md flex items-center justify-center text-white text-[10px] sm:text-xs font-semibold shadow-sm`}
+                                    className={`absolute h-full rounded-lg flex items-center justify-center text-white text-[10px] sm:text-xs font-bold transition-all duration-200 group-hover:scale-[1.02] group-hover:shadow-lg ${
+                                      isCollaboratorTask 
+                                        ? 'bg-gradient-to-r from-amber-500 to-amber-400 shadow-amber-200/50' 
+                                        : 'bg-gradient-to-r from-[#476E66] to-[#5A8078] shadow-[#476E66]/30'
+                                    } shadow-md`}
                                     style={{ 
                                       left: `${leftPercent}%`, 
                                       width: `${Math.max(widthPercent, 10)}%`, 
-                                      minWidth: '40px' 
+                                      minWidth: '45px' 
                                     }}
                                     title={`Starts Day ${actualStartDay}, Duration: ${item.estimatedDays} days`}
                                   >
-                                    {item.estimatedDays}d
+                                    <span className="drop-shadow-sm">{item.estimatedDays}d</span>
                                   </div>
                                 </div>
                               </div>
