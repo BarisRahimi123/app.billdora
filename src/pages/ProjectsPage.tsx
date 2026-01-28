@@ -5458,111 +5458,86 @@ function ProjectDetailsTab({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Status Section - Prominent */}
-      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
-        <label className="block text-sm font-semibold text-neutral-900 mb-3">Project Status</label>
-        <div className="flex flex-wrap gap-2">
-          {STATUS_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => updateField('status', opt.value)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                formData.status === opt.value 
-                  ? opt.activeColor + ' shadow-sm' 
-                  : opt.color + ' hover:opacity-80'
+    <div className="space-y-4">
+      {/* Status & Category Section - Compact dropdowns */}
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Status Dropdown */}
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) => updateField('status', e.target.value)}
+              className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer appearance-none ${
+                formData.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
+                formData.status === 'on_hold' ? 'bg-amber-50 text-amber-700' :
+                formData.status === 'completed' ? 'bg-blue-50 text-blue-700' :
+                'bg-neutral-100 text-neutral-700'
               }`}
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px', paddingRight: '40px' }}
             >
-              {opt.label}
-            </button>
-          ))}
+              {STATUS_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Dropdown */}
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Category</label>
+            <select
+              value={formData.category}
+              onChange={(e) => updateField('category', e.target.value)}
+              className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer appearance-none ${
+                formData.category ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-neutral-100 text-neutral-700'
+              }`}
+              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '16px', paddingRight: '40px' }}
+            >
+              <option value="">Select category...</option>
+              {PROJECT_CATEGORIES.map(cat => (
+                <option key={cat.value} value={cat.value}>{cat.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Category & Timeline Section */}
-      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
-        <div className="space-y-5">
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-semibold text-neutral-900 mb-3">Category</label>
-            <div className="flex flex-wrap gap-2">
-              {PROJECT_CATEGORIES.slice(0, 8).map(cat => (
-                <button
-                  key={cat.value}
-                  onClick={() => updateField('category', cat.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                    formData.category === cat.value 
-                      ? 'bg-[#476E66] text-white shadow-sm' 
-                      : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-              {/* More categories dropdown */}
-              {PROJECT_CATEGORIES.length > 8 && (
-                <select
-                  value={PROJECT_CATEGORIES.slice(0, 8).some(c => c.value === formData.category) ? '' : formData.category}
-                  onChange={(e) => e.target.value && updateField('category', e.target.value)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer ${
-                    !PROJECT_CATEGORIES.slice(0, 8).some(c => c.value === formData.category)
-                      ? 'bg-[#476E66] text-white'
-                      : 'bg-neutral-100 text-neutral-600'
-                  }`}
-                >
-                  <option value="">More...</option>
-                  {PROJECT_CATEGORIES.slice(8).map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </select>
-              )}
+      {/* Timeline Section */}
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Timeline</label>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="p-3 sm:p-4 bg-neutral-50 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="text-[10px] sm:text-xs font-medium text-neutral-500 uppercase tracking-wide">Start Date</span>
             </div>
+            <input
+              type="date"
+              value={formData.start_date}
+              onChange={(e) => updateField('start_date', e.target.value)}
+              className="w-full bg-transparent text-xs sm:text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
+              style={{ colorScheme: 'light' }}
+            />
           </div>
-
-          {/* Timeline */}
-          <div className="pt-4 border-t border-neutral-100">
-            <label className="block text-sm font-semibold text-neutral-900 mb-3">Timeline</label>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-neutral-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Start Date</span>
-                </div>
-                <input
-                  type="date"
-                  value={formData.start_date}
-                  onChange={(e) => updateField('start_date', e.target.value)}
-                  className="w-full bg-transparent text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
-                  style={{ colorScheme: 'light' }}
-                />
-                {!formData.start_date && (
-                  <p className="text-xs text-neutral-400 mt-1">Click to set</p>
-                )}
-              </div>
-              <div className="p-4 bg-neutral-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Due Date</span>
-                </div>
-                <input
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => updateField('due_date', e.target.value)}
-                  className="w-full bg-transparent text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
-                  style={{ colorScheme: 'light' }}
-                />
-                {!formData.due_date && (
-                  <p className="text-xs text-neutral-400 mt-1">Click to set</p>
-                )}
-              </div>
+          <div className="p-3 sm:p-4 bg-neutral-50 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="text-[10px] sm:text-xs font-medium text-neutral-500 uppercase tracking-wide">Due Date</span>
             </div>
+            <input
+              type="date"
+              value={formData.due_date}
+              onChange={(e) => updateField('due_date', e.target.value)}
+              className="w-full bg-transparent text-xs sm:text-sm font-medium text-neutral-900 border-0 outline-none cursor-pointer p-0"
+              style={{ colorScheme: 'light' }}
+            />
           </div>
         </div>
       </div>
 
       {/* Notes Section */}
-      <div className="bg-white rounded-xl p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
-        <label className="block text-sm font-semibold text-neutral-900 mb-3">Project Notes</label>
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-neutral-100" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-3">Project Notes</label>
         <textarea
           value={formData.status_notes}
           onChange={(e) => updateField('status_notes', e.target.value)}

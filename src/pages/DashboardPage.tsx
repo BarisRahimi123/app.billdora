@@ -458,17 +458,17 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Dashboard</h1>
-          <p className="text-sm text-neutral-500 mt-1">Welcome back, {profile?.full_name || 'User'}</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Welcome back, {profile?.full_name || 'User'}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Tab Toggle */}
-          <div className="flex bg-neutral-100 rounded-lg p-1">
+          <div className="flex bg-neutral-100 rounded-lg p-0.5 sm:p-1">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
                 activeTab === 'overview' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
@@ -476,11 +476,11 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setActiveTab('health')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all flex items-center gap-1 sm:gap-1.5 ${
                 activeTab === 'health' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
               }`}
             >
-              <TreePine className="w-4 h-4" />
+              <TreePine className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Health
             </button>
           </div>
@@ -489,11 +489,10 @@ export default function DashboardPage() {
           <div className="relative" ref={quickAddRef}>
             <button 
               onClick={() => setShowQuickAdd(!showQuickAdd)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-xs sm:text-sm font-medium"
             >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Quick Add</span>
-              <ChevronDown className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             {showQuickAdd && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl py-2 z-50 border border-neutral-100" style={{ boxShadow: 'var(--shadow-dropdown)' }}>
@@ -528,32 +527,32 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Hero Metrics Row - 4 Equal Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* Profit/Loss Card */}
             {canViewFinancials && (
               <div 
                 onClick={() => setShowProfitTargetModal(true)}
-                className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-all group" 
+                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all group" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOnTrack ? 'bg-emerald-100' : isBehind ? 'bg-amber-100' : 'bg-red-100'}`}>
-                    <Target className={`w-5 h-5 ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`} />
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${isOnTrack ? 'bg-emerald-100' : isBehind ? 'bg-amber-100' : 'bg-red-100'}`}>
+                    <Target className={`w-4 h-4 sm:w-5 sm:h-5 ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`} />
                   </div>
-                  <Settings2 className="w-4 h-4 text-neutral-300 group-hover:text-neutral-400 transition-colors" />
+                  <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-300 group-hover:text-neutral-400 transition-colors" />
                 </div>
-                <p className={`text-2xl font-bold ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
+                <p className={`text-lg sm:text-2xl font-bold ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
                   {formatCurrency(actualProfit)}
                 </p>
-                <p className="text-sm text-neutral-500 mt-1">Profit / Loss</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Profit / Loss</p>
+                <div className="mt-2 sm:mt-3 flex items-center gap-2">
+                  <div className="flex-1 h-1 sm:h-1.5 bg-neutral-100 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full ${isOnTrack ? 'bg-emerald-500' : isBehind ? 'bg-amber-500' : 'bg-red-500'}`}
                       style={{ width: `${Math.min(100, Math.max(0, profitPct))}%` }}
                     />
                   </div>
-                  <span className={`text-xs font-medium ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`}>
+                  <span className={`text-[10px] sm:text-xs font-medium ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`}>
                     {profitPct.toFixed(0)}%
                   </span>
                 </div>
@@ -564,17 +563,16 @@ export default function DashboardPage() {
             {canViewFinancials && (
               <div 
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-all" 
+                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-emerald-600" />
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                   </div>
-                  <ArrowUpRight className="w-4 h-4 text-emerald-500" />
                 </div>
-                <p className="text-2xl font-bold text-neutral-900">{formatCurrency(stats?.totalRevenue || 0)}</p>
-                <p className="text-sm text-neutral-500 mt-1">Total Revenue</p>
+                <p className="text-lg sm:text-2xl font-bold text-neutral-900">{formatCurrency(stats?.totalRevenue || 0)}</p>
+                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Total Revenue</p>
               </div>
             )}
 
@@ -582,98 +580,98 @@ export default function DashboardPage() {
             {canViewFinancials && (
               <div 
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-all" 
+                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-amber-600" />
+                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
                   {(stats?.outstandingInvoices || 0) > 0 && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded-full">Pending</span>
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] sm:text-xs font-medium rounded-full">Pending</span>
                   )}
                 </div>
-                <p className="text-2xl font-bold text-neutral-900">{formatCurrency(stats?.outstandingInvoices || 0)}</p>
-                <p className="text-sm text-neutral-500 mt-1">Outstanding</p>
+                <p className="text-lg sm:text-2xl font-bold text-neutral-900">{formatCurrency(stats?.outstandingInvoices || 0)}</p>
+                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Outstanding</p>
               </div>
             )}
 
             {/* Hours Card */}
             <div 
               onClick={() => navigate('/time-expense')}
-              className="bg-white rounded-xl p-5 cursor-pointer hover:shadow-md transition-all" 
+              className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
               style={{ boxShadow: 'var(--shadow-card)' }}
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-neutral-900">{stats?.hoursThisWeek || 0}h</p>
-              <p className="text-sm text-neutral-500 mt-1">Hours This Week</p>
-              <p className="text-xs text-neutral-400 mt-1">{stats?.hoursToday || 0}h today</p>
+              <p className="text-lg sm:text-2xl font-bold text-neutral-900">{stats?.hoursThisWeek || 0}h</p>
+              <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Hours This Week</p>
+              <p className="text-[10px] sm:text-xs text-neutral-400 mt-0.5 sm:mt-1">{stats?.hoursToday || 0}h today</p>
             </div>
           </div>
 
           {/* Work in Progress Section */}
-          <div className="bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-sm font-semibold text-neutral-900 mb-4">Work in Progress</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Work in Progress</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
               <div 
                 onClick={() => navigate('/projects')}
-                className="p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <Briefcase className="w-4 h-4 text-[#476E66]" />
-                  <span className="text-xs text-neutral-500">Active Projects</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
+                  <span className="text-[10px] sm:text-xs text-neutral-500">Active Projects</span>
                 </div>
-                <p className="text-xl font-bold text-neutral-900">{stats?.activeProjects || 0}</p>
+                <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.activeProjects || 0}</p>
               </div>
               <div 
                 onClick={() => navigate('/projects')}
-                className="p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <CheckSquare className="w-4 h-4 text-[#476E66]" />
-                  <span className="text-xs text-neutral-500">Pending Tasks</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                  <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
+                  <span className="text-[10px] sm:text-xs text-neutral-500">Pending Tasks</span>
                 </div>
-                <p className="text-xl font-bold text-neutral-900">{stats?.pendingTasks || 0}</p>
+                <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.pendingTasks || 0}</p>
               </div>
               {canViewFinancials && (
                 <div 
                   onClick={() => navigate('/time-expense')}
-                  className="p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                  className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="w-4 h-4 text-[#476E66]" />
-                    <span className="text-xs text-neutral-500">Unbilled WIP</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                    <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
+                    <span className="text-[10px] sm:text-xs text-neutral-500">Unbilled WIP</span>
                   </div>
-                  <p className="text-xl font-bold text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</p>
+                  <p className="text-lg sm:text-xl font-bold text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</p>
                 </div>
               )}
               {canViewFinancials && (
                 <div 
                   onClick={() => navigate('/invoicing')}
-                  className="p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                  className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-[#476E66]" />
-                    <span className="text-xs text-neutral-500">Draft Invoices</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+                    <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
+                    <span className="text-[10px] sm:text-xs text-neutral-500">Draft Invoices</span>
                   </div>
-                  <p className="text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</p>
+                  <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Insights Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             {/* Billability */}
-            <div className="bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <h2 className="text-sm font-semibold text-neutral-900 mb-4">Billability</h2>
-              <div className="flex items-center gap-6">
-                <div className="relative w-24 h-24">
-                  <svg className="w-full h-full transform -rotate-90">
+            <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Billability</h2>
+              <div className="flex items-center gap-4 sm:gap-6">
+                <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
                     <circle cx="48" cy="48" r="40" fill="none" stroke="#F3F4F6" strokeWidth="8" />
                     <circle
                       cx="48" cy="48" r="40" fill="none" stroke="#476E66" strokeWidth="8"
@@ -682,23 +680,23 @@ export default function DashboardPage() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xl font-bold text-neutral-900">{stats?.utilization || 0}%</span>
+                    <span className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.utilization || 0}%</span>
                   </div>
                 </div>
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-2 sm:space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#476E66]" />
-                      <span className="text-sm text-neutral-600">Billable</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#476E66]" />
+                      <span className="text-xs sm:text-sm text-neutral-600">Billable</span>
                     </div>
-                    <span className="text-sm font-semibold text-neutral-900">{stats?.billableHours || 0}h</span>
+                    <span className="text-xs sm:text-sm font-semibold text-neutral-900">{stats?.billableHours || 0}h</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-neutral-200" />
-                      <span className="text-sm text-neutral-600">Non-Billable</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-neutral-200" />
+                      <span className="text-xs sm:text-sm text-neutral-600">Non-Billable</span>
                     </div>
-                    <span className="text-sm font-semibold text-neutral-900">{stats?.nonBillableHours || 0}h</span>
+                    <span className="text-xs sm:text-sm font-semibold text-neutral-900">{stats?.nonBillableHours || 0}h</span>
                   </div>
                 </div>
               </div>
@@ -706,20 +704,20 @@ export default function DashboardPage() {
 
             {/* Payment Aging */}
             {canViewFinancials && (
-              <div className="bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <h2 className="text-sm font-semibold text-neutral-900 mb-4">Payment Aging</h2>
-                <div className="space-y-3">
+              <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+                <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Payment Aging</h2>
+                <div className="space-y-2.5 sm:space-y-3">
                   {agingData.map((d, i) => {
                     const maxAmount = Math.max(...agingData.map(a => a.amount), 1);
                     const width = (d.amount / maxAmount) * 100;
                     const colors = ['#476E66', '#8B7355', '#6B5B4F', '#4A4A4A'];
                     return (
                       <div key={d.range}>
-                        <div className="flex items-center justify-between text-sm mb-1">
+                        <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
                           <span className="text-neutral-600">{d.range} days</span>
                           <span className="font-semibold text-neutral-900">{formatCurrency(d.amount)}</span>
                         </div>
-                        <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                        <div className="h-1.5 sm:h-2 bg-neutral-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full rounded-full transition-all"
                             style={{ width: `${Math.max(width, 2)}%`, backgroundColor: colors[i] }}
@@ -729,7 +727,7 @@ export default function DashboardPage() {
                     );
                   })}
                   {agingData.every(d => d.amount === 0) && (
-                    <p className="text-center text-neutral-400 py-4 text-sm">No outstanding invoices</p>
+                    <p className="text-center text-neutral-400 py-3 sm:py-4 text-xs sm:text-sm">No outstanding invoices</p>
                   )}
                 </div>
               </div>
@@ -738,37 +736,37 @@ export default function DashboardPage() {
 
           {/* Revenue Trend */}
           {canViewFinancials && (
-            <div className="bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-neutral-400" />
-                <h2 className="text-sm font-semibold text-neutral-900">Revenue Trend</h2>
+            <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
+                <h2 className="text-xs sm:text-sm font-semibold text-neutral-900">Revenue Trend</h2>
               </div>
-              <div className="h-48">
+              <div className="h-36 sm:h-48">
                 {revenueData.length > 0 && revenueData.some(d => d.revenue > 0) ? (
-                  <div className="flex items-end justify-between h-full gap-2">
+                  <div className="flex items-end justify-between h-full gap-1 sm:gap-2">
                     {revenueData.map((d, i) => {
                       const maxRevenue = Math.max(...revenueData.map(r => r.revenue), 1);
                       const height = (d.revenue / maxRevenue) * 100;
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                          <div className="w-full flex flex-col items-center justify-end h-36">
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1 sm:gap-2">
+                          <div className="w-full flex flex-col items-center justify-end h-24 sm:h-36">
                             {d.revenue > 0 && (
-                              <span className="text-xs font-medium text-neutral-600 mb-1">
+                              <span className="text-[9px] sm:text-xs font-medium text-neutral-600 mb-0.5 sm:mb-1 truncate max-w-full">
                                 {formatCurrency(d.revenue)}
                               </span>
                             )}
                             <div 
-                              className="w-full max-w-12 bg-[#476E66] rounded-t-lg transition-all hover:bg-[#3A5B54]"
+                              className="w-full max-w-8 sm:max-w-12 bg-[#476E66] rounded-t-md sm:rounded-t-lg transition-all hover:bg-[#3A5B54]"
                               style={{ height: `${Math.max(height, 4)}%` }}
                             />
                           </div>
-                          <span className="text-xs text-neutral-500">{d.month}</span>
+                          <span className="text-[9px] sm:text-xs text-neutral-500">{d.month}</span>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-neutral-400 text-sm">
+                  <div className="h-full flex items-center justify-center text-neutral-400 text-xs sm:text-sm">
                     No revenue data yet
                   </div>
                 )}
@@ -777,15 +775,15 @@ export default function DashboardPage() {
           )}
 
           {/* Recent Activity */}
-          <div className="bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-sm font-semibold text-neutral-900 mb-4">Recent Activity</h2>
+          <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Recent Activity</h2>
             {activities.length === 0 ? (
-              <p className="text-neutral-400 text-center py-8 text-sm">No recent activity</p>
+              <p className="text-neutral-400 text-center py-6 sm:py-8 text-xs sm:text-sm">No recent activity</p>
             ) : (
               <div className="space-y-2">
                 {activities.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl hover:bg-neutral-100 transition-colors">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  <div key={activity.id} className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-neutral-50 rounded-xl hover:bg-neutral-100 transition-colors">
+                    <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
                       activity.type === 'time' ? 'bg-[#476E66]/10' :
                       activity.type === 'proposal_signed' ? 'bg-emerald-100' :
                       activity.type === 'proposal_viewed' ? 'bg-blue-100' :
@@ -794,16 +792,16 @@ export default function DashboardPage() {
                       'bg-neutral-100'
                     }`}>
                       {activity.icon ? (
-                        <span className="text-base">{activity.icon}</span>
+                        <span className="text-sm sm:text-base">{activity.icon}</span>
                       ) : (
-                        <Clock className="w-4 h-4 text-[#476E66]" />
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-900">{activity.description}</p>
-                      {activity.meta && <p className="text-xs text-neutral-500 truncate mt-0.5">{activity.meta}</p>}
+                      <p className="text-xs sm:text-sm font-medium text-neutral-900 line-clamp-1">{activity.description}</p>
+                      {activity.meta && <p className="text-[10px] sm:text-xs text-neutral-500 truncate mt-0.5">{activity.meta}</p>}
                     </div>
-                    <span className="text-xs text-neutral-400 flex-shrink-0">{formatDate(activity.date)}</span>
+                    <span className="text-[10px] sm:text-xs text-neutral-400 flex-shrink-0">{formatDate(activity.date)}</span>
                   </div>
                 ))}
               </div>

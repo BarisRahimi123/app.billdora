@@ -3054,91 +3054,123 @@ function InvoiceDetailView({
         {activeTab === 'detail' && (
           <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden">
             {/* Invoice Details Sidebar - Shows first on mobile */}
-            <div className="w-full lg:w-72 lg:order-2 shrink-0 bg-white lg:border-l border-neutral-200 p-3 lg:p-4 lg:overflow-auto space-y-3 lg:space-y-4">
-              {/* Invoice Number */}
-              <div className="bg-neutral-50 rounded-xl p-3 lg:p-4 space-y-3">
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+            <div className="w-full lg:w-80 lg:order-2 shrink-0 bg-white lg:border-l border-neutral-200 p-3 sm:p-4 lg:overflow-auto space-y-3">
+              
+              {/* Invoice Info Card */}
+              <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Invoice Info</p>
+                </div>
+                <div className="p-4 space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">Invoice #</label>
-                    <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white" />
+                    <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Invoice Number</label>
+                    <input 
+                      type="text" 
+                      value={invoiceNumber} 
+                      onChange={(e) => setInvoiceNumber(e.target.value)} 
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none" 
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">Period</label>
-                    <select className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white">
-                      <option value="current">Current Invoice</option>
-                    </select>
+                    <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">PO Number <span className="text-neutral-300">(Optional)</span></label>
+                    <input 
+                      type="text" 
+                      value={poNumber} 
+                      onChange={(e) => setPoNumber(e.target.value)} 
+                      placeholder="e.g. PO-12345" 
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none placeholder:text-neutral-300" 
+                    />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+              </div>
+
+              {/* Billing Terms Card */}
+              <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Billing Terms</p>
+                </div>
+                <div className="p-4 space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">PO Number</label>
-                    <input type="text" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter PO #" className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">Terms</label>
-                    <select value={terms} onChange={(e) => setTerms(e.target.value)} className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white">
+                    <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Payment Terms</label>
+                    <select 
+                      value={terms} 
+                      onChange={(e) => setTerms(e.target.value)} 
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none cursor-pointer"
+                    >
                       <option value="Due on Receipt">Due on Receipt</option>
                       <option value="Net 15">Net 15</option>
                       <option value="Net 30">Net 30</option>
                       <option value="Net 45">Net 45</option>
                       <option value="Net 60">Net 60</option>
-                      <option value="1% 10 Net 30">1% 10 Net 30</option>
-                      <option value="2% 10 Net 30">2% 10 Net 30</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Due Date</label>
+                    <input 
+                      type="date" 
+                      value={dueDate} 
+                      onChange={(e) => setDueDate(e.target.value)} 
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none" 
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Status Section */}
-              <div className="bg-neutral-50 rounded-xl p-3 lg:p-4 space-y-3">
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">Status</label>
-                    <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white">
+              {/* Status Card */}
+              <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Status & Timeline</p>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <select 
+                      value={status} 
+                      onChange={(e) => setStatus(e.target.value)} 
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer ${
+                        status === 'draft' ? 'bg-neutral-100 text-neutral-700' :
+                        status === 'sent' ? 'bg-blue-50 text-blue-700' :
+                        status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                        'bg-neutral-100 text-neutral-700'
+                      }`}
+                    >
                       <option value="draft">Draft</option>
                       <option value="sent">Sent</option>
                       <option value="paid">Paid</option>
                     </select>
+                    {status !== 'draft' && (
+                      <input 
+                        type="date" 
+                        value={sentDate} 
+                        onChange={(e) => setSentDate(e.target.value)} 
+                        className="w-32 px-2 py-2 border border-neutral-200 rounded-lg text-xs bg-white" 
+                        title="Sent Date"
+                      />
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-500 mb-1">Sent Date</label>
-                    <input 
-                      type="date" 
-                      value={sentDate} 
-                      onChange={(e) => setSentDate(e.target.value)} 
-                      className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white" 
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-neutral-400">Due date calculated from sent date + terms</p>
 
-                {/* Status Timeline - horizontal on mobile */}
-                <div className="flex lg:block gap-4 lg:gap-0 lg:space-y-2 pt-2 overflow-x-auto">
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                    <div className={`w-2 h-2 rounded-full ${draftDate ? 'bg-neutral-800' : 'bg-neutral-300'}`}></div>
-                    <span className="text-neutral-600">Drafted</span>
-                    <span className="text-neutral-500 lg:ml-auto">{draftDate ? new Date(draftDate).toLocaleDateString() : '-'}</span>
+                  {/* Clean Timeline */}
+                  <div className="grid grid-cols-4 gap-1 text-center">
+                    <div className="space-y-1">
+                      <div className={`w-3 h-3 rounded-full mx-auto ${draftDate ? 'bg-[#476E66]' : 'bg-neutral-200'}`} />
+                      <p className="text-[10px] font-medium text-neutral-600">Draft</p>
+                      <p className="text-[9px] text-neutral-400">{draftDate ? new Date(draftDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className={`w-3 h-3 rounded-full mx-auto ${sentDate ? 'bg-blue-500' : 'bg-neutral-200'}`} />
+                      <p className="text-[10px] font-medium text-neutral-600">Sent</p>
+                      <p className="text-[9px] text-neutral-400">{sentDate ? new Date(sentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className={`w-3 h-3 rounded-full mx-auto ${dueDate ? 'bg-amber-500' : 'bg-neutral-200'}`} />
+                      <p className="text-[10px] font-medium text-neutral-600">Due</p>
+                      <p className="text-[9px] text-neutral-400">{dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className={`w-3 h-3 rounded-full mx-auto ${status === 'paid' ? 'bg-emerald-500' : 'bg-neutral-200'}`} />
+                      <p className="text-[10px] font-medium text-neutral-600">Paid</p>
+                      <p className="text-[9px] text-neutral-400">{status === 'paid' && invoice.paid_at ? new Date(invoice.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                    <div className={`w-2 h-2 rounded-full ${sentDate ? 'bg-neutral-800' : 'bg-neutral-300'}`}></div>
-                    <span className="text-neutral-600">Sent</span>
-                    <span className="text-neutral-500 lg:ml-auto">{sentDate ? new Date(sentDate).toLocaleDateString() : '-'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                    <div className={`w-2 h-2 rounded-full ${dueDate ? 'bg-neutral-800' : 'bg-neutral-300'}`}></div>
-                    <span className="text-neutral-600">Due</span>
-                    <span className="text-neutral-500 lg:ml-auto">{dueDate ? new Date(dueDate).toLocaleDateString() : '-'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs whitespace-nowrap">
-                    <div className={`w-2 h-2 rounded-full ${status === 'paid' ? 'bg-emerald-500' : 'bg-neutral-300'}`}></div>
-                    <span className="text-neutral-600">Paid</span>
-                    <span className="text-neutral-500 lg:ml-auto">{status === 'paid' && invoice.paid_at ? new Date(invoice.paid_at).toLocaleDateString() : '-'}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <label className="block text-xs font-medium text-neutral-500 mb-1">Due Date</label>
-                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-sm bg-white" />
                 </div>
               </div>
 
@@ -3150,20 +3182,22 @@ function InvoiceDetailView({
               />
 
               {/* Payment Options - hidden on mobile to save space */}
-              <div className="hidden lg:block bg-neutral-50 rounded-xl p-4 space-y-3">
-                <label className="block text-xs font-medium text-neutral-500">Payment Options</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-neutral-300 text-neutral-500" />
-                    <span>Bank Transfer</span>
+              <div className="hidden lg:block bg-white border border-neutral-200 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
+                  <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Payment Methods</p>
+                </div>
+                <div className="p-4 space-y-2">
+                  <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]" />
+                    <span className="text-neutral-700">Bank Transfer</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 text-neutral-500" />
-                    <span>Credit Card</span>
+                  <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]" />
+                    <span className="text-neutral-700">Credit Card</span>
                   </label>
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 text-neutral-500" />
-                    <span>Check</span>
+                  <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]" />
+                    <span className="text-neutral-700">Check</span>
                   </label>
                 </div>
               </div>
@@ -3386,7 +3420,7 @@ function InvoiceDetailView({
             <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
               {/* Header with buttons */}
               <div className="p-3 lg:p-4 border-b border-neutral-200 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                <button className="px-4 py-2 bg-[#476E66] text-white rounded-lg text-sm font-medium hover:bg-[#3A5B54]">
+                <button className="px-4 py-2 border-2 border-[#476E66] text-[#476E66] bg-transparent rounded-lg text-sm font-medium hover:bg-[#476E66]/5 transition-colors">
                   Add Expense
                 </button>
                 <button className="hidden sm:block px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50">

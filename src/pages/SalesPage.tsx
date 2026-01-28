@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -63,6 +63,8 @@ export default function SalesPage() {
   const [proposalsSubTab, setProposalsSubTab] = useState<ProposalsSubTab>('all');
   const [leadsViewMode, setLeadsViewMode] = useState<LeadsViewMode>('list');
   const [showWonConvertModal, setShowWonConvertModal] = useState<Lead | null>(null);
+  const [leadBottomSheet, setLeadBottomSheet] = useState<Lead | null>(null); // Mobile bottom sheet
+  const [showLeadBottomSheetMenu, setShowLeadBottomSheetMenu] = useState(false); // 3-dot menu in bottom sheet
   
   const [collaborationInbox, setCollaborationInbox] = useState<ProposalCollaboration[]>([]);
   const [sentCollaborations, setSentCollaborations] = useState<ProposalCollaboration[]>([]);
@@ -464,12 +466,13 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="space-y-3 lg:space-y-4">
+    <div className="space-y-2.5 sm:space-y-3 lg:space-y-4">
       
-      <div className="flex items-center justify-between gap-3">
+      {/* Header - Hidden on mobile, title shown in tabs area */}
+      <div className="hidden sm:flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Sales Pipeline</h1>
-          <p className="text-sm text-neutral-500 mt-1">Manage your leads, clients, and proposals</p>
+          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Manage your leads, clients, and proposals</p>
         </div>
         <button
           onClick={() => {
@@ -490,21 +493,23 @@ export default function SalesPage() {
           className="flex items-center gap-1.5 px-3 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Add {activeTab === 'leads' ? 'Lead' : activeTab === 'clients' ? 'Client' : 'Proposal'}</span>
-          <span className="sm:hidden">Add</span>
+          <span>Add {activeTab === 'leads' ? 'Lead' : activeTab === 'clients' ? 'Client' : 'Proposal'}</span>
         </button>
       </div>
+
+      {/* Mobile Subtitle */}
+      <p className="text-xs text-neutral-500 sm:hidden">Manage your leads, clients, and proposals</p>
 
       {/* Tabs */}
       <div className="flex gap-0.5 p-0.5 bg-neutral-100 rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('leads')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
             activeTab === 'leads' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
           <span>Leads</span>
-          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+          <span className={`px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs rounded-full min-w-[18px] sm:min-w-[20px] text-center ${
             activeTab === 'leads' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
           }`}>
             {leads.filter(l => l.status !== 'won' && l.status !== 'lost').length}
@@ -512,12 +517,12 @@ export default function SalesPage() {
         </button>
         <button
           onClick={() => setActiveTab('clients')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
             activeTab === 'clients' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
           <span>Clients</span>
-          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+          <span className={`px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs rounded-full min-w-[18px] sm:min-w-[20px] text-center ${
             activeTab === 'clients' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
           }`}>
             {clients.length}
@@ -525,18 +530,18 @@ export default function SalesPage() {
         </button>
         <button
           onClick={() => setActiveTab('proposals')}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
             activeTab === 'proposals' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
           }`}
         >
           <span>Proposals</span>
-          <span className={`px-1.5 py-0.5 text-xs rounded-full min-w-[20px] text-center ${
+          <span className={`px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-xs rounded-full min-w-[18px] sm:min-w-[20px] text-center ${
             activeTab === 'proposals' ? 'bg-neutral-100 text-neutral-600' : 'bg-neutral-200/50 text-neutral-500'
           }`}>
             {quotes.length}
           </span>
           {collaborationInbox.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-[#476E66] text-white text-xs rounded-full min-w-[20px] text-center">
+            <span className="px-1 sm:px-1.5 py-0.5 bg-[#476E66] text-white text-[10px] sm:text-xs rounded-full min-w-[18px] sm:min-w-[20px] text-center">
               {collaborationInbox.length}
             </span>
           )}
@@ -544,15 +549,15 @@ export default function SalesPage() {
       </div>
 
       {/* Search and filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+          <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
           <input
             type="text"
             placeholder={`Search ${activeTab}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full h-11 pl-9 pr-3 py-2 rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none text-sm"
+            className="w-full h-9 sm:h-11 pl-8 sm:pl-9 pr-2 sm:pr-3 py-1.5 sm:py-2 rounded-lg border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none text-xs sm:text-sm"
           />
         </div>
         <button className="hidden sm:flex items-center gap-1.5 px-3 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors text-sm flex-shrink-0">
@@ -657,87 +662,167 @@ export default function SalesPage() {
             </div>
           ) : leadsViewMode === 'kanban' ? (
             /* Kanban Board View */
-            <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-              {PIPELINE_STAGES.filter(s => s.key !== 'all').map((stage) => {
-                const stageLeads = leads.filter(l => {
-                  const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-                  return matchesSearch && l.status === stage.key;
-                });
-                return (
-                  <div key={stage.key} className="flex-shrink-0 w-72">
-                    {/* Column Header */}
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-t-lg ${stage.bgColor}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-semibold ${stage.color}`}>{stage.label}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${stage.color} bg-white/60`}>
-                          {stageLeads.length}
-                        </span>
+            <>
+              {/* Mobile: Full-width swipeable columns */}
+              <div className="sm:hidden">
+                {/* Horizontal scroll container with snap */}
+                <div 
+                  className="flex overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-3 scrollbar-hide"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {PIPELINE_STAGES.filter(s => s.key !== 'all').map((stage, index) => {
+                    const stageLeads = leads.filter(l => {
+                      const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+                      return matchesSearch && l.status === stage.key;
+                    });
+                    return (
+                      <div 
+                        key={stage.key} 
+                        className="flex-shrink-0 w-[calc(100vw-2rem)] snap-center pr-3 last:pr-0"
+                      >
+                        {/* Column Header - Brand color */}
+                        <div className="flex items-center justify-between px-3 py-2.5 rounded-t-xl bg-[#476E66]">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-white">{stage.label}</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium text-[#476E66] bg-white">
+                              {stageLeads.length}
+                            </span>
+                          </div>
+                          <span className="text-xs text-white/70">{index + 1}/{PIPELINE_STAGES.filter(s => s.key !== 'all').length}</span>
+                        </div>
+                        
+                        {/* Column Body */}
+                        <div className="bg-[#476E66]/5 rounded-b-xl p-3 min-h-[50vh] space-y-2.5">
+                          {stageLeads.map((lead) => (
+                            <div
+                              key={lead.id}
+                              className="bg-white rounded-xl p-3.5 shadow-sm active:scale-[0.98] transition-transform cursor-pointer border border-neutral-100"
+                              onClick={() => setLeadBottomSheet(lead)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-[#476E66]/10 flex items-center justify-center text-[#476E66] font-semibold text-sm flex-shrink-0">
+                                  {lead.name.charAt(0)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-neutral-900 text-sm">{lead.name}</p>
+                                  <p className="text-xs text-neutral-500 truncate">{lead.company_name || lead.email || '-'}</p>
+                                </div>
+                                {lead.estimated_value && (
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="text-sm font-semibold text-[#476E66]">${lead.estimated_value.toLocaleString()}</p>
+                                  </div>
+                                )}
+                              </div>
+                              {lead.source && (
+                                <div className="mt-2 pt-2 border-t border-neutral-100 flex items-center justify-between">
+                                  <span className="text-[10px] text-neutral-400 uppercase tracking-wide">{lead.source.replace('_', ' ')}</span>
+                                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {stageLeads.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
+                              <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center mb-3">
+                                <User className="w-6 h-6 text-neutral-300" />
+                              </div>
+                              <p className="text-sm font-medium text-neutral-500">No {stage.label.toLowerCase()} leads</p>
+                              <p className="text-xs text-neutral-400 mt-1">Swipe to see other stages</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Swipe hint */}
+                <p className="text-center text-[10px] text-neutral-400 mt-2">Swipe left or right to see other stages</p>
+              </div>
+
+              {/* Desktop: Traditional multi-column Kanban */}
+              <div className="hidden sm:flex gap-4 overflow-x-auto pb-4">
+                {PIPELINE_STAGES.filter(s => s.key !== 'all').map((stage) => {
+                  const stageLeads = leads.filter(l => {
+                    const matchesSearch = searchTerm ? l.name.toLowerCase().includes(searchTerm.toLowerCase()) || l.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+                    return matchesSearch && l.status === stage.key;
+                  });
+                  return (
+                    <div key={stage.key} className="flex-shrink-0 w-72">
+                      {/* Column Header */}
+                      <div className="flex items-center justify-between px-3 py-2 rounded-t-lg bg-[#476E66]/10">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-[#476E66]">{stage.label}</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium text-[#476E66] bg-[#476E66]/10">
+                            {stageLeads.length}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Column Body */}
+                      <div className="bg-neutral-50 rounded-b-lg p-2 min-h-[400px] space-y-2">
+                        {stageLeads.map((lead) => (
+                          <div
+                            key={lead.id}
+                            className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-neutral-100"
+                            onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
+                          >
+                            <div className="flex items-start gap-2 mb-2">
+                              <div className="w-8 h-8 rounded-full bg-[#476E66]/10 flex items-center justify-center text-[#476E66] font-medium text-xs flex-shrink-0">
+                                {lead.name.charAt(0)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-neutral-900 text-sm truncate">{lead.name}</p>
+                                <p className="text-xs text-neutral-500 truncate">{lead.company_name || lead.email || '-'}</p>
+                              </div>
+                            </div>
+                            {lead.estimated_value && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-neutral-500">Est. Value</span>
+                                <span className="font-medium text-[#476E66]">${lead.estimated_value.toLocaleString()}</span>
+                              </div>
+                            )}
+                            {lead.source && (
+                              <div className="mt-2 pt-2 border-t border-neutral-100">
+                                <span className="text-[10px] text-neutral-400 uppercase tracking-wide">{lead.source.replace('_', ' ')}</span>
+                              </div>
+                            )}
+                            {/* Quick Actions */}
+                            <div className="mt-2 pt-2 border-t border-neutral-100 flex gap-1">
+                              {lead.status !== 'won' && lead.status !== 'lost' && (
+                                <>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' }); }}
+                                    className="flex-1 px-2 py-1 text-[10px] font-medium text-[#476E66] bg-[#476E66]/10 rounded hover:bg-[#476E66]/20 transition-colors"
+                                  >
+                                    Proposal
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setConvertingLead(lead); setShowConvertModal(true); }}
+                                    className="flex-1 px-2 py-1 text-[10px] font-medium text-[#476E66] bg-[#476E66]/10 rounded hover:bg-[#476E66]/20 transition-colors"
+                                  >
+                                    Convert
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {stageLeads.length === 0 && (
+                          <div className="text-center py-8 text-neutral-400 text-xs">
+                            No leads in this stage
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {/* Column Body */}
-                    <div className="bg-neutral-50 rounded-b-lg p-2 min-h-[400px] space-y-2">
-                      {stageLeads.map((lead) => (
-                        <div
-                          key={lead.id}
-                          className="bg-white rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-neutral-100"
-                          onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
-                        >
-                          <div className="flex items-start gap-2 mb-2">
-                            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-medium text-xs flex-shrink-0">
-                              {lead.name.charAt(0)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-neutral-900 text-sm truncate">{lead.name}</p>
-                              <p className="text-xs text-neutral-500 truncate">{lead.company_name || lead.email || '-'}</p>
-                            </div>
-                          </div>
-                          {lead.estimated_value && (
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-neutral-500">Est. Value</span>
-                              <span className="font-medium text-neutral-700">${lead.estimated_value.toLocaleString()}</span>
-                            </div>
-                          )}
-                          {lead.source && (
-                            <div className="mt-2 pt-2 border-t border-neutral-100">
-                              <span className="text-[10px] text-neutral-400 uppercase tracking-wide">{lead.source.replace('_', ' ')}</span>
-                            </div>
-                          )}
-                          {/* Quick Actions */}
-                          <div className="mt-2 pt-2 border-t border-neutral-100 flex gap-1">
-                            {lead.status !== 'won' && lead.status !== 'lost' && (
-                              <>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' }); }}
-                                  className="flex-1 px-2 py-1 text-[10px] font-medium text-[#476E66] bg-[#476E66]/10 rounded hover:bg-[#476E66]/20 transition-colors"
-                                >
-                                  Proposal
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setConvertingLead(lead); setShowConvertModal(true); }}
-                                  className="flex-1 px-2 py-1 text-[10px] font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-                                >
-                                  Convert
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {stageLeads.length === 0 && (
-                        <div className="text-center py-8 text-neutral-400 text-xs">
-                          No leads in this stage
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             /* List View */
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {/* Pipeline Stage Filter Pills */}
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
                 {PIPELINE_STAGES.map((stage) => {
                   const count = stage.key === 'all' 
                     ? leads.length 
@@ -747,14 +832,14 @@ export default function SalesPage() {
                     <button
                       key={stage.key}
                       onClick={() => setSelectedPipelineStage(stage.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all flex-shrink-0 ${
+                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all flex-shrink-0 ${
                         isSelected 
                           ? `${stage.bgColor} ${stage.color}` 
                           : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
                       }`}
                     >
                       <span>{stage.label}</span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/50' : 'bg-neutral-100'}`}>
+                      <span className={`px-1 sm:px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] ${isSelected ? 'bg-white/50' : 'bg-neutral-100'}`}>
                         {count}
                       </span>
                     </button>
@@ -768,12 +853,12 @@ export default function SalesPage() {
                   <table className="w-full">
                     <thead className="bg-neutral-50 border-b border-neutral-100">
                       <tr>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Lead</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Source</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Est. Value</th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden lg:table-cell">Created</th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wide">Actions</th>
+                        <th className="text-left px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide">Lead</th>
+                        <th className="text-left px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden sm:table-cell">Source</th>
+                        <th className="text-left px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
+                        <th className="text-left px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Est. Value</th>
+                        <th className="text-left px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide hidden lg:table-cell">Created</th>
+                        <th className="text-right px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-xs font-semibold text-neutral-500 uppercase tracking-wide sr-only sm:not-sr-only">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100">
@@ -782,24 +867,35 @@ export default function SalesPage() {
                         const matchesStage = selectedPipelineStage === 'all' || l.status === selectedPipelineStage;
                         return matchesSearch && matchesStage;
                       }).map((lead) => (
-                        <tr key={lead.id} className="hover:bg-neutral-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-semibold text-sm flex-shrink-0">
+                        <tr 
+                          key={lead.id} 
+                          className="hover:bg-neutral-50 transition-colors cursor-pointer sm:cursor-default"
+                          onClick={() => { 
+                            // On mobile, clicking row opens lead modal
+                            if (window.innerWidth < 640) {
+                              setEditingLead(lead); 
+                              setShowLeadModal(true); 
+                            }
+                          }}
+                        >
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                            <div className="flex items-center gap-2 sm:gap-3">
+                              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-semibold text-xs sm:text-sm flex-shrink-0">
                                 {lead.name.charAt(0)}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-medium text-neutral-900 text-sm">{lead.name}</p>
-                                <p className="text-xs text-neutral-500 truncate max-w-[180px]">{lead.company_name || lead.email || '-'}</p>
+                                <p className="font-medium text-neutral-900 text-xs sm:text-sm">{lead.name}</p>
+                                <p className="text-[10px] sm:text-xs text-neutral-500 truncate max-w-[120px] sm:max-w-[180px]">{lead.company_name || lead.email || '-'}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden sm:table-cell">
-                            <span className="text-sm text-neutral-600 capitalize">{lead.source?.replace('_', ' ') || '-'}</span>
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden sm:table-cell">
+                            <span className="text-xs sm:text-sm text-neutral-600 capitalize">{lead.source?.replace('_', ' ') || '-'}</span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3">
                             <select
                               value={lead.status || 'new'}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={async (e) => {
                                 const newStatus = e.target.value as Lead['status'];
                                 try {
@@ -812,7 +908,7 @@ export default function SalesPage() {
                                   console.error('Failed to update lead:', error);
                                 }
                               }}
-                              className={`text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer ${
+                              className={`text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border-0 cursor-pointer ${
                                 lead.status === 'new' ? 'bg-blue-50 text-blue-700' :
                                 lead.status === 'contacted' ? 'bg-purple-50 text-purple-700' :
                                 lead.status === 'qualified' ? 'bg-amber-50 text-amber-700' :
@@ -830,32 +926,32 @@ export default function SalesPage() {
                               <option value="lost">Lost</option>
                             </select>
                           </td>
-                          <td className="px-4 py-3 text-sm text-neutral-600 hidden md:table-cell">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-neutral-600 hidden md:table-cell">
                             {lead.estimated_value ? `$${lead.estimated_value.toLocaleString()}` : '-'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-neutral-500 hidden lg:table-cell">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-neutral-500 hidden lg:table-cell">
                             {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : '-'}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden sm:table-cell">
                             <div className="flex items-center justify-end gap-1">
                               {lead.status !== 'won' && lead.status !== 'lost' && (
                                 <>
                                   <button
-                                    onClick={() => setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' })}
-                                    className="px-2.5 py-1.5 text-xs font-medium text-[#476E66] bg-[#476E66]/10 rounded-lg hover:bg-[#476E66]/20 transition-colors hidden sm:block"
+                                    onClick={(e) => { e.stopPropagation(); setShowProposalChoiceModal({ type: 'lead', id: lead.id, name: lead.name, email: lead.email || '', company: lead.company_name || '' }); }}
+                                    className="px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-[#476E66] bg-[#476E66]/10 rounded-lg hover:bg-[#476E66]/20 transition-colors hidden sm:block"
                                   >
                                     Proposal
                                   </button>
                                   <button
-                                    onClick={() => { setConvertingLead(lead); setShowConvertModal(true); }}
-                                    className="px-2.5 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors hidden md:block"
+                                    onClick={(e) => { e.stopPropagation(); setConvertingLead(lead); setShowConvertModal(true); }}
+                                    className="px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors hidden md:block"
                                   >
                                     Convert
                                   </button>
                                 </>
                               )}
                               <button
-                                onClick={() => { setEditingLead(lead); setShowLeadModal(true); }}
+                                onClick={(e) => { e.stopPropagation(); setEditingLead(lead); setShowLeadModal(true); }}
                                 className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
                               >
                                 <Edit2 className="w-4 h-4" />
@@ -2039,6 +2135,226 @@ export default function SalesPage() {
           onClose={() => { setShowQuoteModal(false); setEditingQuote(null); }}
           onSave={() => { loadData(); setShowQuoteModal(false); setEditingQuote(null); }}
         />
+      )}
+
+      {/* Mobile Floating Action Button */}
+      <button
+        onClick={() => {
+          if (activeTab === 'leads') {
+            setEditingLead(null);
+            setShowLeadModal(true);
+          } else if (activeTab === 'clients') {
+            checkAndProceed('clients', clients.length, () => {
+              setSelectedClient(null);
+              setIsAddingNewClient(true);
+            });
+          } else if (activeTab === 'proposals') {
+            setShowProposalChoiceModal({ type: 'client' });
+          }
+        }}
+        className="sm:hidden fixed right-4 bottom-20 w-14 h-14 bg-[#476E66] text-white rounded-full shadow-lg hover:bg-[#3A5B54] transition-all flex items-center justify-center z-40"
+        style={{ boxShadow: '0 4px 12px rgba(71, 110, 102, 0.4)' }}
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* Mobile Lead Bottom Sheet */}
+      {leadBottomSheet && (
+        <div className="sm:hidden fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/40 transition-opacity"
+            onClick={() => setLeadBottomSheet(null)}
+          />
+          {/* Sheet */}
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 bg-neutral-300 rounded-full" />
+            </div>
+            
+            {/* Header */}
+            <div className="px-4 pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-[#476E66]/10 flex items-center justify-center text-[#476E66] font-semibold text-lg">
+                  {leadBottomSheet.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-neutral-900">{leadBottomSheet.name}</h3>
+                  {leadBottomSheet.company_name && (
+                    <p className="text-sm text-neutral-500">{leadBottomSheet.company_name}</p>
+                  )}
+                </div>
+                
+                {/* 3-dot menu */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowLeadBottomSheetMenu(!showLeadBottomSheetMenu)}
+                    className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg"
+                  >
+                    <MoreHorizontal className="w-5 h-5" />
+                  </button>
+                  
+                  {showLeadBottomSheetMenu && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowLeadBottomSheetMenu(false)} 
+                      />
+                      <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-lg border border-neutral-100 py-1 z-20">
+                        <button
+                          onClick={() => {
+                            setShowLeadBottomSheetMenu(false);
+                            setLeadBottomSheet(null);
+                            setEditingLead(leadBottomSheet);
+                            setShowLeadModal(true);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setShowLeadBottomSheetMenu(false);
+                            if (confirm('Delete this lead?')) {
+                              try {
+                                await leadsApi.deleteLead(leadBottomSheet.id);
+                                setLeadBottomSheet(null);
+                                loadData();
+                              } catch (error) {
+                                console.error('Failed to delete lead:', error);
+                              }
+                            }
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                
+                <button 
+                  onClick={() => { setShowLeadBottomSheetMenu(false); setLeadBottomSheet(null); }}
+                  className="p-2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Status Badge */}
+            <div className="px-4 py-3 border-b border-neutral-100">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-neutral-500">Status</span>
+                <span className="px-3 py-1 text-xs font-medium rounded-full bg-[#476E66]/10 text-[#476E66]">
+                  {leadBottomSheet.status?.replace('_', ' ').charAt(0).toUpperCase() + (leadBottomSheet.status?.replace('_', ' ').slice(1) || '')}
+                </span>
+              </div>
+            </div>
+
+            {/* Details */}
+            <div className="px-4 py-3 space-y-3">
+              {leadBottomSheet.estimated_value && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#476E66]/10 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-[#476E66]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Est. Value</p>
+                    <p className="text-sm font-medium text-neutral-900">${leadBottomSheet.estimated_value.toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+              
+              {leadBottomSheet.email && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#476E66]/10 flex items-center justify-center">
+                    <Mail className="w-4 h-4 text-[#476E66]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-neutral-500">Email</p>
+                    <p className="text-sm font-medium text-neutral-900 truncate">{leadBottomSheet.email}</p>
+                  </div>
+                </div>
+              )}
+              
+              {leadBottomSheet.phone && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#476E66]/10 flex items-center justify-center">
+                    <Phone className="w-4 h-4 text-[#476E66]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Phone</p>
+                    <p className="text-sm font-medium text-neutral-900">{leadBottomSheet.phone}</p>
+                  </div>
+                </div>
+              )}
+              
+              {leadBottomSheet.source && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#476E66]/10 flex items-center justify-center">
+                    <Tag className="w-4 h-4 text-[#476E66]" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Source</p>
+                    <p className="text-sm font-medium text-neutral-900 capitalize">{leadBottomSheet.source.replace('_', ' ')}</p>
+                  </div>
+                </div>
+              )}
+              
+              {leadBottomSheet.created_at && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center">
+                    <Calendar className="w-4 h-4 text-neutral-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Created</p>
+                    <p className="text-sm font-medium text-neutral-900">{new Date(leadBottomSheet.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="px-4 py-4 border-t border-neutral-100 space-y-2 pb-safe">
+              {leadBottomSheet.status !== 'won' && leadBottomSheet.status !== 'lost' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setLeadBottomSheet(null);
+                      setShowProposalChoiceModal({ 
+                        type: 'lead', 
+                        id: leadBottomSheet.id, 
+                        name: leadBottomSheet.name, 
+                        email: leadBottomSheet.email || '', 
+                        company: leadBottomSheet.company_name || '' 
+                      });
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#476E66] text-white rounded-xl font-medium text-sm"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Proposal
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLeadBottomSheet(null);
+                      setConvertingLead(leadBottomSheet);
+                      setShowConvertModal(true);
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-[#476E66]/20 text-[#476E66] rounded-xl font-medium text-sm"
+                  >
+                    <Users className="w-4 h-4" />
+                    Convert
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Lead Modal */}

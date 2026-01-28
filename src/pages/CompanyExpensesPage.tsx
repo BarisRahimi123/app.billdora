@@ -226,50 +226,51 @@ export default function CompanyExpensesPage() {
               <p className="text-xs text-neutral-500">Track your recurring business costs</p>
             </div>
           </div>
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            Add Expense
-          </button>
+            <button
+              onClick={openAddModal}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-xs sm:text-sm font-medium"
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Add Expense</span>
+              <span className="sm:hidden">Add</span>
+            </button>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <div className="max-w-4xl mx-auto px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
           {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-                  <TrendingDown className="w-5 h-5 text-emerald-600" />
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="bg-white rounded-xl p-3 sm:p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-neutral-500">Monthly</p>
-                  <p className="text-xl font-bold text-neutral-900">{formatCurrency(totalMonthly)}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-neutral-500">Yearly</p>
-                  <p className="text-xl font-bold text-neutral-900">{formatCurrency(totalMonthly * 12)}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-neutral-500">Monthly</p>
+                  <p className="text-sm sm:text-xl font-bold text-neutral-900 truncate">{formatCurrency(totalMonthly)}</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-purple-600" />
+            <div className="bg-white rounded-xl p-3 sm:p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-neutral-500">Active</p>
-                  <p className="text-xl font-bold text-neutral-900">{activeExpenses.length}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-neutral-500">Yearly</p>
+                  <p className="text-sm sm:text-xl font-bold text-neutral-900 truncate">{formatCurrency(totalMonthly * 12)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-3 sm:p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-neutral-500">Active</p>
+                  <p className="text-sm sm:text-xl font-bold text-neutral-900">{activeExpenses.length}</p>
                 </div>
               </div>
             </div>
@@ -305,19 +306,22 @@ export default function CompanyExpensesPage() {
                     {/* Category Header */}
                     <div 
                       onClick={() => toggleCategory(cat.value)} 
-                      className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-50 transition-colors"
+                      className="px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between cursor-pointer hover:bg-neutral-50 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isExpanded ? 'bg-[#476E66]/10' : 'bg-neutral-100'}`}>
-                          <Icon className={`w-4 h-4 ${isExpanded ? 'text-[#476E66]' : 'text-neutral-500'}`} />
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isExpanded ? 'bg-[#476E66]/10' : 'bg-neutral-100'}`}>
+                          <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isExpanded ? 'text-[#476E66]' : 'text-neutral-500'}`} />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-neutral-900">{cat.label}</p>
-                          <p className="text-xs text-neutral-500">{cat.expenses.length} expense{cat.expenses.length !== 1 ? 's' : ''}</p>
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-medium text-neutral-900 truncate">{cat.label}</p>
+                          <p className="text-[10px] sm:text-xs text-neutral-500">{cat.expenses.length} expense{cat.expenses.length !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-neutral-900">{formatCurrency(cat.total)}<span className="text-xs text-neutral-400 font-normal">/mo</span></span>
+                      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                        <div className="text-right">
+                          <span className="text-xs sm:text-sm font-semibold text-neutral-900">{formatCurrency(cat.total)}</span>
+                          <span className="text-[10px] sm:text-xs text-neutral-400 font-normal">/mo</span>
+                        </div>
                         {isExpanded ? (
                           <ChevronDown className="w-4 h-4 text-neutral-400" />
                         ) : (
@@ -331,20 +335,22 @@ export default function CompanyExpensesPage() {
                       <div className="border-t border-neutral-100">
                         <div className="divide-y divide-neutral-100">
                           {cat.expenses.map(exp => (
-                            <div key={exp.id} className="px-4 py-3 flex items-center justify-between hover:bg-neutral-50 transition-colors group">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2 h-2 rounded-full bg-[#476E66]" />
-                                <span className="text-sm text-neutral-900">{exp.name}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <span className="text-sm font-medium text-neutral-900">{formatCurrency(exp.amount)}</span>
-                                <span className="px-2 py-0.5 bg-neutral-100 rounded-full text-xs text-neutral-600 capitalize">{exp.frequency}</span>
-                                <button 
-                                  onClick={() => handleDelete(exp.id)} 
-                                  className="p-1.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                            <div key={exp.id} className="px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-neutral-50 transition-colors group">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#476E66] flex-shrink-0" />
+                                  <span className="text-xs sm:text-sm text-neutral-900 truncate">{exp.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                                  <span className="text-xs sm:text-sm font-medium text-neutral-900">{formatCurrency(exp.amount)}</span>
+                                  <span className="hidden sm:inline px-2 py-0.5 bg-neutral-100 rounded-full text-xs text-neutral-600 capitalize">{exp.frequency}</span>
+                                  <button 
+                                    onClick={() => handleDelete(exp.id)} 
+                                    className="p-1 sm:p-1.5 text-neutral-400 sm:text-neutral-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}

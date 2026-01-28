@@ -247,6 +247,13 @@ export default function SettingsPage() {
   }
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showMoreTabs, setShowMoreTabs] = useState(false);
+  
+  // Split tabs: first 6 visible, rest in dropdown (on mobile)
+  const visibleTabCount = 6;
+  const visibleTabs = tabs.slice(0, visibleTabCount);
+  const moreTabs = tabs.slice(visibleTabCount);
+  const activeTabInMore = moreTabs.some(t => t.id === activeTab);
 
   return (
     <div className="space-y-3">
@@ -257,22 +264,86 @@ export default function SettingsPage() {
       </div>
 
       {/* Settings Tabs */}
-      <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-neutral-100">
-        {/* Tab Navigation */}
-        <div className="border-b border-neutral-100 overflow-x-auto scrollbar-hide">
-          <nav className="flex min-w-max px-2">
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-100">
+        {/* Tab Navigation - Mobile: Limited tabs + More dropdown */}
+        <div className="border-b border-neutral-100 relative">
+          {/* Mobile Tab Bar */}
+          <nav className="sm:hidden flex items-center justify-between px-2">
+            {/* Visible Tabs */}
+            <div className="flex items-center gap-1">
+              {visibleTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                    activeTab === tab.id 
+                      ? 'bg-[#476E66]/10 text-[#476E66]' 
+                      : 'text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50'
+                  }`}
+                >
+                  <tab.icon className="w-5 h-5" />
+                </button>
+              ))}
+            </div>
+            
+            {/* More Button - Right aligned */}
+            {moreTabs.length > 0 && (
+              <button
+                onClick={() => setShowMoreTabs(!showMoreTabs)}
+                className={`flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                  activeTabInMore 
+                    ? 'bg-[#476E66]/10 text-[#476E66]' 
+                    : 'text-neutral-400 hover:text-neutral-700 hover:bg-neutral-50'
+                }`}
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            )}
+          </nav>
+          
+          {/* More Dropdown Menu - Full width sheet from bottom of tabs */}
+          {showMoreTabs && (
+            <>
+              <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setShowMoreTabs(false)} />
+              <div className="absolute left-2 right-2 top-full mt-1 z-50 bg-white rounded-xl shadow-xl border border-neutral-200 py-2 max-h-[60vh] overflow-y-auto">
+                <div className="px-3 py-2 border-b border-neutral-100 mb-1">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase">More Settings</p>
+                </div>
+                {moreTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setShowMoreTabs(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm ${
+                      activeTab === tab.id 
+                        ? 'bg-[#476E66]/10 text-[#476E66]' 
+                        : 'text-neutral-700 hover:bg-neutral-50'
+                    }`}
+                  >
+                    <tab.icon className="w-5 h-5" />
+                    <span>{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          
+          {/* Desktop Tab Bar - All tabs visible */}
+          <nav className="hidden sm:flex min-w-max px-2 overflow-x-auto scrollbar-hide">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
                   activeTab === tab.id 
                     ? 'border-[#476E66] text-[#476E66]' 
                     : 'border-transparent text-neutral-500 hover:text-neutral-700'
                 }`}
               >
-                <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden xs:inline">{tab.label}</span>
+                <tab.icon className="w-4 h-4" />
+                <span>{tab.label}</span>
               </button>
             ))}
           </nav>
@@ -5835,68 +5906,167 @@ function SubscriptionTab() {
         </div>
       )}
 
-      {/* Plan Comparison - Visual redesign */}
-      <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-neutral-100">
-        <div className="p-3 sm:p-4 border-b border-neutral-100">
-          <h3 className="text-base sm:text-lg font-bold text-neutral-900">Compare Plans</h3>
-          <p className="text-neutral-500 text-xs mt-0.5">See what's included in each plan</p>
+      {/* Plan Comparison - Mobile: Swipeable Cards, Desktop: Table */}
+      <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-neutral-100">
+        <div className="p-4 border-b border-neutral-100">
+          <h3 className="text-base font-bold text-neutral-900">Choose Your Plan</h3>
+          <p className="text-neutral-500 text-xs mt-0.5">Swipe to compare plans</p>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[500px]">
+        {/* Mobile: Muted Current + Highlighted Upgrade */}
+        <div className="sm:hidden p-3 space-y-3">
+          {/* Current Plan - Muted/Simple */}
+          {!isPro ? (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-neutral-200 flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-neutral-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-700">Starter Plan</p>
+                    <p className="text-[10px] text-neutral-500">Your current plan</p>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-neutral-600">Free</span>
+              </div>
+              <div className="mt-2 pt-2 border-t border-neutral-200 grid grid-cols-4 gap-1 text-center">
+                <div><p className="text-xs font-bold text-neutral-700">3</p><p className="text-[9px] text-neutral-500">Projects</p></div>
+                <div><p className="text-xs font-bold text-neutral-700">2</p><p className="text-[9px] text-neutral-500">Team</p></div>
+                <div><p className="text-xs font-bold text-neutral-700">5</p><p className="text-[9px] text-neutral-500">Clients</p></div>
+                <div><p className="text-xs font-bold text-neutral-700">10</p><p className="text-[9px] text-neutral-500">Invoices</p></div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-[#476E66] flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-700">Professional Plan</p>
+                    <p className="text-[10px] text-neutral-500">Your current plan</p>
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-[#476E66]">${billingCycle === 'yearly' ? '17.60' : '22'}/mo</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Upgrade Card - Prominent (only show if not Pro) */}
+          {!isPro && (
+            <div className="rounded-xl border-2 border-[#476E66] bg-gradient-to-br from-[#476E66]/10 to-[#476E66]/5 p-4 relative overflow-hidden">
+              {/* Recommended Badge */}
+              <div className="absolute top-0 right-0 bg-[#476E66] text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">
+                RECOMMENDED
+              </div>
+              
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h4 className="text-lg font-bold text-neutral-900">Professional</h4>
+                  <p className="text-xs text-neutral-600">Unlock all features</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-[#476E66]">${billingCycle === 'yearly' ? '17.60' : '22'}</p>
+                  <p className="text-[10px] text-neutral-500">per month</p>
+                </div>
+              </div>
+              
+              {/* Key Benefits */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#476E66]" />
+                  <span className="text-xs text-neutral-700">Unlimited projects</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#476E66]" />
+                  <span className="text-xs text-neutral-700">50 team members</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#476E66]" />
+                  <span className="text-xs text-neutral-700">Custom branding</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#476E66]" />
+                  <span className="text-xs text-neutral-700">Advanced reports</span>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleUpgrade}
+                disabled={!!checkoutLoading}
+                className="w-full py-3 bg-[#476E66] text-white text-sm font-bold rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+              >
+                {checkoutLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>Upgrade Now</>
+                )}
+              </button>
+              
+              {billingCycle === 'yearly' && (
+                <p className="text-center text-[10px] text-emerald-600 font-medium mt-2">Save 20% with yearly billing</p>
+              )}
+            </div>
+          )}
+        </div>
+        
+        {/* Desktop: Traditional Table */}
+        <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full">
             <thead>
               <tr className="bg-neutral-50">
-                <th className="text-left py-2 px-3 sm:px-4 text-xs font-semibold text-neutral-700 w-1/2">Features</th>
-                <th className="text-center py-2 px-2 sm:px-3 w-1/4">
+                <th className="text-left py-3 px-4 text-xs font-semibold text-neutral-700 w-1/2">Features</th>
+                <th className="text-center py-3 px-4 w-1/4">
                   <div className="inline-flex flex-col items-center">
-                    <span className="text-xs font-semibold text-neutral-900">Starter</span>
-                    <span className="text-[10px] text-neutral-500">Free forever</span>
+                    <span className="text-sm font-semibold text-neutral-900">Starter</span>
+                    <span className="text-xs text-neutral-500">Free forever</span>
                   </div>
                 </th>
-                <th className="text-center py-2 px-2 sm:px-3 w-1/4">
+                <th className="text-center py-3 px-4 w-1/4">
                   <div className="inline-flex flex-col items-center">
-                    <span className="text-xs font-semibold text-neutral-900 flex items-center gap-1">
-                      <span className="hidden sm:inline">Professional</span>
-                      <span className="sm:hidden">Pro</span>
-                      <span className="px-1 py-0.5 bg-[#476E66] text-white text-[9px] font-bold rounded">PRO</span>
+                    <span className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
+                      Professional
+                      <span className="px-1.5 py-0.5 bg-[#476E66] text-white text-[9px] font-bold rounded">PRO</span>
                     </span>
-                    <span className="text-[10px] text-neutral-500">$22/month</span>
+                    <span className="text-xs text-neutral-500">${billingCycle === 'yearly' ? '17.60' : '22'}/month</span>
                   </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-50">
+            <tbody className="divide-y divide-neutral-100">
               {features.map((feature, idx) => (
                 <tr key={feature.name} className={idx % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
-                  <td className="py-2 px-3 sm:px-4 text-xs text-neutral-700 font-medium">{feature.name}</td>
-                  <td className="text-center py-2 px-2 sm:px-3">
+                  <td className="py-3 px-4 text-sm text-neutral-700">{feature.name}</td>
+                  <td className="text-center py-3 px-4">
                     {typeof feature.starter === 'boolean' ? (
                       feature.starter ? (
-                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100">
-                          <Check className="w-3 h-3 text-emerald-600" />
+                        <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
                         </div>
                       ) : (
-                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-neutral-100">
-                          <X className="w-3 h-3 text-neutral-400" />
+                        <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-neutral-100">
+                          <X className="w-3.5 h-3.5 text-neutral-400" />
                         </div>
                       )
                     ) : (
-                      <span className="text-xs font-medium text-neutral-900">{feature.starter}</span>
+                      <span className="text-sm font-medium text-neutral-900">{feature.starter}</span>
                     )}
                   </td>
-                  <td className="text-center py-2 px-2 sm:px-3">
+                  <td className="text-center py-3 px-4">
                     {typeof feature.pro === 'boolean' ? (
                       feature.pro ? (
-                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100">
-                          <Check className="w-3 h-3 text-emerald-600" />
+                        <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
                         </div>
                       ) : (
-                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-neutral-100">
-                          <X className="w-3 h-3 text-neutral-400" />
+                        <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-neutral-100">
+                          <X className="w-3.5 h-3.5 text-neutral-400" />
                         </div>
                       )
                     ) : (
-                      <span className="text-xs font-semibold text-[#476E66]">{feature.pro}</span>
+                      <span className="text-sm font-semibold text-[#476E66]">{feature.pro}</span>
                     )}
                   </td>
                 </tr>
@@ -5905,21 +6075,20 @@ function SubscriptionTab() {
           </table>
         </div>
 
+        {/* Desktop Upgrade CTA */}
         {isStarter && (
-          <div className="p-3 sm:p-4 bg-gradient-to-r from-[#476E66]/5 to-[#476E66]/10 border-t border-neutral-100">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-neutral-700 text-xs sm:text-sm font-medium">Ready to unlock all features?</p>
+          <div className="hidden sm:block p-4 bg-gradient-to-r from-[#476E66]/5 to-[#476E66]/10 border-t border-neutral-100">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-neutral-700 text-sm font-medium">Ready to unlock all features?</p>
               <button
                 onClick={handleUpgrade}
                 disabled={!!checkoutLoading}
-                className="px-4 py-2 bg-[#476E66] text-white text-sm font-semibold rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-2.5 bg-[#476E66] text-white text-sm font-semibold rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {checkoutLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>
-                    <span className="hidden xs:inline">Upgrade Now - </span>${billingCycle === 'yearly' ? '17.60' : '22'}/mo
-                  </>
+                  <>Upgrade Now - ${billingCycle === 'yearly' ? '17.60' : '22'}/mo</>
                 )}
               </button>
             </div>
