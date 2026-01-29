@@ -207,9 +207,9 @@ Deno.serve(async (req) => {
             user_id: collab.collaborator_user_id,
             type: 'proposal_signed',
             title: '✅ Your proposal has been approved!',
-            message: `The project owner has signed and approved your proposal for "${projectTitle}".`,
-            reference_id: collaborationId,
-            reference_type: 'collaboration',
+            message: `The project owner has signed and approved your proposal for "${projectTitle}". Click to view your signed proposal.`,
+            reference_id: quoteId,
+            reference_type: 'quote',
             metadata: { quote_id: quoteId, collaboration_id: collaborationId }
           })
         }

@@ -222,9 +222,11 @@ export default function NotificationsPage() {
     markAsRead(notification.id);
     
     if (notification.reference_type === 'quote' && notification.reference_id) {
-      // For signed/approved proposals, go to Sales page (read-only view makes more sense)
-      // For other proposal notifications (viewed, sent), go to the editor
-      if (notification.type?.includes('signed') || notification.type?.includes('approved')) {
+      // For signed/approved proposals, go to view the quote document
+      if (notification.type === 'proposal_signed') {
+        // Collaborator viewing their approved proposal
+        navigate(`/quotes/${notification.reference_id}/document?mode=view`);
+      } else if (notification.type?.includes('signed') || notification.type?.includes('approved')) {
         // Signed proposals - go to Sales page to view the approved quote
         navigate('/sales');
       } else if (notification.type?.includes('declined')) {
