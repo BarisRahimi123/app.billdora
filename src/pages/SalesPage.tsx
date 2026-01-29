@@ -1807,11 +1807,14 @@ export default function SalesPage() {
                             <div key={collab.id} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-neutral-50 transition-colors">
                               <div className="flex items-center gap-3 flex-1 min-w-0">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                  collab.status === 'approved' ? 'bg-emerald-100' :
                                   collab.status === 'merged' ? 'bg-purple-100' :
                                   collab.status === 'submitted' ? 'bg-emerald-100' :
                                   collab.status === 'declined' ? 'bg-red-100' : 'bg-neutral-100'
                                 }`}>
-                                  {collab.status === 'merged' ? (
+                                  {collab.status === 'approved' ? (
+                                    <Check className="w-4 h-4 text-emerald-600" />
+                                  ) : collab.status === 'merged' ? (
                                     <Check className="w-4 h-4 text-purple-600" />
                                   ) : collab.status === 'submitted' ? (
                                     <Check className="w-4 h-4 text-emerald-600" />
@@ -1832,13 +1835,15 @@ export default function SalesPage() {
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  collab.status === 'approved' ? 'bg-emerald-50 text-emerald-600' :
                                   collab.status === 'pending' ? 'bg-amber-50 text-amber-600' :
                                   collab.status === 'accepted' ? 'bg-blue-50 text-blue-600' :
                                   collab.status === 'submitted' ? 'bg-emerald-50 text-emerald-600' :
                                   collab.status === 'merged' ? 'bg-purple-50 text-purple-600' :
                                   collab.status === 'declined' ? 'bg-red-50 text-red-600' : 'bg-neutral-100 text-neutral-600'
                                 }`}>
-                                  {collab.status === 'merged' ? 'Merged ✓' : 
+                                  {collab.status === 'approved' ? 'Signed ✓' :
+                                   collab.status === 'merged' ? 'Merged ✓' : 
                                    collab.status === 'submitted' ? 'Submitted' :
                                    collab.status === 'accepted' ? 'Working' :
                                    collab.status === 'declined' ? 'Declined' : 'Pending'}

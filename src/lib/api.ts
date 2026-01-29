@@ -2599,7 +2599,7 @@ export const collaborationApi = {
       .from('proposal_collaborations')
       .select('*')
       .eq('collaborator_email', userEmail.toLowerCase())
-      .in('status', ['pending', 'accepted', 'submitted', 'merged'])
+      .in('status', ['pending', 'accepted', 'submitted', 'merged', 'approved'])
       .order('invited_at', { ascending: false });
     
     if (error) {
@@ -2862,7 +2862,7 @@ export interface ProposalCollaboration {
   message?: string;
   transparency_mode?: string;
   payment_mode?: string;
-  status?: 'pending' | 'accepted' | 'declined' | 'submitted' | 'merged';
+  status?: 'pending' | 'accepted' | 'declined' | 'submitted' | 'merged' | 'approved';
   invited_at?: string;
   accepted_at?: string;
   submitted_at?: string;
