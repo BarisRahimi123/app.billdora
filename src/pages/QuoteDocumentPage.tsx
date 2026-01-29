@@ -60,11 +60,14 @@ export default function QuoteDocumentPage() {
   // Step param (to open at specific step, e.g., step=5 for preview)
   const stepParam = searchParams.get('step');
   const ownerSigningMode = searchParams.get('owner_signing') === 'true';
+  
+  // View-only mode (for viewing signed proposals without edit functionality)
+  const isViewOnly = searchParams.get('mode') === 'view';
 
   const [quote, setQuote] = useState<Quote | null>(null);
   
-  // Lock editing when proposal is sent or approved, or in owner signing mode
-  const isLocked = quote?.status === 'sent' || quote?.status === 'approved' || quote?.status === 'accepted' || ownerSigningMode;
+  // Lock editing when proposal is sent or approved, or in owner signing mode, or in view-only mode
+  const isLocked = quote?.status === 'sent' || quote?.status === 'approved' || quote?.status === 'accepted' || ownerSigningMode || isViewOnly;
   
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);

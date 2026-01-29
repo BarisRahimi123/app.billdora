@@ -2187,6 +2187,16 @@ export default function SalesPage() {
                             View My Response
                           </button>
                         )}
+                        {/* View Signed Proposal - for collaborators to view their approved/signed proposal */}
+                        {collab.status === 'approved' && collab.response_quote_id && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${collab.response_quote_id}/document?mode=view`); }}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-1"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View Signed Proposal
+                          </button>
+                        )}
                         {collab.status === 'accepted' && (
                           <button
                             onClick={async () => {
