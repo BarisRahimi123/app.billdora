@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Verify authentication
+  // Verify authorization - accept anon key or service role key
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
@@ -30,15 +30,9 @@ Deno.serve(async (req) => {
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
-  // Verify JWT token using anon key
-  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY! }
-  });
-
-  if (!userRes.ok) {
-    const errText = await userRes.text();
-    console.error('Auth verification failed:', userRes.status, errText);
-    return new Response(JSON.stringify({ error: 'Invalid or expired token', details: errText }), {
+  // Accept anon key or service role key
+  if (token !== SUPABASE_ANON_KEY && token !== SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: 'Invalid authorization' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
