@@ -1225,6 +1225,31 @@ export const api = {
     return data as QuoteLineItem[];
   },
 
+  // Fetch collaboration quote (for owner signing mode - bypasses RLS)
+  async getCollaborationQuote(quoteId: string, collaborationId?: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated');
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-collaboration-quote`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ quoteId, collaborationId })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch collaboration quote');
+    }
+
+    return response.json();
+  },
+
   async createQuoteLineItem(item: Partial<QuoteLineItem>) {
     const { data, error } = await supabase.from('quote_line_items')
       .insert(item)

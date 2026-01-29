@@ -499,7 +499,56 @@ export default function QuoteDocumentPage() {
       }
 
       if (!isNewQuote && quoteId) {
-        // Load existing quote
+        // OWNER SIGNING MODE: Use edge function to bypass RLS for cross-company access
+        if (ownerSigningMode) {
+          try {
+            console.log('[QuoteDocument] Owner signing mode - fetching via edge function');
+            const collabData = await api.getCollaborationQuote(quoteId);
+            
+            if (collabData.quote) {
+              const foundQuote = collabData.quote;
+              setQuote(foundQuote);
+              setDocumentTitle(foundQuote.title || 'Quote');
+              setProjectName(foundQuote.title || '');
+              setDescription(foundQuote.description || '');
+              setCoverBgUrl(foundQuote.cover_background_url || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80');
+              setVolumeNumber(foundQuote.cover_volume_number || 'Volume I');
+              setScopeOfWork(foundQuote.scope_of_work || '');
+              setCurrentStep(5); // Go to preview for signing
+              
+              // Load line items from edge function response
+              if (collabData.lineItems && collabData.lineItems.length > 0) {
+                setLineItems(collabData.lineItems.map((item: any) => ({
+                  id: item.id,
+                  description: item.description,
+                  unitPrice: item.unit_price,
+                  qty: item.quantity,
+                  unit: item.unit || 'each',
+                  taxed: item.taxed,
+                  estimatedDays: item.estimated_days || 1,
+                  startOffset: item.start_offset || 0,
+                  dependsOn: item.depends_on || '',
+                  startType: item.start_type || 'parallel',
+                  overlapDays: item.overlap_days || 0
+                })));
+              }
+              
+              // Store collaboration info for signing
+              if (collabData.collaboration) {
+                setMergeCollaboration(collabData.collaboration);
+              }
+              
+              console.log('[QuoteDocument] Owner signing mode - loaded quote and', collabData.lineItems?.length || 0, 'line items');
+            }
+          } catch (err) {
+            console.error('[QuoteDocument] Failed to load collaboration quote:', err);
+            showToast?.('Failed to load collaboration quote', 'error');
+          }
+          setLoading(false);
+          return; // Skip normal loading flow
+        }
+        
+        // Load existing quote (normal flow)
         const quotes = await api.getQuotes(profile.company_id);
         const foundQuote = quotes.find(q => q.id === quoteId);
         if (foundQuote) {
