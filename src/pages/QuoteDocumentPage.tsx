@@ -1479,6 +1479,7 @@ export default function QuoteDocumentPage() {
               </div>
 
               {/* Upload Background Button */}
+              {!isLocked && (
               <label className="absolute top-4 right-4 z-20 cursor-pointer print:hidden">
                 <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
                   <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white text-sm rounded-xl hover:bg-white/30 transition-colors">
@@ -1486,6 +1487,7 @@ export default function QuoteDocumentPage() {
                     Change Image
                 </div>
               </label>
+              )}
 
                 {/* Cover Content */}
                 <div className="relative z-10 h-full flex flex-col text-white p-8 md:p-12" style={{ minHeight: '500px' }}>
@@ -1531,8 +1533,8 @@ export default function QuoteDocumentPage() {
                     </div>
                   ) : (
                     <h1 
-                      onClick={() => setEditingTitle(true)}
-                      className="text-4xl md:text-5xl font-bold tracking-tight cursor-pointer hover:opacity-80 print:cursor-default"
+                      onClick={() => !isLocked && setEditingTitle(true)}
+                      className={`text-4xl md:text-5xl font-bold tracking-tight print:cursor-default ${isLocked ? 'cursor-default' : 'cursor-pointer hover:opacity-80'}`}
                     >
                       {projectName || documentTitle || 'PROJECT NAME'}
                     </h1>
@@ -1606,6 +1608,7 @@ export default function QuoteDocumentPage() {
               <textarea
                 value={letterContent || `Thank you for the potential opportunity to work together on ${projectName || 'this project'}. I have attached the proposal for your consideration which includes a thorough Scope of Work, deliverable schedule, and Fee.\n\nPlease review and let me know if you have any questions or comments. If you are ready for us to start working on the project, please sign the proposal sheet.`}
                 onChange={(e) => { setLetterContent(e.target.value); setHasUnsavedChanges(true); }}
+                readOnly={isLocked}
                 className="w-full h-32 p-0 text-neutral-700 bg-transparent resize-none outline-none border-none focus:ring-0"
                 placeholder="Enter your letter content..."
               />
@@ -2330,6 +2333,7 @@ export default function QuoteDocumentPage() {
                         type="number"
                         value={taxRate}
                         onChange={(e) => { setTaxRate(parseFloat(e.target.value) || 0); setHasUnsavedChanges(true); }}
+                        disabled={isLocked}
                         onFocus={(e) => e.target.select()}
                         className="w-16 text-right bg-transparent border-b border-neutral-200 outline-none focus:border-neutral-500 text-neutral-900"
                         step="0.01"
@@ -2370,6 +2374,7 @@ export default function QuoteDocumentPage() {
                 <textarea
                   value={scopeOfWork}
                   onChange={(e) => { setScopeOfWork(e.target.value); setHasUnsavedChanges(true); }}
+                  readOnly={isLocked}
                   className="w-full h-48 px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none resize-none"
                   placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives..."
                 />
@@ -2514,6 +2519,7 @@ export default function QuoteDocumentPage() {
                 <textarea
                   value={terms}
                   onChange={(e) => { setTerms(e.target.value); setHasUnsavedChanges(true); }}
+                  readOnly={isLocked}
                   className="w-full h-48 px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none resize-none"
                   placeholder="Enter terms and conditions..."
                 />
@@ -3421,6 +3427,7 @@ export default function QuoteDocumentPage() {
                 <textarea
                   value={scopeOfWork}
                   onChange={(e) => { setScopeOfWork(e.target.value); setHasUnsavedChanges(true); }}
+                  readOnly={isLocked}
                   className="w-full h-48 p-4 text-sm text-neutral-700 rounded-lg resize-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
                   placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives..."
                 />
@@ -3591,6 +3598,7 @@ export default function QuoteDocumentPage() {
                       type="text"
                       value={description}
                       onChange={(e) => { setDescription(e.target.value); setHasUnsavedChanges(true); }}
+                      readOnly={isLocked}
                       className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
                       placeholder="Brief description..."
                     />
@@ -4129,6 +4137,7 @@ export default function QuoteDocumentPage() {
                           type="number"
                           value={taxRate}
                           onChange={(e) => { setTaxRate(parseFloat(e.target.value) || 0); setHasUnsavedChanges(true); }}
+                        disabled={isLocked}
                           className="w-16 text-right bg-transparent border-b border-neutral-200 outline-none focus:border-neutral-500 print:border-none text-neutral-900"
                           step="0.01"
                         />
@@ -4164,6 +4173,7 @@ export default function QuoteDocumentPage() {
                 <textarea
                   value={terms}
                   onChange={(e) => { setTerms(e.target.value); setHasUnsavedChanges(true); }}
+                  readOnly={isLocked}
                   className="w-full h-32 p-3 text-sm text-neutral-700 border border-neutral-200 rounded-lg resize-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none print:border-none print:resize-none"
                 />
               </div>
