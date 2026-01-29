@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get quote info for project creation
+    // Get quote info
     const quoteRes = await fetch(
       `${SUPABASE_URL}/rest/v1/quotes?id=eq.${quoteId}&select=title`,
       {
@@ -157,74 +157,35 @@ Deno.serve(async (req) => {
     );
     const quoteData = await quoteRes.json();
     const quote = quoteData?.[0];
+    const projectTitle = quote?.title || 'Untitled Project';
 
-    // Create project for collaborator if they have a user_id
-    let projectId = null;
-    if (collab.collaborator_user_id) {
-      const projectTitle = quote?.title || 'Untitled Project';
-      
-      const projectRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/projects`,
+    // Always send notification to collaborator (requires company_id)
+    if (collab.collaborator_user_id && collab.collaborator_company_id) {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/notifications`,
         {
           method: 'POST',
           headers: {
             'apikey': SUPABASE_SERVICE_ROLE_KEY,
             'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
+            'Prefer': 'return=minimal'
           },
           body: JSON.stringify({
-            title: projectTitle,
+            company_id: collab.collaborator_company_id,
             user_id: collab.collaborator_user_id,
-            source_quote_id: quoteId,
-            status: 'active'
+            type: 'proposal_signed',
+            title: '✅ Your proposal has been approved!',
+            message: `The project owner has signed and approved your proposal for "${projectTitle}".`,
+            reference_id: collaborationId,
+            reference_type: 'collaboration',
+            metadata: { quote_id: quoteId, collaboration_id: collaborationId }
           })
         }
       );
-
-      if (projectRes.ok) {
-        const newProject = await projectRes.json();
-        projectId = newProject?.[0]?.id;
-
-        if (projectId) {
-          // Update collaboration with project reference
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}`,
-            {
-              method: 'PATCH',
-              headers: {
-                'apikey': SUPABASE_SERVICE_ROLE_KEY,
-                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify({ converted_project_id: projectId })
-            }
-          );
-
-          // Send notification to collaborator
-          await fetch(
-            `${SUPABASE_URL}/rest/v1/notifications`,
-            {
-              method: 'POST',
-              headers: {
-                'apikey': SUPABASE_SERVICE_ROLE_KEY,
-                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-              },
-              body: JSON.stringify({
-                user_id: collab.collaborator_user_id,
-                type: 'proposal_signed',
-                title: 'Your proposal has been signed!',
-                message: `The project owner has signed your proposal for "${projectTitle}". A new project has been created in your account.`,
-                metadata: { quote_id: quoteId, project_id: projectId }
-              })
-            }
-          );
-        }
-      }
     }
+
+    let projectId = null;
 
     return new Response(JSON.stringify({ 
       success: true, 
