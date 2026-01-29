@@ -130,6 +130,7 @@ export default function QuoteDocumentPage() {
   
   // Collaboration response mode - parent quote info for dependency selection
   const [parentQuoteLineItems, setParentQuoteLineItems] = useState<LineItem[]>([]);
+  const [parentSharePricing, setParentSharePricing] = useState(false);
   const [isCollaborationResponse, setIsCollaborationResponse] = useState(false);
   const [collaboratorInfo, setCollaboratorInfo] = useState<{ name: string; email: string; company: string } | null>(null);
   const [showCollaboratorInfo, setShowCollaboratorInfo] = useState(true);
@@ -173,6 +174,7 @@ export default function QuoteDocumentPage() {
     categoryName: string;
     deadline: string;
     message: string;
+    sharePricing: boolean;
   }>>([]);
   const [showAddCollaboratorModal, setShowAddCollaboratorModal] = useState(false);
   const [newCollaborator, setNewCollaborator] = useState({
@@ -181,7 +183,8 @@ export default function QuoteDocumentPage() {
     company: '',
     categoryId: '',
     deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    message: ''
+    message: '',
+    sharePricing: false
   });
   const [invitingCollaborators, setInvitingCollaborators] = useState(false);
   const [invitationsSent, setInvitationsSent] = useState(false);
@@ -409,6 +412,21 @@ export default function QuoteDocumentPage() {
         setDocumentTitle(`Response: ${decodedTitle}`);
         setIsCollaborationResponse(true);
         console.log('[QuoteDocument] Pre-filled project from collaboration:', decodedTitle);
+        
+        // Load collaboration record to get share_line_items setting
+        try {
+          const { data: collabData } = await (await import('../lib/supabase')).supabase
+            .from('proposal_collaborations')
+            .select('share_line_items')
+            .eq('id', collaborationId)
+            .single();
+          if (collabData?.share_line_items) {
+            setParentSharePricing(true);
+            console.log('[QuoteDocument] Owner shared pricing with collaborator');
+          }
+        } catch (err) {
+          console.warn('[QuoteDocument] Could not load collaboration settings:', err);
+        }
         
         // Load parent quote's line items for dependency selection
         if (parentQuoteId) {
@@ -1092,6 +1110,7 @@ export default function QuoteDocumentPage() {
             collaborator_company_name: collab.company || undefined,
             category_id: collab.categoryId || undefined,
             message: collab.message || undefined,
+            share_line_items: collab.sharePricing,
             expires_at: collab.deadline ? new Date(collab.deadline).toISOString() : undefined
           });
           
@@ -1897,6 +1916,9 @@ export default function QuoteDocumentPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-neutral-900 truncate">{item.description}</p>
                       </div>
+                      {parentSharePricing && item.unitPrice > 0 && (
+                        <div className="text-xs text-emerald-600 font-medium">${(item.unitPrice * item.qty).toLocaleString()}</div>
+                      )}
                       <div className="text-xs text-blue-600 font-medium">{item.estimatedDays} days</div>
                     </div>
                   ))}
@@ -2718,12 +2740,30 @@ export default function QuoteDocumentPage() {
                         className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={newCollaborator.sharePricing}
+                            onChange={(e) => setNewCollaborator(prev => ({ ...prev, sharePricing: e.target.checked }))}
+                            className="sr-only peer"
+                          />
+                          <div className="w-10 h-6 bg-neutral-200 rounded-full peer-checked:bg-[#476E66] transition-colors"></div>
+                          <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></div>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-neutral-700 group-hover:text-neutral-900">Share my pricing</span>
+                          <p className="text-xs text-neutral-500">Allow collaborator to see your line item prices</p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
                   <div className="flex justify-end gap-3 pt-4 border-t border-neutral-100">
                     <button
                       onClick={() => {
                         setShowAddCollaboratorModal(false);
-                        setNewCollaborator({ name: '', email: '', company: '', categoryId: '', deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], message: '' });
+                        setNewCollaborator({ name: '', email: '', company: '', categoryId: '', deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], message: '', sharePricing: false });
                       }}
                       className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-700"
                     >
@@ -2741,7 +2781,7 @@ export default function QuoteDocumentPage() {
                           categoryName: category?.name || 'Unknown'
                         }]);
                         setShowAddCollaboratorModal(false);
-                        setNewCollaborator({ name: '', email: '', company: '', categoryId: '', deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], message: '' });
+                        setNewCollaborator({ name: '', email: '', company: '', categoryId: '', deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], message: '', sharePricing: false });
                         showToast?.('Collaborator added', 'success');
                       }}
                       disabled={!newCollaborator.email || !newCollaborator.categoryId}
