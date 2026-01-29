@@ -28,14 +28,17 @@ Deno.serve(async (req) => {
   const token = authHeader.replace('Bearer ', '');
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
-  // Verify JWT token
+  // Verify JWT token using anon key
   const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_SERVICE_ROLE_KEY! }
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY! }
   });
 
   if (!userRes.ok) {
-    return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
+    const errText = await userRes.text();
+    console.error('Auth verification failed:', userRes.status, errText);
+    return new Response(JSON.stringify({ error: 'Invalid or expired token', details: errText }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
