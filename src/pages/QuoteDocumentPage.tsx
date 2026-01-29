@@ -3457,15 +3457,15 @@ export default function QuoteDocumentPage() {
                         const widthPercent = (item.estimatedDays / timelineRange) * 100;
                         const leftPercent = (normalizedStart / timelineRange) * 100;
                         const actualStartDay = startDay + 1;
-                        const barColor = 'bg-[#476E66]';
+                        const isCollaboratorTask = item.description.startsWith('[');
                         return (
                           <div key={item.id} className="flex items-center gap-2 py-1">
                             <div className="w-32 flex-shrink-0 text-xs text-neutral-700 truncate" title={item.description}>
                               {item.description.length > 20 ? item.description.substring(0, 20) + '...' : item.description}
                             </div>
-                            <div className="flex-1 h-8 bg-neutral-50 rounded relative border border-neutral-200">
+                            <div className="flex-1 h-6 bg-neutral-100 rounded-full relative">
                               <div 
-                                className={`absolute h-full ${item.description.startsWith('[') ? 'bg-purple-500' : barColor} rounded flex items-center justify-center text-white text-xs font-semibold shadow-sm`}
+                                className={`absolute h-full rounded-full flex items-center justify-center text-white text-[10px] font-medium ${isCollaboratorTask ? 'bg-amber-500' : 'bg-[#476E66]'}`}
                                 style={{ left: `${leftPercent}%`, width: `${Math.max(widthPercent, 8)}%`, minWidth: '40px' }}
                                 title={`Starts Day ${actualStartDay}, Duration: ${item.estimatedDays} days`}
                               >
@@ -4500,15 +4500,15 @@ export default function QuoteDocumentPage() {
                           const widthPercent = (item.estimatedDays / totalDays) * 100;
                           const leftPercent = (startDay / totalDays) * 100;
                           const actualStartDay = startDay + 1;
-                          const barColor = 'bg-[#476E66]';
+                          const isCollaboratorTask = item.description.startsWith('[');
                           return (
                             <div key={item.id} className="flex items-center gap-2 py-1">
                               <div className="w-32 flex-shrink-0 text-xs text-neutral-700 truncate" title={item.description}>
                                 {item.description.length > 20 ? item.description.substring(0, 20) + '...' : item.description}
                               </div>
-                              <div className="flex-1 h-8 bg-neutral-50 rounded relative border border-neutral-200">
+                              <div className="flex-1 h-6 bg-neutral-100 rounded-full relative">
                                 <div 
-                                  className={`absolute h-full ${item.description.startsWith('[') ? 'bg-purple-500' : barColor} rounded flex items-center justify-center text-white text-xs font-semibold shadow-sm`}
+                                  className={`absolute h-full rounded-full flex items-center justify-center text-white text-[10px] font-medium ${isCollaboratorTask ? 'bg-amber-500' : 'bg-[#476E66]'}`}
                                   style={{ left: `${leftPercent}%`, width: `${Math.max(widthPercent, 8)}%`, minWidth: '40px' }}
                                   title={`Starts Day ${actualStartDay}, Duration: ${item.estimatedDays} days`}
                                 >
