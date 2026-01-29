@@ -1868,6 +1868,18 @@ export default function SalesPage() {
                                collab.status === 'merged' ? 'Merged & Complete' : collab.status}
                             </span>
                           </div>
+                          {/* What's Next messaging */}
+                          {collab.status === 'submitted' && (
+                            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                              Waiting for {collab.owner_profile?.full_name || 'owner'} to review and merge
+                            </p>
+                          )}
+                          {collab.status === 'merged' && (
+                            <p className="text-xs text-purple-600 mt-2">
+                              ✓ Your contribution has been merged into the final proposal
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

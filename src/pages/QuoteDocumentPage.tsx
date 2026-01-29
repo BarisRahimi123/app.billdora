@@ -1700,6 +1700,38 @@ export default function QuoteDocumentPage() {
                 </div>
               </div>
               
+              {/* Price Breakdown Summary */}
+              <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-t border-b border-emerald-200">
+                <h4 className="text-sm font-semibold text-emerald-800 mb-3">💰 Price Breakdown</h4>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="bg-white/70 rounded-lg p-3 border border-emerald-200">
+                    <p className="text-xs text-neutral-500 mb-1">Your Items</p>
+                    <p className="text-lg font-bold text-[#476E66]">
+                      ${lineItems.reduce((sum, item) => sum + (item.unitPrice || 0) * (item.qty || 1), 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-white/70 rounded-lg p-3 border border-amber-200">
+                    <p className="text-xs text-neutral-500 mb-1">Collaborator (Selected)</p>
+                    <p className="text-lg font-bold text-amber-600">
+                      ${collaboratorLineItems
+                        .filter(item => selectedCollabItems.has(item.id))
+                        .reduce((sum, item) => sum + (item.unitPrice || 0) * (item.qty || 1), 0)
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-white/70 rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs text-neutral-500 mb-1">Final Total</p>
+                    <p className="text-lg font-bold text-purple-700">
+                      ${(lineItems.reduce((sum, item) => sum + (item.unitPrice || 0) * (item.qty || 1), 0) +
+                        collaboratorLineItems
+                          .filter(item => selectedCollabItems.has(item.id))
+                          .reduce((sum, item) => sum + (item.unitPrice || 0) * (item.qty || 1), 0)
+                      ).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               {/* Collaborator's Line Items */}
               <div className="px-6 py-4">
                 <div className="flex items-center justify-between mb-3">

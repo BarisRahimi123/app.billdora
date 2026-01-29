@@ -239,8 +239,23 @@ export default function NotificationsPage() {
     } else if (notification.reference_type === 'project' && notification.reference_id) {
       navigate(`/projects/${notification.reference_id}`);
     } else if (notification.reference_type === 'collaboration' && notification.reference_id) {
-      // Collaboration invites - go to Sales page inbox tab
-      navigate('/sales?tab=inbox');
+      // Deep-link based on collaboration notification type
+      if (notification.type?.includes('submitted') || notification.type?.includes('response')) {
+        // Owner: collaborator submitted response - go to Sent tab to review/merge
+        navigate('/sales?tab=proposals&subtab=collaborations');
+      } else if (notification.type?.includes('merged')) {
+        // Collaborator: their work was merged - go to Inbox to see status
+        navigate('/sales?tab=proposals&subtab=inbox');
+      } else if (notification.type?.includes('invited')) {
+        // Collaborator: new invitation - go to Inbox
+        navigate('/sales?tab=proposals&subtab=inbox');
+      } else if (notification.type?.includes('accepted')) {
+        // Owner: collaborator accepted - go to Sent tab
+        navigate('/sales?tab=proposals&subtab=collaborations');
+      } else {
+        // Default: go to inbox
+        navigate('/sales?tab=proposals&subtab=inbox');
+      }
     }
   }
 
