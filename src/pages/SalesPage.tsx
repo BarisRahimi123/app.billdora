@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -1843,6 +1843,84 @@ export default function SalesPage() {
                                     Review & Merge
                                   </button>
                                 )}
+                                {/* Sign & Approve button - shows when merged AND parent quote is approved by client */}
+                                {collab.status === 'merged' && firstCollab.parent_quote?.status === 'approved' && !collab.owner_signed_at && (
+                                  <button
+                                    onClick={async (e) => { 
+                                      e.stopPropagation();
+                                      try {
+                                        // Sign the collaborator's portion
+                                        const { error } = await supabase
+                                          .from('proposal_collaborations')
+                                          .update({ owner_signed_at: new Date().toISOString() })
+                                          .eq('id', collab.id);
+                                        
+                                        if (error) throw error;
+                                        
+                                        // Create project for collaborator from their response quote
+                                        if (collab.response_quote_id && collab.collaborator_company_id) {
+                                          const { data: projectData } = await supabase
+                                            .from('projects')
+                                            .insert({
+                                              company_id: collab.collaborator_company_id,
+                                              name: firstCollab.parent_quote?.title || 'Untitled Project',
+                                              description: `Project created from approved proposal collaboration`,
+                                              status: 'active',
+                                              created_by: collab.collaborator_user_id
+                                            })
+                                            .select()
+                                            .single();
+                                          
+                                          if (projectData) {
+                                            // Link project to collaboration
+                                            await supabase
+                                              .from('proposal_collaborations')
+                                              .update({ converted_project_id: projectData.id })
+                                              .eq('id', collab.id);
+                                            
+                                            // Update response quote with project_id
+                                            await supabase
+                                              .from('quotes')
+                                              .update({ project_id: projectData.id, status: 'approved' })
+                                              .eq('id', collab.response_quote_id);
+                                          }
+                                        }
+                                        
+                                        // Send notification to collaborator
+                                        if (collab.collaborator_user_id) {
+                                          await supabase.from('notifications').insert({
+                                            user_id: collab.collaborator_user_id,
+                                            type: 'collaboration_signed',
+                                            title: 'Your proposal has been signed!',
+                                            message: `Your portion of "${firstCollab.parent_quote?.title}" has been approved and signed. A project has been created.`,
+                                            action_url: `/projects`,
+                                            is_read: false
+                                          });
+                                        }
+                                        
+                                        // Update local state
+                                        setSentCollaborations(prev => prev.map(c => 
+                                          c.id === collab.id ? { ...c, owner_signed_at: new Date().toISOString() } : c
+                                        ));
+                                        showToast?.('Collaborator signed & project created!', 'success');
+                                      } catch (err) {
+                                        console.error('Failed to sign:', err);
+                                        showToast?.('Failed to sign collaborator', 'error');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs font-medium flex items-center gap-1"
+                                  >
+                                    <FileSignature className="w-3 h-3" />
+                                    Sign & Approve
+                                  </button>
+                                )}
+                                {/* Already signed indicator */}
+                                {collab.status === 'merged' && collab.owner_signed_at && (
+                                  <span className="px-2 py-1 bg-green-50 text-green-600 rounded text-xs font-medium flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    Signed
+                                  </span>
+                                )}
                                 {collab.status === 'declined' && (
                                   <button
                                     onClick={async (e) => { 
@@ -1881,6 +1959,100 @@ export default function SalesPage() {
                                 Merge Now
                               </button>
                             </div>
+                          </div>
+                        )}
+                        
+                        {/* Client Approved Footer - Show when client approved and there are unsigned collaborators */}
+                        {firstCollab.parent_quote?.status === 'approved' && allMerged && collabs.some(c => !c.owner_signed_at) && (
+                          <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border-t border-purple-100 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                <FileSignature className="w-4 h-4 text-purple-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-purple-900">Client Approved ✓</p>
+                                <p className="text-xs text-purple-600">
+                                  {collabs.filter(c => !c.owner_signed_at).length} collaborator{collabs.filter(c => !c.owner_signed_at).length > 1 ? 's' : ''} awaiting your signature
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                // Sign all unsigned collaborators
+                                const unsignedCollabs = collabs.filter(c => !c.owner_signed_at);
+                                for (const collab of unsignedCollabs) {
+                                  try {
+                                    await supabase
+                                      .from('proposal_collaborations')
+                                      .update({ owner_signed_at: new Date().toISOString() })
+                                      .eq('id', collab.id);
+                                    
+                                    // Create project for collaborator
+                                    if (collab.response_quote_id && collab.collaborator_company_id) {
+                                      const { data: projectData } = await supabase
+                                        .from('projects')
+                                        .insert({
+                                          company_id: collab.collaborator_company_id,
+                                          name: firstCollab.parent_quote?.title || 'Untitled Project',
+                                          description: `Project created from approved proposal collaboration`,
+                                          status: 'active',
+                                          created_by: collab.collaborator_user_id
+                                        })
+                                        .select()
+                                        .single();
+                                      
+                                      if (projectData) {
+                                        await supabase
+                                          .from('proposal_collaborations')
+                                          .update({ converted_project_id: projectData.id })
+                                          .eq('id', collab.id);
+                                        
+                                        await supabase
+                                          .from('quotes')
+                                          .update({ project_id: projectData.id, status: 'approved' })
+                                          .eq('id', collab.response_quote_id);
+                                      }
+                                    }
+                                    
+                                    // Send notification
+                                    if (collab.collaborator_user_id) {
+                                      await supabase.from('notifications').insert({
+                                        user_id: collab.collaborator_user_id,
+                                        type: 'collaboration_signed',
+                                        title: 'Your proposal has been signed!',
+                                        message: `Your portion of "${firstCollab.parent_quote?.title}" has been approved and signed. A project has been created.`,
+                                        action_url: `/projects`,
+                                        is_read: false
+                                      });
+                                    }
+                                  } catch (err) {
+                                    console.error('Failed to sign:', err);
+                                  }
+                                }
+                                
+                                // Update local state
+                                setSentCollaborations(prev => prev.map(c => 
+                                  unsignedCollabs.some(uc => uc.id === c.id) 
+                                    ? { ...c, owner_signed_at: new Date().toISOString() } 
+                                    : c
+                                ));
+                                showToast?.(`Signed ${unsignedCollabs.length} collaborator(s) successfully!`, 'success');
+                              }}
+                              className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-1.5"
+                            >
+                              <FileSignature className="w-4 h-4" />
+                              Sign All ({collabs.filter(c => !c.owner_signed_at).length})
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* All Signed Success Footer */}
+                        {firstCollab.parent_quote?.status === 'approved' && allMerged && collabs.every(c => c.owner_signed_at) && (
+                          <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-t border-green-100 flex items-center gap-2">
+                            <Check className="w-5 h-5 text-green-600" />
+                            <p className="text-sm font-medium text-green-800">
+                              All collaborators signed • Projects created successfully
+                            </p>
                           </div>
                         )}
                       </div>

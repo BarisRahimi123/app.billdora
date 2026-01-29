@@ -2817,6 +2817,8 @@ export interface ProposalCollaboration {
   accepted_at?: string;
   submitted_at?: string;
   merged_at?: string;
+  owner_signed_at?: string;
+  converted_project_id?: string;
   expires_at?: string;
   depth?: number;
   created_at?: string;

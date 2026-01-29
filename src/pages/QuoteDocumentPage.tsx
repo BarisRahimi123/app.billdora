@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell } from 'lucide-react';
+import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, Quote, Client, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -61,6 +61,10 @@ export default function QuoteDocumentPage() {
   const stepParam = searchParams.get('step');
 
   const [quote, setQuote] = useState<Quote | null>(null);
+  
+  // Lock editing when proposal is sent or approved
+  const isLocked = quote?.status === 'sent' || quote?.status === 'approved' || quote?.status === 'accepted';
+  
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [client, setClient] = useState<Client | null>(null);
@@ -1290,6 +1294,19 @@ export default function QuoteDocumentPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
+      
+      {/* Lock Banner - Shows when proposal is sent/approved */}
+      {isLocked && (
+        <div className={`sticky top-0 z-[60] px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-medium print:hidden ${
+          quote?.status === 'approved' ? 'bg-green-50 text-green-800 border-b border-green-200' :
+          'bg-amber-50 text-amber-800 border-b border-amber-200'
+        }`}>
+          <Lock className="w-4 h-4" />
+          {quote?.status === 'approved' 
+            ? 'This proposal has been approved by the client. Editing is disabled.'
+            : 'This proposal has been sent. Editing is disabled to maintain integrity.'}
+        </div>
+      )}
       
       {/* Toolbar */}
       <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 px-4 lg:px-6 py-3 print:hidden shadow-sm">
