@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
     if (collab.collaborator_company_id) {
       // Get line items total from the response quote for budget
       const lineItemsRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/line_items?quote_id=eq.${quoteId}&select=total`,
+        `${SUPABASE_URL}/rest/v1/quote_line_items?quote_id=eq.${quoteId}&select=total`,
         {
           headers: {
             'apikey': SUPABASE_SERVICE_ROLE_KEY,
@@ -256,7 +256,9 @@ Deno.serve(async (req) => {
         }
       );
       const lineItems = await lineItemsRes.json();
-      const totalBudget = lineItems?.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) || 0;
+      const totalBudget = Array.isArray(lineItems) 
+        ? lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) 
+        : 0;
 
       const projectRes = await fetch(
         `${SUPABASE_URL}/rest/v1/projects`,
