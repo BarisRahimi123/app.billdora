@@ -1857,7 +1857,7 @@ export default function SalesPage() {
                                     onClick={(e) => { 
                                       e.stopPropagation();
                                       // Navigate to collaborator's response quote for signing
-                                      navigate(`/quotes/${collab.response_quote_id}/document?sign_mode=owner&collaboration_id=${collab.id}`);
+                                      navigate(`/quotes/${collab.response_quote_id}/document?owner_signing=true`);
                                     }}
                                     className="px-2.5 py-1 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs font-medium flex items-center gap-1"
                                   >
