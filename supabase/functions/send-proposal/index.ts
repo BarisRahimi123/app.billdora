@@ -1,32 +1,56 @@
-import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
+// Self-contained CORS headers
+const getCorsHeaders = (origin: string | null) => ({
+  'Access-Control-Allow-Origin': origin || '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE, PATCH',
+  'Access-Control-Max-Age': '86400',
+  'Access-Control-Allow-Credentials': 'false'
+});
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
 
   // Verify authentication
-  const auth = await verifyAuth(req);
-  if (!auth.authenticated) {
-    return unauthorizedResponse(corsHeaders, auth.error);
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+  // Verify JWT token
+  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_SERVICE_ROLE_KEY! }
+  });
+
+  if (!userRes.ok) {
+    return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 
   try {
     const { quoteId, companyId, clientEmail, clientName, billingContactEmail, billingContactName, projectName, companyName, senderName, validUntil, portalUrl, letterContent } = await req.json();
 
     const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!SENDGRID_API_KEY) {
       throw new Error('SendGrid API key not configured');
     }
 
     // SAFETY CHECK: Prevent sending collaborator response quotes directly
-    // These should never be sent to clients - only the parent/main quote should be sent
     const quoteCheckRes = await fetch(
       `${SUPABASE_URL}/rest/v1/quotes?id=eq.${quoteId}&select=is_collaboration_response,title`,
       {
@@ -48,8 +72,8 @@ Deno.serve(async (req) => {
     }
 
     // Generate secure token and access code
-    const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-    const accessCode = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit code
+    const proposalToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    const accessCode = String(Math.floor(1000 + Math.random() * 9000));
 
     // Calculate expiry (30 days from now or validUntil date)
     const expiresAt = validUntil ? new Date(validUntil) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -67,7 +91,7 @@ Deno.serve(async (req) => {
         quote_id: quoteId,
         company_id: companyId,
         access_code: accessCode,
-        token: token,
+        token: proposalToken,
         client_email: clientEmail,
         expires_at: expiresAt.toISOString(),
         sent_at: new Date().toISOString()
@@ -80,10 +104,9 @@ Deno.serve(async (req) => {
     }
 
     // Build proposal link
-    const proposalLink = `${portalUrl}/proposal/${token}`;
+    const proposalLink = `${portalUrl}/proposal/${proposalToken}`;
 
-    // Send email via SendGrid
-    // Format letter content - convert newlines to <br> tags for HTML
+    // Format letter content
     const formattedLetterContent = letterContent ? letterContent.replace(/\n/g, '<br>') : '';
     
     const emailHtml = `
@@ -98,25 +121,19 @@ Deno.serve(async (req) => {
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <!-- Header -->
           <tr>
             <td style="background-color: #476E66; padding: 32px 40px; text-align: center;">
               <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">${companyName}</h1>
             </td>
           </tr>
-          
-          <!-- Body -->
           <tr>
             <td style="padding: 40px;">
               <p style="margin: 0 0 20px; color: #18181b; font-size: 18px; font-weight: 600;">
                 Hello ${clientName},
               </p>
-              
               <p style="margin: 0 0 24px; color: #52525b; font-size: 16px; line-height: 1.6;">
                 ${formattedLetterContent}
               </p>
-              
-              <!-- Access Code Box -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fafafa; border-radius: 8px; margin-bottom: 24px;">
                 <tr>
                   <td style="padding: 24px; text-align: center;">
@@ -125,8 +142,6 @@ Deno.serve(async (req) => {
                   </td>
                 </tr>
               </table>
-              
-              <!-- CTA Button - Email-client compatible -->
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding: 8px 0 24px;">
@@ -134,9 +149,7 @@ Deno.serve(async (req) => {
                       <tr>
                         <td align="center" bgcolor="#476E66" style="background-color: #476E66; border-radius: 8px;">
                           <a href="${proposalLink}" target="_blank" style="display: block; padding: 16px 48px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                            <!--[if mso]><i style="letter-spacing: 48px; mso-font-width: -100%; mso-text-raise: 30pt;">&nbsp;</i><![endif]-->
                             <span style="mso-text-raise: 15pt;">View Proposal</span>
-                            <!--[if mso]><i style="letter-spacing: 48px; mso-font-width: -100%;">&nbsp;</i><![endif]-->
                           </a>
                         </td>
                       </tr>
@@ -144,21 +157,15 @@ Deno.serve(async (req) => {
                   </td>
                 </tr>
               </table>
-              
-              <!-- Fallback Link -->
               <p style="margin: 0 0 16px; color: #71717a; font-size: 13px; text-align: center;">
                 Button not working? <a href="${proposalLink}" style="color: #476E66;">Click here to view your proposal</a>
               </p>
-              
               <p style="margin: 0 0 16px; color: #52525b; font-size: 14px; line-height: 1.6;">
                 You'll need to enter the access code above to view your proposal. This ensures your proposal remains secure and private.
               </p>
-              
               ${validUntil ? `<p style="margin: 0; color: #71717a; font-size: 14px;">This proposal is valid until <strong>${new Date(validUntil).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>.</p>` : ''}
             </td>
           </tr>
-          
-          <!-- Footer -->
           <tr>
             <td style="background-color: #fafafa; padding: 24px 40px; border-top: 1px solid #e4e4e7;">
               <p style="margin: 0; color: #71717a; font-size: 14px; text-align: center;">
@@ -203,7 +210,7 @@ Deno.serve(async (req) => {
       success: true, 
       message: 'Proposal sent successfully',
       accessCode,
-      token 
+      token: proposalToken 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
