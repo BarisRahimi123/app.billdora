@@ -16,27 +16,17 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Verify authorization - accept anon key or service role key
+  // Basic auth check - just verify header exists
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
+    return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 
-  const token = authHeader.replace('Bearer ', '');
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-
-  // Accept anon key or service role key
-  if (token !== SUPABASE_ANON_KEY && token !== SUPABASE_SERVICE_ROLE_KEY) {
-    return new Response(JSON.stringify({ error: 'Invalid authorization' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
 
   try {
     const { quoteId, companyId, clientEmail, clientName, billingContactEmail, billingContactName, projectName, companyName, senderName, validUntil, portalUrl, letterContent } = await req.json();
