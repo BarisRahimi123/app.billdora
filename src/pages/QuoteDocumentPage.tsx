@@ -5075,7 +5075,7 @@ export default function QuoteDocumentPage() {
                 const { data: collabData, error: collabErr } = await supabase
                   .from('proposal_collaborations')
                   .select('id, collaborator_user_id, parent_quote_id')
-                  .eq('response_quote_id', id)
+                  .eq('response_quote_id', quoteId)
                   .single();
                 
                 if (collabErr || !collabData) {
@@ -5100,13 +5100,13 @@ export default function QuoteDocumentPage() {
 
                 // Create project for collaborator
                 if (collabData.collaborator_user_id) {
-                  const projectTitle = quote?.document_title || 'Untitled Project';
+                  const projectTitle = quote?.title || 'Untitled Project';
                   const { data: newProject, error: projectErr } = await supabase
                     .from('projects')
                     .insert({
                       title: projectTitle,
                       user_id: collabData.collaborator_user_id,
-                      source_quote_id: id,
+                      source_quote_id: quoteId,
                       status: 'active'
                     })
                     .select()
@@ -5125,7 +5125,7 @@ export default function QuoteDocumentPage() {
                       type: 'proposal_signed',
                       title: 'Your proposal has been signed!',
                       message: `The project owner has signed your proposal for "${projectTitle}". A new project has been created in your account.`,
-                      metadata: { quote_id: id, project_id: newProject.id }
+                      metadata: { quote_id: quoteId, project_id: newProject.id }
                     });
                   }
                 }
