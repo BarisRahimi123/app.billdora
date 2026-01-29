@@ -159,6 +159,37 @@ Deno.serve(async (req) => {
     const quote = quoteData?.[0];
     const projectTitle = quote?.title || 'Untitled Project';
 
+    // Get owner's profile for signer name
+    const ownerProfileRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=full_name`,
+      {
+        headers: {
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      }
+    );
+    const ownerProfileData = await ownerProfileRes.json();
+    const ownerName = ownerProfileData?.[0]?.full_name || 'Project Owner';
+
+    // Get collaborator's email
+    let collaboratorEmail = null;
+    if (collab.collaborator_user_id) {
+      const collabUserRes = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users/${collab.collaborator_user_id}`,
+        {
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          }
+        }
+      );
+      if (collabUserRes.ok) {
+        const collabUserData = await collabUserRes.json();
+        collaboratorEmail = collabUserData?.email;
+      }
+    }
+
     // Always send notification to collaborator (requires company_id)
     if (collab.collaborator_user_id && collab.collaborator_company_id) {
       await fetch(
@@ -183,6 +214,32 @@ Deno.serve(async (req) => {
           })
         }
       );
+    }
+
+    // Send email notification to collaborator
+    if (collaboratorEmail) {
+      const signedDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', month: 'long', day: 'numeric' 
+      });
+      
+      await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: collaboratorEmail,
+          subject: `✅ Your proposal for "${projectTitle}" has been approved!`,
+          type: 'collaborator_proposal_approved',
+          data: {
+            projectName: projectTitle,
+            ownerName: ownerName,
+            signedDate: signedDate,
+            viewUrl: `https://app.billdora.com/quotes/${quoteId}/document`
+          }
+        })
+      });
     }
 
     let projectId = null;

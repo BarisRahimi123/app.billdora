@@ -1,17 +1,61 @@
-// Edge function to send emails via SendGrid
-import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
+// Edge function to send emails via SendGrid - self-contained
+const ALLOWED_ORIGINS = [
+  'https://app.billdora.com',
+  'https://app-billdora.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'capacitor://localhost',
+  'http://localhost'
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed => 
+    origin === allowed || origin.endsWith('.vercel.app') || origin.endsWith('.minimax.io')
+  ) ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE, PATCH',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true'
+  };
+}
 
 const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
 
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
 
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
 
-  const auth = await verifyAuth(req);
-  if (!auth.authenticated) return unauthorizedResponse(corsHeaders, auth.error);
+  // Verify auth - allow service role calls
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  // Allow service role key or validate user token
+  if (token !== SUPABASE_SERVICE_ROLE_KEY) {
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY }
+    });
+    if (!userRes.ok) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  }
 
   try {
     const { to, subject, type, data } = await req.json();
@@ -196,6 +240,43 @@ Deno.serve(async (req) => {
           </div>
           <p style="color: #9CA3AF; font-size: 14px; margin-top: 40px;">
             This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+          </p>
+        </div>
+      `;
+    } else if (type === 'collaborator_proposal_approved') {
+      const { projectName, ownerName, signedDate, viewUrl } = data || {};
+      htmlContent = `
+        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background: #ffffff;">
+          <div style="text-align: center; margin-bottom: 40px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background: #476E66; color: white; font-size: 24px; font-weight: bold; line-height: 48px; border-radius: 12px;">B</div>
+            <h1 style="margin: 16px 0 0; font-size: 24px; color: #111827;">Billdora</h1>
+          </div>
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; background: #D1FAE5; color: #065F46; padding: 8px 20px; border-radius: 20px; font-weight: 600;">
+              ✅ Proposal Approved
+            </div>
+          </div>
+          <h2 style="color: #111827; font-size: 20px; margin-bottom: 24px;">Great news! Your proposal has been approved.</h2>
+          <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
+            <strong>${ownerName || 'The project owner'}</strong> has signed and approved your proposal for <strong>${projectName || 'the project'}</strong>.
+          </p>
+          <div style="background: #F9FAFB; border-radius: 12px; padding: 20px; margin: 24px 0;">
+            <p style="margin: 0 0 8px; color: #6B7280; font-size: 14px;">Signed by</p>
+            <p style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">${ownerName || 'Project Owner'}</p>
+            <p style="margin: 8px 0 0; color: #6B7280; font-size: 14px;">${signedDate || new Date().toLocaleDateString()}</p>
+          </div>
+          <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
+            You can now proceed with the project. Click the button below to view the signed proposal:
+          </p>
+          ${viewUrl ? `
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${viewUrl}" style="display: inline-block; background: #476E66; color: white; text-decoration: none; padding: 14px 32px; font-size: 14px; font-weight: 600; border-radius: 8px;">
+              View Signed Proposal
+            </a>
+          </div>
+          ` : ''}
+          <p style="color: #9CA3AF; font-size: 14px; margin-top: 40px;">
+            If you have any questions, please contact the project owner directly.
           </p>
         </div>
       `;
