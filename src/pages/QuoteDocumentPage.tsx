@@ -538,6 +538,37 @@ export default function QuoteDocumentPage() {
                 setMergeCollaboration(collabData.collaboration);
               }
               
+              // Set company settings to COLLABORATOR (they are the "contractor" sending the proposal)
+              if (collabData.collaboratorAsContractor) {
+                setCompanySettings({
+                  company_name: collabData.collaboratorAsContractor.name,
+                  address: collabData.collaboratorAsContractor.address || '',
+                  city: collabData.collaboratorAsContractor.city || '',
+                  state: collabData.collaboratorAsContractor.state || '',
+                  zip: collabData.collaboratorAsContractor.zip || '',
+                  phone: collabData.collaboratorAsContractor.phone || '',
+                  website: '',
+                  email: collabData.collaboratorAsContractor.email || '',
+                  logo_url: collabData.collaboratorAsContractor.logo_url || ''
+                } as CompanySettings);
+              }
+              
+              // Set client to OWNER (they are the "client" receiving the proposal)
+              if (collabData.ownerAsClient) {
+                setClient({
+                  id: 'owner-as-client',
+                  name: collabData.ownerAsClient.name,
+                  display_name: collabData.ownerAsClient.name,
+                  email: collabData.ownerAsClient.email || '',
+                  phone: collabData.ownerAsClient.phone || '',
+                  address: collabData.ownerAsClient.address || '',
+                  city: collabData.ownerAsClient.city || '',
+                  state: collabData.ownerAsClient.state || '',
+                  zip: collabData.ownerAsClient.zip || ''
+                } as Client);
+                setRecipientType('client');
+              }
+              
               console.log('[QuoteDocument] Owner signing mode - loaded quote and', collabData.lineItems?.length || 0, 'line items');
             }
           } catch (err) {
