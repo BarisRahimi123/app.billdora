@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock } from 'lucide-react';
+import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, Quote, Client, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -59,11 +59,12 @@ export default function QuoteDocumentPage() {
   
   // Step param (to open at specific step, e.g., step=5 for preview)
   const stepParam = searchParams.get('step');
+  const ownerSigningMode = searchParams.get('owner_signing') === 'true';
 
   const [quote, setQuote] = useState<Quote | null>(null);
   
-  // Lock editing when proposal is sent or approved
-  const isLocked = quote?.status === 'sent' || quote?.status === 'approved' || quote?.status === 'accepted';
+  // Lock editing when proposal is sent or approved, or in owner signing mode
+  const isLocked = quote?.status === 'sent' || quote?.status === 'approved' || quote?.status === 'accepted' || ownerSigningMode;
   
   const [clients, setClients] = useState<Client[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1296,7 +1297,7 @@ export default function QuoteDocumentPage() {
     <div className="min-h-screen bg-neutral-50">
       
       {/* Lock Banner - Shows when proposal is sent/approved */}
-      {isLocked && (
+      {isLocked && !ownerSigningMode && (
         <div className={`sticky top-0 z-[60] px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-medium print:hidden ${
           quote?.status === 'approved' ? 'bg-green-50 text-green-800 border-b border-green-200' :
           'bg-amber-50 text-amber-800 border-b border-amber-200'
@@ -1305,6 +1306,14 @@ export default function QuoteDocumentPage() {
           {quote?.status === 'approved' 
             ? 'This proposal has been approved by the client. Editing is disabled.'
             : 'This proposal has been sent. Editing is disabled to maintain integrity.'}
+        </div>
+      )}
+      
+      {/* Owner Signing Mode Banner */}
+      {ownerSigningMode && (
+        <div className="sticky top-0 z-[60] px-4 py-2.5 flex items-center justify-center gap-2 text-sm font-medium print:hidden bg-purple-50 text-purple-800 border-b border-purple-200">
+          <FileSignature className="w-4 h-4" />
+          Review and sign this collaborator's proposal to finalize their participation.
         </div>
       )}
       
@@ -5052,6 +5061,88 @@ export default function QuoteDocumentPage() {
           onSelect={applyTemplate}
           onClose={() => setShowTemplatePickerModal(false)}
         />
+      )}
+
+      {/* Owner Signing Floating Button */}
+      {ownerSigningMode && (
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 print:hidden">
+          <button
+            onClick={async () => {
+              if (!confirm('Are you sure you want to sign and approve this collaborator\'s proposal? This will create a project for them and send a notification.')) return;
+              
+              try {
+                // Get collaboration ID from the quote
+                const { data: collabData, error: collabErr } = await supabase
+                  .from('proposal_collaborations')
+                  .select('id, collaborator_user_id, parent_quote_id')
+                  .eq('response_quote_id', id)
+                  .single();
+                
+                if (collabErr || !collabData) {
+                  alert('Could not find collaboration record');
+                  return;
+                }
+
+                // Update collaboration with owner signature
+                const { error: updateErr } = await supabase
+                  .from('proposal_collaborations')
+                  .update({
+                    status: 'owner-signed',
+                    owner_signed_at: new Date().toISOString(),
+                    owner_signed_by: profile?.id
+                  })
+                  .eq('id', collabData.id);
+                
+                if (updateErr) {
+                  alert('Failed to sign: ' + updateErr.message);
+                  return;
+                }
+
+                // Create project for collaborator
+                if (collabData.collaborator_user_id) {
+                  const projectTitle = quote?.document_title || 'Untitled Project';
+                  const { data: newProject, error: projectErr } = await supabase
+                    .from('projects')
+                    .insert({
+                      title: projectTitle,
+                      user_id: collabData.collaborator_user_id,
+                      source_quote_id: id,
+                      status: 'active'
+                    })
+                    .select()
+                    .single();
+                  
+                  if (!projectErr && newProject) {
+                    // Update collaboration with project reference
+                    await supabase
+                      .from('proposal_collaborations')
+                      .update({ converted_project_id: newProject.id })
+                      .eq('id', collabData.id);
+                    
+                    // Send notification to collaborator
+                    await supabase.from('notifications').insert({
+                      user_id: collabData.collaborator_user_id,
+                      type: 'proposal_signed',
+                      title: 'Your proposal has been signed!',
+                      message: `The project owner has signed your proposal for "${projectTitle}". A new project has been created in your account.`,
+                      metadata: { quote_id: id, project_id: newProject.id }
+                    });
+                  }
+                }
+
+                alert('Successfully signed! The collaborator has been notified and a project was created for them.');
+                navigate('/sales');
+              } catch (err) {
+                console.error('Signing error:', err);
+                alert('An error occurred while signing.');
+              }
+            }}
+            className="px-6 py-3 bg-purple-600 text-white rounded-xl shadow-lg hover:bg-purple-700 transition-all flex items-center gap-2 font-medium"
+          >
+            <FileSignature className="w-5 h-5" />
+            Sign & Approve Collaborator's Proposal
+          </button>
+        </div>
       )}
     </div>
   );
