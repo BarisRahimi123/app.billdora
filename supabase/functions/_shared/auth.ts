@@ -6,12 +6,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 export interface AuthResult {
   authenticated: boolean;
   user?: { id: string; email?: string };
+  isServiceRole?: boolean;
   error?: string;
 }
 
 /**
  * Verify the Authorization header and return user info
  * Use this at the start of every Edge Function that requires authentication
+ * Accepts both user JWT tokens AND service role key (for server-to-server calls)
  */
 export async function verifyAuth(req: Request): Promise<AuthResult> {
   const authHeader = req.headers.get('Authorization');
@@ -23,6 +25,12 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
   const token = authHeader.replace('Bearer ', '');
   if (!token || token === authHeader) {
     return { authenticated: false, error: 'Invalid Authorization format' };
+  }
+  
+  // Check if this is the service role key (for internal edge function calls)
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceRoleKey && token === serviceRoleKey) {
+    return { authenticated: true, isServiceRole: true };
   }
   
   try {
