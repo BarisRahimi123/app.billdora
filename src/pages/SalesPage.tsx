@@ -1856,6 +1856,19 @@ export default function SalesPage() {
                                     Review & Merge
                                   </button>
                                 )}
+                                {/* View Signed Proposal button - shows for approved collaborations */}
+                                {collab.status === 'approved' && collab.response_quote_id && (
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation();
+                                      navigate(`/quotes/${collab.response_quote_id}/document?mode=view`);
+                                    }}
+                                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    View Proposal
+                                  </button>
+                                )}
                                 {/* Sign & Approve button - shows when merged AND parent quote is approved by client */}
                                 {collab.status === 'merged' && firstCollab.parent_quote?.status === 'approved' && !collab.owner_signed_at && collab.response_quote_id && (
                                   <button
