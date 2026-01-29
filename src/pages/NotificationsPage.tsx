@@ -240,7 +240,10 @@ export default function NotificationsPage() {
       navigate(`/projects/${notification.reference_id}`);
     } else if (notification.reference_type === 'collaboration' && notification.reference_id) {
       // Deep-link based on collaboration notification type
-      if (notification.type?.includes('submitted') || notification.type?.includes('response')) {
+      if (notification.type === 'proposal_signed') {
+        // Collaborator: their proposal was approved - go to their projects (new project created)
+        navigate('/projects');
+      } else if (notification.type?.includes('submitted') || notification.type?.includes('response')) {
         // Owner: collaborator submitted response - go to Sent tab to review/merge
         navigate('/sales?tab=proposals&subtab=collaborations');
       } else if (notification.type?.includes('merged')) {
@@ -256,6 +259,9 @@ export default function NotificationsPage() {
         // Default: go to inbox
         navigate('/sales?tab=proposals&subtab=inbox');
       }
+    } else if (notification.type === 'collaborators_ready' && notification.reference_id) {
+      // Owner: client approved, collaborators ready to sign - go to quote document with collaborations
+      navigate(`/quotes/${notification.reference_id}/document?step=4`);
     }
   }
 
@@ -272,6 +278,7 @@ export default function NotificationsPage() {
 
   function getNotificationIcon(type: string) {
     // Proposals
+    if (type === 'collaborators_ready') return <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-purple-600" /></div>;
     if (type.includes('signed')) return <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0"><Check className="w-5 h-5 text-emerald-600" /></div>;
     if (type.includes('declined')) return <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5 text-red-600" /></div>;
     if (type.includes('proposal') && type.includes('viewed')) return <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><Eye className="w-5 h-5 text-blue-600" /></div>;
