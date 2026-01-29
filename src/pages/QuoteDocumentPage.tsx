@@ -5164,63 +5164,36 @@ export default function QuoteDocumentPage() {
               if (!confirm('Are you sure you want to sign and approve this collaborator\'s proposal? This will create a project for them and send a notification.')) return;
               
               try {
-                // Get collaboration ID from the quote
-                const { data: collabData, error: collabErr } = await supabase
-                  .from('proposal_collaborations')
-                  .select('id, collaborator_user_id, parent_quote_id')
-                  .eq('response_quote_id', quoteId)
-                  .single();
-                
-                if (collabErr || !collabData) {
-                  alert('Could not find collaboration record');
+                // Use edge function to handle cross-company signing
+                const collaborationId = searchParams.get('collaboration_id');
+                if (!collaborationId) {
+                  alert('Missing collaboration ID');
                   return;
                 }
 
-                // Update collaboration with owner signature
-                const { error: updateErr } = await supabase
-                  .from('proposal_collaborations')
-                  .update({
-                    status: 'owner-signed',
-                    owner_signed_at: new Date().toISOString(),
-                    owner_signed_by: profile?.id
-                  })
-                  .eq('id', collabData.id);
-                
-                if (updateErr) {
-                  alert('Failed to sign: ' + updateErr.message);
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                  alert('Not authenticated');
                   return;
                 }
 
-                // Create project for collaborator
-                if (collabData.collaborator_user_id) {
-                  const projectTitle = quote?.title || 'Untitled Project';
-                  const { data: newProject, error: projectErr } = await supabase
-                    .from('projects')
-                    .insert({
-                      title: projectTitle,
-                      user_id: collabData.collaborator_user_id,
-                      source_quote_id: quoteId,
-                      status: 'active'
-                    })
-                    .select()
-                    .single();
-                  
-                  if (!projectErr && newProject) {
-                    // Update collaboration with project reference
-                    await supabase
-                      .from('proposal_collaborations')
-                      .update({ converted_project_id: newProject.id })
-                      .eq('id', collabData.id);
-                    
-                    // Send notification to collaborator
-                    await supabase.from('notifications').insert({
-                      user_id: collabData.collaborator_user_id,
-                      type: 'proposal_signed',
-                      title: 'Your proposal has been signed!',
-                      message: `The project owner has signed your proposal for "${projectTitle}". A new project has been created in your account.`,
-                      metadata: { quote_id: quoteId, project_id: newProject.id }
-                    });
+                const response = await fetch(
+                  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sign-collaboration-proposal`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({ collaborationId, quoteId }),
                   }
+                );
+
+                const result = await response.json();
+                
+                if (!response.ok) {
+                  alert('Failed to sign: ' + (result.error || 'Unknown error'));
+                  return;
                 }
 
                 alert('Successfully signed! The collaborator has been notified and a project was created for them.');
