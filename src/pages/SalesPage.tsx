@@ -229,13 +229,21 @@ export default function SalesPage() {
       setCachedData(CACHE_KEYS.SALES_QUOTES, quotesData);
       
       // Auto-convert accepted quotes in BACKGROUND (non-blocking)
+      // Skip if project already exists or if already attempted
       const quotesToProcess = quotesData.filter((q: Quote) => 
         (q.status === 'accepted' || q.status === 'approved') && !q.project_id
       );
-      if (quotesToProcess.length > 0) {
+      const attemptedConversions = new Set(JSON.parse(sessionStorage.getItem('attempted_conversions') || '[]'));
+      const newQuotesToProcess = quotesToProcess.filter((q: Quote) => !attemptedConversions.has(q.id));
+      
+      if (newQuotesToProcess.length > 0) {
+        // Mark as attempted to avoid repeated failures
+        newQuotesToProcess.forEach((q: Quote) => attemptedConversions.add(q.id));
+        sessionStorage.setItem('attempted_conversions', JSON.stringify([...attemptedConversions]));
+        
         // Run in background, don't await - use setTimeout to defer
         setTimeout(() => {
-          Promise.all(quotesToProcess.map(async (quote: Quote) => {
+          Promise.all(newQuotesToProcess.map(async (quote: Quote) => {
             try {
               await api.convertQuoteToProject(quote.id, companyId);
               console.log(`Auto-converted quote ${quote.quote_number} to project`);
