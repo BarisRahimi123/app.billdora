@@ -1400,6 +1400,27 @@ export default function QuoteDocumentPage() {
         </div>
       )}
       
+      {/* Signature Display - Shows when collaboration is approved/signed */}
+      {mergeCollaboration?.status === 'approved' && mergeCollaboration?.owner_signed_at && (
+        <div className="bg-green-50 border-b border-green-200 px-4 py-4 print:bg-white">
+          <div className="max-w-[1200px] mx-auto flex items-center justify-center gap-4">
+            <div className="flex items-center gap-2 text-green-700">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-semibold">Proposal Approved</span>
+            </div>
+            <div className="h-6 w-px bg-green-300" />
+            <div className="text-green-800">
+              <span className="font-medium">Signed by: </span>
+              <span>{mergeCollaboration.owner_profile?.full_name || 'Project Owner'}</span>
+              <span className="mx-2">•</span>
+              <span>{new Date(mergeCollaboration.owner_signed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Toolbar */}
       <div className="sticky top-0 z-50 bg-white border-b border-neutral-200 px-4 lg:px-6 py-3 print:hidden shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 max-w-[1200px] mx-auto">

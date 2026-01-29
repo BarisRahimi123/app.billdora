@@ -1,18 +1,62 @@
-import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
+// Get collaboration quote - self-contained edge function
+const ALLOWED_ORIGINS = [
+  'https://app.billdora.com',
+  'https://app-billdora.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'capacitor://localhost',
+  'http://localhost'
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed => 
+    origin === allowed || origin.endsWith('.vercel.app') || origin.endsWith('.minimax.io')
+  ) ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE, PATCH',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true'
+  };
+}
 
 // Edge function to fetch collaboration quote data (bypasses RLS for valid owner access)
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
 
   // Verify authentication
-  const auth = await verifyAuth(req);
-  if (!auth.authenticated) {
-    return unauthorizedResponse(corsHeaders, auth.error);
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY }
+  });
+  if (!userRes.ok) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+  const user = await userRes.json();
+  if (!user?.id) {
+    return new Response(JSON.stringify({ error: 'Unauthorized - no user' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 
   try {
@@ -31,10 +75,10 @@ Deno.serve(async (req) => {
     // First, verify the user has access via collaboration relationship
     // Either they're the owner of a collaboration where this quote is the response
     // Or we have a specific collaboration ID to check
-    let verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?response_quote_id=eq.${quoteId}&owner_user_id=eq.${auth.user.id}&select=id,status,owner_company_id`;
+    let verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?response_quote_id=eq.${quoteId}&owner_user_id=eq.${user.id}&select=id,status,owner_company_id`;
     
     if (collaborationId) {
-      verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}&owner_user_id=eq.${auth.user.id}&select=id,status,owner_company_id`;
+      verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}&owner_user_id=eq.${user.id}&select=id,status,owner_company_id`;
     }
 
     const verifyRes = await fetch(verificationQuery, {
@@ -126,6 +170,27 @@ Deno.serve(async (req) => {
       );
       const collabCompanyData = await collabCompanyRes.json();
       collaboratorCompany = collabCompanyData?.[0] || null;
+    }
+
+    // If collaboration is signed, fetch owner profile for signature display
+    let ownerProfile = null;
+    if (collaboration?.owner_signed_by) {
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${collaboration.owner_signed_by}&select=full_name,email`,
+        {
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          }
+        }
+      );
+      const profileData = await profileRes.json();
+      ownerProfile = profileData?.[0] || null;
+    }
+
+    // Add owner_profile to collaboration object
+    if (collaboration && ownerProfile) {
+      collaboration.owner_profile = ownerProfile;
     }
 
     return new Response(JSON.stringify({

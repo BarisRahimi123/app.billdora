@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
-          status: 'owner-signed',
+          status: 'approved',
           owner_signed_at: new Date().toISOString(),
           owner_signed_by: user.id
         })
@@ -242,7 +242,66 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Create project for the collaborator
     let projectId = null;
+    if (collab.collaborator_company_id) {
+      // Get line items total from the response quote for budget
+      const lineItemsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/line_items?quote_id=eq.${quoteId}&select=total`,
+        {
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          }
+        }
+      );
+      const lineItems = await lineItemsRes.json();
+      const totalBudget = lineItems?.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0) || 0;
+
+      const projectRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/projects`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            company_id: collab.collaborator_company_id,
+            name: projectTitle,
+            description: `Project created from approved collaboration proposal`,
+            status: 'active',
+            budget: totalBudget,
+            created_by: collab.collaborator_user_id,
+            proposal_id: quoteId
+          })
+        }
+      );
+
+      if (projectRes.ok) {
+        const projectData = await projectRes.json();
+        projectId = projectData?.[0]?.id;
+
+        // Update collaboration with the created project id
+        if (projectId) {
+          await fetch(
+            `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}`,
+            {
+              method: 'PATCH',
+              headers: {
+                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+              },
+              body: JSON.stringify({ converted_project_id: projectId })
+            }
+          );
+        }
+      }
+    }
 
     return new Response(JSON.stringify({ 
       success: true, 

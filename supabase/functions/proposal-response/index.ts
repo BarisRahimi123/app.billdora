@@ -1,4 +1,27 @@
-import { getCorsHeaders } from '../_shared/cors.ts';
+// Proposal response handler - self-contained
+const ALLOWED_ORIGINS = [
+  'https://app.billdora.com',
+  'https://billdora.com',
+  'https://app-billdora.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'capacitor://localhost',
+  'http://localhost'
+];
+
+function getCorsHeaders(origin: string | null) {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.some(allowed => 
+    origin === allowed || origin.endsWith('.vercel.app') || origin.endsWith('.minimax.io')
+  ) ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE, PATCH',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true'
+  };
+}
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
@@ -467,6 +490,37 @@ Deno.serve(async (req) => {
           } catch (emailErr) {
             console.error('Failed to send confirmation email:', emailErr);
           }
+        }
+
+        // Check if there are merged collaborations ready to be signed by owner
+        const collabsRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/proposal_collaborations?parent_quote_id=eq.${quoteId}&status=eq.merged&select=id,collaborator_name,collaborator_company_name`,
+          { headers: { 'apikey': SUPABASE_SERVICE_ROLE_KEY!, 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        );
+        const mergedCollabs = await collabsRes.json();
+
+        if (mergedCollabs && mergedCollabs.length > 0) {
+          // Notify owner that collaborator proposals are ready to be signed
+          const collabNames = mergedCollabs.map((c: any) => c.collaborator_name || c.collaborator_company_name || 'Collaborator').join(', ');
+          
+          await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            },
+            body: JSON.stringify({
+              company_id: companyId,
+              type: 'collaborators_ready',
+              title: '✍️ Collaborator Proposals Ready to Sign',
+              message: `Your client approved "${quote?.title || 'the proposal'}". You can now sign and approve the proposals from: ${collabNames}`,
+              reference_id: quoteId,
+              reference_type: 'quote',
+              is_read: false,
+              metadata: { collaboration_count: mergedCollabs.length }
+            })
+          });
         }
       }
 
