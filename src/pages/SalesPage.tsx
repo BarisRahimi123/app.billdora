@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -1087,7 +1087,7 @@ export default function SalesPage() {
               }`}
             >
               Sent
-              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${proposalsSubTab === 'collaborations' ? 'bg-neutral-100' : 'bg-neutral-200/50'}`}>{sentCollaborations.length}</span>
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${proposalsSubTab === 'collaborations' ? 'bg-neutral-100' : 'bg-neutral-200/50'}`}>{new Set(sentCollaborations.map(c => c.parent_quote_id)).size}</span>
             </button>
           </div>
 
@@ -1722,95 +1722,170 @@ export default function SalesPage() {
                   <p className="text-sm text-neutral-500">When you invite collaborators to your proposals, they'll appear here</p>
                 </div>
               ) : (
-                <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-                  <div className="divide-y divide-neutral-100">
-                    {sentCollaborations.map((collab) => (
-                      <div key={collab.id} className="p-4 hover:bg-neutral-50 transition-colors cursor-pointer" onClick={() => navigate(`/quotes/${collab.parent_quote_id}/document?step=5`)}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              collab.status === 'merged' ? 'bg-purple-100' : 
-                              collab.status === 'declined' ? 'bg-red-100' : 'bg-neutral-100'
-                            }`}>
-                              {collab.status === 'merged' ? (
-                                <Check className="w-5 h-5 text-purple-600" />
-                              ) : collab.status === 'declined' ? (
-                                <XCircle className="w-5 h-5 text-red-500" />
-                              ) : (
-                                <Send className="w-5 h-5 text-neutral-500" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-neutral-900">
-                                {collab.parent_quote?.title || 'Untitled Proposal'}
-                              </h3>
-                              <div className="text-sm text-neutral-600 mt-0.5 space-y-0.5">
-                                <p>
-                                  Collaborator: <span className="font-medium">{collab.collaborator_name || collab.collaborator_email}</span>
-                                  {collab.collaborator_company_name && <span> ({collab.collaborator_company_name})</span>}
-                                </p>
-                                {((collab.parent_quote as any)?.client?.name || (collab.parent_quote as any)?.client?.company_name) && (
-                                  <p>
-                                    Client: <span className="font-medium">{(collab.parent_quote as any)?.client?.company_name || (collab.parent_quote as any)?.client?.name}</span>
-                                  </p>
+                <div className="space-y-4">
+                  {/* Group collaborations by parent_quote_id */}
+                  {Object.entries(
+                    sentCollaborations.reduce((acc, collab) => {
+                      const key = collab.parent_quote_id;
+                      if (!acc[key]) acc[key] = [];
+                      acc[key].push(collab);
+                      return acc;
+                    }, {} as Record<string, typeof sentCollaborations>)
+                  ).map(([quoteId, collabs]) => {
+                    const firstCollab = collabs[0];
+                    const submittedCount = collabs.filter(c => c.status === 'submitted' || c.status === 'merged').length;
+                    const pendingCount = collabs.filter(c => c.status === 'pending' || c.status === 'accepted').length;
+                    const mergedCount = collabs.filter(c => c.status === 'merged').length;
+                    const allMerged = mergedCount === collabs.length;
+                    const hasSubmitted = collabs.some(c => c.status === 'submitted');
+                    
+                    return (
+                      <div key={quoteId} className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+                        {/* Proposal Header */}
+                        <div 
+                          className="p-4 bg-gradient-to-r from-neutral-50 to-white border-b border-neutral-100 cursor-pointer hover:bg-neutral-50 transition-colors"
+                          onClick={() => navigate(`/quotes/${quoteId}/document?step=5`)}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-3 flex-1">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                allMerged ? 'bg-purple-100' : hasSubmitted ? 'bg-emerald-100' : 'bg-amber-100'
+                              }`}>
+                                {allMerged ? (
+                                  <Check className="w-5 h-5 text-purple-600" />
+                                ) : (
+                                  <Users className="w-5 h-5 text-amber-600" />
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 mt-2 text-xs text-neutral-500">
-                                <span>{new Date(collab.invited_at).toLocaleDateString()}</span>
-                                <span className={`px-2 py-0.5 rounded ${
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-neutral-900 text-lg">
+                                  {firstCollab.parent_quote?.title || 'Untitled Proposal'}
+                                </h3>
+                                {((firstCollab.parent_quote as any)?.client?.name || (firstCollab.parent_quote as any)?.client?.company_name) && (
+                                  <p className="text-sm text-neutral-600 mt-0.5">
+                                    Client: <span className="font-medium">{(firstCollab.parent_quote as any)?.client?.company_name || (firstCollab.parent_quote as any)?.client?.name}</span>
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-3 mt-2 text-sm">
+                                  <span className="text-neutral-500">
+                                    Shared with <span className="font-semibold text-neutral-700">{collabs.length}</span> collaborator{collabs.length > 1 ? 's' : ''}
+                                  </span>
+                                  <span className="text-neutral-300">•</span>
+                                  {submittedCount > 0 && (
+                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs font-medium">
+                                      {submittedCount} ready
+                                    </span>
+                                  )}
+                                  {pendingCount > 0 && (
+                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded text-xs font-medium">
+                                      {pendingCount} pending
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${quoteId}/document`); }}
+                              className="px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors text-sm font-medium flex-shrink-0"
+                            >
+                              View Proposal
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Collaborators List */}
+                        <div className="divide-y divide-neutral-100">
+                          {collabs.map((collab) => (
+                            <div key={collab.id} className="px-4 py-3 flex items-center justify-between gap-4 hover:bg-neutral-50 transition-colors">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                  collab.status === 'merged' ? 'bg-purple-100' :
+                                  collab.status === 'submitted' ? 'bg-emerald-100' :
+                                  collab.status === 'declined' ? 'bg-red-100' : 'bg-neutral-100'
+                                }`}>
+                                  {collab.status === 'merged' ? (
+                                    <Check className="w-4 h-4 text-purple-600" />
+                                  ) : collab.status === 'submitted' ? (
+                                    <Check className="w-4 h-4 text-emerald-600" />
+                                  ) : collab.status === 'declined' ? (
+                                    <XCircle className="w-4 h-4 text-red-500" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-neutral-400" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-neutral-900 truncate">
+                                    {collab.collaborator_name || collab.collaborator_email}
+                                  </p>
+                                  {collab.collaborator_company_name && (
+                                    <p className="text-xs text-neutral-500 truncate">{collab.collaborator_company_name}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   collab.status === 'pending' ? 'bg-amber-50 text-amber-600' :
                                   collab.status === 'accepted' ? 'bg-blue-50 text-blue-600' :
                                   collab.status === 'submitted' ? 'bg-emerald-50 text-emerald-600' :
                                   collab.status === 'merged' ? 'bg-purple-50 text-purple-600' :
                                   collab.status === 'declined' ? 'bg-red-50 text-red-600' : 'bg-neutral-100 text-neutral-600'
                                 }`}>
-                                  {collab.status === 'merged' 
-                                   ? (collab.parent_quote?.status === 'sent' ? 'Merged & Sent ✓' : 'Merged (Draft)')
-                                   : collab.status === 'declined' ? 'Declined' : collab.status}
+                                  {collab.status === 'merged' ? 'Merged ✓' : 
+                                   collab.status === 'submitted' ? 'Submitted' :
+                                   collab.status === 'accepted' ? 'Working' :
+                                   collab.status === 'declined' ? 'Declined' : 'Pending'}
                                 </span>
+                                {collab.status === 'submitted' && collab.response_quote_id && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${quoteId}/document?merge_collaboration_id=${collab.id}`); }}
+                                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-medium"
+                                  >
+                                    Review & Merge
+                                  </button>
+                                )}
+                                {collab.status === 'declined' && (
+                                  <button
+                                    onClick={async (e) => { 
+                                      e.stopPropagation();
+                                      try {
+                                        await supabase.from('proposal_collaborations').delete().eq('id', collab.id);
+                                        setSentCollaborations(prev => prev.filter(c => c.id !== collab.id));
+                                        showToast?.('Collaboration removed', 'success');
+                                      } catch (err) {
+                                        console.error('Failed to remove:', err);
+                                        showToast?.('Failed to remove', 'error');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-xs font-medium"
+                                  >
+                                    Remove
+                                  </button>
+                                )}
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {collab.status === 'submitted' && collab.response_quote_id && (
+                          ))}
+                        </div>
+                        
+                        {/* Action Footer - Show when there are ready responses */}
+                        {hasSubmitted && !allMerged && (
+                          <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-teal-50 border-t border-emerald-100 flex items-center justify-between">
+                            <p className="text-sm text-emerald-700">
+                              <span className="font-semibold">{submittedCount}</span> response{submittedCount > 1 ? 's' : ''} ready to merge
+                              {pendingCount > 0 && <span className="text-emerald-600"> • {pendingCount} still pending</span>}
+                            </p>
+                            <div className="flex gap-2">
                               <button
-                                onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${collab.parent_quote_id}/document?merge_collaboration_id=${collab.id}`); }}
+                                onClick={() => navigate(`/quotes/${quoteId}/document?merge_collaboration_id=${collabs.find(c => c.status === 'submitted')?.id}`)}
                                 className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
                               >
-                                Review & Merge
+                                Merge Now
                               </button>
-                            )}
-                            {collab.status === 'merged' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${collab.parent_quote_id}/document`); }}
-                                className="px-3 py-1.5 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors text-sm font-medium"
-                              >
-                                View Proposal
-                              </button>
-                            )}
-                            {collab.status === 'declined' && (
-                              <button
-                                onClick={async (e) => { 
-                                  e.stopPropagation();
-                                  try {
-                                    await supabase.from('proposal_collaborations').delete().eq('id', collab.id);
-                                    setSentCollaborations(prev => prev.filter(c => c.id !== collab.id));
-                                    showToast?.('Collaboration removed', 'success');
-                                  } catch (err) {
-                                    console.error('Failed to remove:', err);
-                                    showToast?.('Failed to remove', 'error');
-                                  }
-                                }}
-                                className="px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
-                              >
-                                Remove
-                              </button>
-                            )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
