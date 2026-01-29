@@ -145,6 +145,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Also update the quote status to approved so it shows in collaborator's sales page
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/quotes?id=eq.${quoteId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          status: 'approved'
+        })
+      }
+    );
+
     // Get quote info
     const quoteRes = await fetch(
       `${SUPABASE_URL}/rest/v1/quotes?id=eq.${quoteId}&select=title`,
