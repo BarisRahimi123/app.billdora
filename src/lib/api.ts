@@ -1250,6 +1250,31 @@ export const api = {
     return response.json();
   },
 
+  // Sign and approve a collaborator's proposal (simplified one-click signing)
+  async signCollaborationProposal(collaborationId: string, quoteId: string, signerName?: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated - please log in again');
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sign-collaboration-proposal`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ collaborationId, quoteId, signerName })
+      }
+    );
+
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || 'Failed to sign proposal');
+    }
+
+    return response.json();
+  },
+
   async createQuoteLineItem(item: Partial<QuoteLineItem>) {
     const { data, error } = await supabase.from('quote_line_items')
       .insert(item)

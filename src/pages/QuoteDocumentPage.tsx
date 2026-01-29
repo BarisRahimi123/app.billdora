@@ -5156,59 +5156,39 @@ export default function QuoteDocumentPage() {
         />
       )}
 
-      {/* Owner Signing Floating Button */}
+      {/* Owner Signing Floating Button - Simplified One-Click Signing */}
       {ownerSigningMode && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 print:hidden">
-          <button
-            onClick={async () => {
-              if (!confirm('Are you sure you want to sign and approve this collaborator\'s proposal? This will create a project for them and send a notification.')) return;
-              
-              try {
-                // Use edge function to handle cross-company signing
+          <div className="bg-white rounded-2xl shadow-xl border border-purple-200 p-4 flex flex-col items-center gap-3">
+            <p className="text-sm text-neutral-600">
+              By clicking below, you electronically sign and approve this proposal.
+            </p>
+            <button
+              onClick={async () => {
                 const collaborationId = searchParams.get('collaboration_id');
                 if (!collaborationId) {
                   alert('Missing collaboration ID');
                   return;
                 }
 
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session) {
-                  alert('Not authenticated');
-                  return;
+                try {
+                  await api.signCollaborationProposal(collaborationId, quoteId || '');
+                  alert('Successfully signed! The collaborator has been notified and a project was created for them.');
+                  navigate('/sales');
+                } catch (err: any) {
+                  console.error('Signing error:', err);
+                  alert(err.message || 'An error occurred while signing.');
                 }
-
-                const response = await fetch(
-                  `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sign-collaboration-proposal`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${session.access_token}`,
-                      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                    },
-                    body: JSON.stringify({ collaborationId, quoteId }),
-                  }
-                );
-
-                const result = await response.json();
-                
-                if (!response.ok) {
-                  alert('Failed to sign: ' + (result.error || 'Unknown error'));
-                  return;
-                }
-
-                alert('Successfully signed! The collaborator has been notified and a project was created for them.');
-                navigate('/sales');
-              } catch (err) {
-                console.error('Signing error:', err);
-                alert('An error occurred while signing.');
-              }
-            }}
-            className="px-6 py-3 bg-purple-600 text-white rounded-xl shadow-lg hover:bg-purple-700 transition-all flex items-center gap-2 font-medium"
-          >
-            <FileSignature className="w-5 h-5" />
-            Sign & Approve Collaborator's Proposal
-          </button>
+              }}
+              className="px-6 py-3 bg-purple-600 text-white rounded-xl shadow-lg hover:bg-purple-700 transition-all flex items-center gap-2 font-medium"
+            >
+              <FileSignature className="w-5 h-5" />
+              Sign & Approve
+            </button>
+            <p className="text-xs text-neutral-400">
+              Signed on {new Date().toLocaleDateString()}
+            </p>
+          </div>
         </div>
       )}
     </div>
