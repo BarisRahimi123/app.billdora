@@ -758,6 +758,7 @@ export default function QuoteDocumentPage() {
   const total = subtotal + taxDue + otherCharges;
 
   const addLineItem = () => {
+    if (isLocked) return; // Prevent adding when locked
     setLineItems([...lineItems, { 
       id: crypto.randomUUID(), 
       description: '', 
@@ -821,11 +822,13 @@ export default function QuoteDocumentPage() {
   };
 
   const updateLineItem = (id: string, updates: Partial<LineItem>) => {
+    if (isLocked) return; // Prevent edits when locked
     setLineItems(lineItems.map(item => item.id === id ? { ...item, ...updates } : item));
     setHasUnsavedChanges(true);
   };
 
   const removeLineItem = (id: string) => {
+    if (isLocked) return; // Prevent deletion when locked
     if (lineItems.length > 1) {
       setLineItems(lineItems.filter(item => item.id !== id));
       setHasUnsavedChanges(true);
