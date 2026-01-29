@@ -25,6 +25,28 @@ Deno.serve(async (req) => {
       throw new Error('SendGrid API key not configured');
     }
 
+    // SAFETY CHECK: Prevent sending collaborator response quotes directly
+    // These should never be sent to clients - only the parent/main quote should be sent
+    const quoteCheckRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/quotes?id=eq.${quoteId}&select=is_collaboration_response,title`,
+      {
+        headers: {
+          'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      }
+    );
+    const quoteCheckData = await quoteCheckRes.json();
+    if (quoteCheckData[0]?.is_collaboration_response === true) {
+      return new Response(JSON.stringify({ 
+        error: 'Cannot send a collaborator response quote directly. Please send the main/parent proposal instead.',
+        code: 'COLLABORATION_RESPONSE_BLOCKED'
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Generate secure token and access code
     const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
     const accessCode = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit code
