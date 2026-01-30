@@ -74,11 +74,14 @@ Deno.serve(async (req) => {
 
     // First, verify the user has access via collaboration relationship
     // Either they're the owner of a collaboration where this quote is the response
+    // Or they're the collaborator who submitted this quote
     // Or we have a specific collaboration ID to check
-    let verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?response_quote_id=eq.${quoteId}&owner_user_id=eq.${user.id}&select=id,status,owner_company_id`;
+    
+    // Check if user is owner OR collaborator
+    let verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?response_quote_id=eq.${quoteId}&or=(owner_user_id.eq.${user.id},collaborator_user_id.eq.${user.id})&select=id,status,owner_company_id,collaborator_user_id`;
     
     if (collaborationId) {
-      verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}&owner_user_id=eq.${user.id}&select=id,status,owner_company_id`;
+      verificationQuery = `${SUPABASE_URL}/rest/v1/proposal_collaborations?id=eq.${collaborationId}&or=(owner_user_id.eq.${user.id},collaborator_user_id.eq.${user.id})&select=id,status,owner_company_id,collaborator_user_id`;
     }
 
     const verifyRes = await fetch(verificationQuery, {
