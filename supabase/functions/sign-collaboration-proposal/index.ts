@@ -264,9 +264,9 @@ Deno.serve(async (req) => {
     let clientId = null;
     
     if (collab.collaborator_company_id) {
-      // First, get owner's company details to create as client for collaborator
+      // First, get owner's company settings (where email and address info is stored)
       const ownerCompanyRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/companies?id=eq.${collab.owner_company_id}&select=*`,
+        `${SUPABASE_URL}/rest/v1/company_settings?company_id=eq.${collab.owner_company_id}&select=*`,
         {
           headers: {
             'apikey': SUPABASE_SERVICE_ROLE_KEY,
