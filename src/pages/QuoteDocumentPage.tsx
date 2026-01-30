@@ -503,9 +503,9 @@ export default function QuoteDocumentPage() {
 
       if (!isNewQuote && quoteId) {
         // OWNER SIGNING MODE: Use edge function to bypass RLS for cross-company access
-        if (ownerSigningMode) {
+        if (ownerSigningMode || isViewOnly) {
           try {
-            console.log('[QuoteDocument] Owner signing mode - fetching via edge function');
+            console.log('[QuoteDocument]', ownerSigningMode ? 'Owner signing mode' : 'View-only mode', '- fetching via edge function');
             const collabData = await api.getCollaborationQuote(quoteId);
             
             if (collabData.quote) {
@@ -572,7 +572,7 @@ export default function QuoteDocumentPage() {
                 setRecipientType('client');
               }
               
-              console.log('[QuoteDocument] Owner signing mode - loaded quote and', collabData.lineItems?.length || 0, 'line items');
+              console.log('[QuoteDocument]', ownerSigningMode ? 'Owner signing mode' : 'View-only mode', '- loaded quote and', collabData.lineItems?.length || 0, 'line items');
             }
           } catch (err) {
             console.error('[QuoteDocument] Failed to load collaboration quote:', err);
