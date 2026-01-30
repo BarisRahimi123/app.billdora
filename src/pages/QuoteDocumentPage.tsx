@@ -4794,6 +4794,42 @@ export default function QuoteDocumentPage() {
                   </div>
                 </div>
               </div>
+              
+              {/* Owner Signature Section - Shows when collaboration is signed/approved */}
+              {mergeCollaboration?.owner_signed_at && (
+              <div className="px-8 py-6 border-t-2 border-emerald-500 mt-4 bg-emerald-50 rounded-b-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="font-bold text-emerald-800">Approved & Signed</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-8">
+                  <div>
+                    <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
+                      <span className="text-2xl font-script text-emerald-700 italic">{mergeCollaboration.owner_profile?.full_name || 'Project Owner'}</span>
+                    </div>
+                    <p className="text-sm text-emerald-600">Signature</p>
+                  </div>
+                  <div>
+                    <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
+                      <span className="text-neutral-800">{mergeCollaboration.owner_profile?.full_name || 'Project Owner'}</span>
+                    </div>
+                    <p className="text-sm text-emerald-600">Print Name</p>
+                  </div>
+                </div>
+                <div className="mt-4 text-sm text-emerald-700">
+                  <span className="font-medium">Date Signed: </span>
+                  {new Date(mergeCollaboration.owner_signed_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </div>
+              </div>
+              )}
               </>
               )}
               </div>
