@@ -261,7 +261,78 @@ Deno.serve(async (req) => {
 
     // Create project for the collaborator
     let projectId = null;
+    let clientId = null;
+    
     if (collab.collaborator_company_id) {
+      // First, get owner's company details to create as client for collaborator
+      const ownerCompanyRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/companies?id=eq.${collab.owner_company_id}&select=*`,
+        {
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          }
+        }
+      );
+      const ownerCompanyData = await ownerCompanyRes.json();
+      const ownerCompany = ownerCompanyData?.[0];
+
+      // Check if owner company already exists as a client for the collaborator
+      if (ownerCompany) {
+        const existingClientRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/clients?company_id=eq.${collab.collaborator_company_id}&email=eq.${encodeURIComponent(ownerCompany.email || '')}&select=id`,
+          {
+            headers: {
+              'apikey': SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            }
+          }
+        );
+        const existingClientData = await existingClientRes.json();
+        
+        if (existingClientData && existingClientData.length > 0) {
+          // Client already exists
+          clientId = existingClientData[0].id;
+        } else {
+          // Create owner as a new client for the collaborator
+          const createClientRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/clients`,
+            {
+              method: 'POST',
+              headers: {
+                'apikey': SUPABASE_SERVICE_ROLE_KEY,
+                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify({
+                company_id: collab.collaborator_company_id,
+                name: ownerCompany.company_name || 'Unknown Company',
+                display_name: ownerCompany.company_name || 'Unknown Company',
+                email: ownerCompany.email || '',
+                phone: ownerCompany.phone || '',
+                address: ownerCompany.address || '',
+                city: ownerCompany.city || '',
+                state: ownerCompany.state || '',
+                zip: ownerCompany.zip || '',
+                country: ownerCompany.country || 'USA',
+                contact_person: ownerName || '',
+                primary_contact_name: ownerName || '',
+                primary_contact_email: ownerCompany.email || '',
+                lifecycle_stage: 'client',
+                source: 'collaboration',
+                created_by: collab.collaborator_user_id
+              })
+            }
+          );
+          
+          if (createClientRes.ok) {
+            const newClientData = await createClientRes.json();
+            clientId = newClientData?.[0]?.id;
+          }
+        }
+      }
+
       // Get line items total from the response quote for budget
       const lineItemsRes = await fetch(
         `${SUPABASE_URL}/rest/v1/quote_line_items?quote_id=eq.${quoteId}&select=total`,
@@ -289,6 +360,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             company_id: collab.collaborator_company_id,
+            client_id: clientId,
             name: projectTitle,
             description: `Project created from approved collaboration proposal`,
             status: 'active',
