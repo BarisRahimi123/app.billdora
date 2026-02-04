@@ -1,29 +1,82 @@
-import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
+// Self-contained generate-pdf function with Browserless integration
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const BROWSERLESS_API_KEY = Deno.env.get('BROWSERLESS_API_KEY');
+
+// CORS Configuration
+const ALLOWED_ORIGINS = [
+  'https://app.billdora.com',
+  'https://billdora.com',
+  'https://dkwnlxnqw399.space.minimax.io',
+  'capacitor://localhost',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const isAllowed = origin && (
+    ALLOWED_ORIGINS.includes(origin) || 
+    origin.endsWith('.space.minimax.io') ||
+    origin.endsWith('.vercel.app')
+  );
+  const allowedOrigin = isAllowed ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE, PATCH',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Allow-Credentials': 'true'
+  };
+}
+
+// Auth verification
+async function verifyAuth(req: Request): Promise<{ authenticated: boolean; user?: { id: string }; error?: string }> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) return { authenticated: false, error: 'Missing Authorization header' };
+  
+  const token = authHeader.replace('Bearer ', '');
+  if (!token || token === authHeader) return { authenticated: false, error: 'Invalid Authorization format' };
+  
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceRoleKey && token === serviceRoleKey) return { authenticated: true };
+  
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return { authenticated: false, error: error?.message || 'Invalid token' };
+    return { authenticated: true, user: { id: user.id } };
+  } catch (e) {
+    return { authenticated: false, error: 'Token verification failed' };
+  }
+}
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
 
-  const corsResponse = handleCors(req);
-  if (corsResponse) return corsResponse;
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
 
   // Verify authentication
   const auth = await verifyAuth(req);
   if (!auth.authenticated) {
-    return unauthorizedResponse(corsHeaders, auth.error);
+    return new Response(
+      JSON.stringify({ error: { code: 'UNAUTHORIZED', message: auth.error || 'Unauthorized' } }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
     const requestBody = await req.json();
-    console.log('[generate-pdf] Request body keys:', Object.keys(requestBody));
-    console.log('[generate-pdf] returnType value:', requestBody.returnType, 'type:', typeof requestBody.returnType);
+    console.log('[generate-pdf] Request received, keys:', Object.keys(requestBody));
     
     const { type, data, returnType = 'pdf' } = requestBody;
-    
-    console.log('[generate-pdf] After destructure - returnType:', returnType, 'type:', typeof returnType);
     
     if (!type || !data) {
       throw new Error('Type and data are required');
@@ -31,7 +84,6 @@ Deno.serve(async (req) => {
 
     // Generate HTML based on document type
     let html = '';
-    
     if (type === 'quote') {
       html = generateQuoteHtml(data);
     } else if (type === 'invoice') {
@@ -40,102 +92,66 @@ Deno.serve(async (req) => {
       throw new Error('Invalid document type');
     }
 
-    // DIAGNOSTIC: Log what we received
-    console.log('[generate-pdf] returnType received:', returnType, 'type:', typeof returnType);
-    console.log('[generate-pdf] returnType === "html":', returnType === 'html');
-    console.log('[generate-pdf] returnType === "pdf":', returnType === 'pdf');
-    
-    // TEMPORARY: Force PDF mode for testing
-    const forcePdfMode = true;
-    
-    // If returnType is 'html', return HTML for preview (legacy support)
-    if (returnType === 'html' && !forcePdfMode) {
-      console.log('[generate-pdf] Returning HTML (legacy mode)');
-      return new Response(JSON.stringify({
-        data: { html, type }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    console.log('[generate-pdf] HTML generated, length:', html.length);
 
-    console.log('[generate-pdf] Proceeding to PDF generation with Browserless');
-    
-    // Generate PDF using Browserless
+    // Check for Browserless API key
     if (!BROWSERLESS_API_KEY) {
-      console.error('[generate-pdf] BROWSERLESS_API_KEY not found in environment');
-      throw new Error('Browserless API key not configured');
+      console.error('[generate-pdf] BROWSERLESS_API_KEY not found');
+      throw new Error('Browserless API key not configured. Please add BROWSERLESS_API_KEY to Supabase secrets.');
     }
 
-    console.log('[generate-pdf] API key present, length:', BROWSERLESS_API_KEY.length);
-    console.log('[generate-pdf] HTML length:', html.length);
     console.log('[generate-pdf] Calling Browserless API...');
     
+    // Use Browserless v2 API
     const browserlessUrl = `https://production-sfo.browserless.io/pdf?token=${BROWSERLESS_API_KEY}`;
-    const requestBody = {
-      html: html,
-      options: {
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '0px',
-          right: '0px',
-          bottom: '0px',
-          left: '0px'
-        }
-      }
-    };
-    
-    console.log('[generate-pdf] Request body keys:', Object.keys(requestBody));
     
     let browserlessResponse;
     try {
       browserlessResponse = await fetch(browserlessUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: html,
+          options: {
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+          }
+        })
       });
-    } catch (fetchError) {
+    } catch (fetchError: any) {
       console.error('[generate-pdf] Fetch error:', fetchError);
       throw new Error(`Failed to reach Browserless API: ${fetchError.message}`);
     }
 
     console.log('[generate-pdf] Browserless response status:', browserlessResponse.status);
-    console.log('[generate-pdf] Browserless response headers:', Object.fromEntries(browserlessResponse.headers));
     
     if (!browserlessResponse.ok) {
       const errorText = await browserlessResponse.text();
-      console.error('[generate-pdf] Browserless error response:', errorText);
+      console.error('[generate-pdf] Browserless error:', errorText);
       throw new Error(`Browserless API error: ${browserlessResponse.status} - ${errorText.substring(0, 300)}`);
     }
 
     const contentType = browserlessResponse.headers.get('content-type') || '';
-    console.log('[generate-pdf] Content-Type:', contentType);
-    
     if (!contentType.includes('application/pdf') && !contentType.includes('application/octet-stream')) {
       const bodyText = await browserlessResponse.text();
-      console.error('[generate-pdf] Unexpected content type:', contentType);
-      console.error('[generate-pdf] Response body:', bodyText.substring(0, 500));
+      console.error('[generate-pdf] Unexpected content type:', contentType, bodyText.substring(0, 200));
       throw new Error(`Browserless returned ${contentType} instead of PDF`);
     }
 
-    // Get PDF as ArrayBuffer
+    // Get PDF as ArrayBuffer and convert to base64
     const pdfBuffer = await browserlessResponse.arrayBuffer();
     console.log('[generate-pdf] PDF generated, size:', pdfBuffer.byteLength, 'bytes');
     
-    // Verify it's a PDF (starts with %PDF)
+    // Verify PDF header
     const firstBytes = new Uint8Array(pdfBuffer.slice(0, 4));
     const header = String.fromCharCode(...firstBytes);
-    console.log('[generate-pdf] PDF header:', header);
     if (header !== '%PDF') {
       throw new Error('Response does not appear to be a valid PDF');
     }
 
-    // Convert ArrayBuffer to base64 using Deno's standard encoding
+    // Convert to base64
     const uint8Array = new Uint8Array(pdfBuffer);
-    
-    // Use standard base64 encoding that works with binary data
     const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     let pdfBase64 = '';
     const len = uint8Array.length;
@@ -151,8 +167,7 @@ Deno.serve(async (req) => {
       pdfBase64 += i + 2 < len ? base64Chars[byte3 & 63] : '=';
     }
     
-    console.log('[generate-pdf] Base64 length:', pdfBase64.length);
-    console.log('[generate-pdf] Base64 preview:', pdfBase64.substring(0, 50));
+    console.log('[generate-pdf] Success! Base64 length:', pdfBase64.length);
     
     return new Response(JSON.stringify({
       data: { 
@@ -165,13 +180,11 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('PDF generation error:', error);
-    console.error('Error stack:', error.stack);
+    console.error('[generate-pdf] Error:', error.message);
     return new Response(JSON.stringify({
       error: { 
         code: 'PDF_FAILED', 
-        message: error.message || 'Unknown error occurred',
-        details: error.stack?.split('\n')[0] || ''
+        message: error.message || 'Unknown error occurred'
       }
     }), {
       status: 500,
@@ -226,7 +239,7 @@ function generateQuoteHtml(data: any): string {
   <div class="cover-page">
     <div class="cover-overlay"></div>
     <div class="cover-content">
-      ${company.logo ? `<img src="${company.logo}" class="cover-logo" alt="Logo">` : ''}
+      ${company?.logo ? `<img src="${company.logo}" class="cover-logo" alt="Logo">` : ''}
       <h1 class="cover-title">${title || 'Quote'}</h1>
       <p class="cover-subtitle">Prepared for ${client?.name || 'Client'}</p>
       <p class="cover-volume">${volumeNumber || ''}</p>
@@ -235,10 +248,10 @@ function generateQuoteHtml(data: any): string {
   <div class="details-page">
     <div class="header">
       <div class="company-info">
-        <h2>${company.name}</h2>
-        <p>${company.address || ''}</p>
-        <p>${company.city || ''} ${company.state || ''} ${company.zip || ''}</p>
-        <p>${company.phone || ''}</p>
+        <h2>${company?.name || ''}</h2>
+        <p>${company?.address || ''}</p>
+        <p>${company?.city || ''} ${company?.state || ''} ${company?.zip || ''}</p>
+        <p>${company?.phone || ''}</p>
       </div>
       <div class="client-box">
         <h3>Prepared For</h3>
@@ -259,18 +272,18 @@ function generateQuoteHtml(data: any): string {
       <tbody>
         ${lineItems?.map((item: any) => `
           <tr>
-            <td>${item.description}</td>
-            <td style="text-align:right">${item.qty}</td>
-            <td style="text-align:right">$${item.unitPrice?.toFixed(2)}</td>
-            <td style="text-align:right">$${(item.qty * item.unitPrice).toFixed(2)}</td>
+            <td>${item.description || ''}</td>
+            <td style="text-align:right">${item.qty || 0}</td>
+            <td style="text-align:right">$${(item.unitPrice || 0).toFixed(2)}</td>
+            <td style="text-align:right">$${((item.qty || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
           </tr>
         `).join('') || ''}
       </tbody>
     </table>
     <div class="totals">
-      <p>Subtotal: $${totals?.subtotal?.toFixed(2) || '0.00'}</p>
-      <p>Tax: $${totals?.tax?.toFixed(2) || '0.00'}</p>
-      <p class="total-row">Total: $${totals?.total?.toFixed(2) || '0.00'}</p>
+      <p>Subtotal: $${(totals?.subtotal || 0).toFixed(2)}</p>
+      <p>Tax: $${(totals?.tax || 0).toFixed(2)}</p>
+      <p class="total-row">Total: $${(totals?.total || 0).toFixed(2)}</p>
     </div>
     ${validUntil ? `<p style="margin-top:20px;color:#666;">Valid until: ${validUntil}</p>` : ''}
     <div class="terms">
@@ -312,7 +325,7 @@ function generateInvoiceHtml(data: any): string {
   <div class="header">
     <div>
       <h1 class="invoice-title">Invoice</h1>
-      <p class="invoice-number">${invoiceNumber}</p>
+      <p class="invoice-number">${invoiceNumber || ''}</p>
       <span class="status-badge status-${status || 'draft'}">${status || 'Draft'}</span>
     </div>
     <div style="text-align:right">
@@ -330,14 +343,14 @@ function generateInvoiceHtml(data: any): string {
     <thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
     <tbody>
       ${lineItems?.map((item: any) => `
-        <tr><td>${item.description}</td><td style="text-align:right">$${item.amount?.toFixed(2)}</td></tr>
-      `).join('') || `<tr><td>Services</td><td style="text-align:right">$${totals?.total?.toFixed(2) || '0.00'}</td></tr>`}
+        <tr><td>${item.description || ''}</td><td style="text-align:right">$${(item.amount || 0).toFixed(2)}</td></tr>
+      `).join('') || `<tr><td>Services</td><td style="text-align:right">$${(totals?.total || 0).toFixed(2)}</td></tr>`}
     </tbody>
   </table>
   <div class="totals">
-    <p>Subtotal: $${totals?.subtotal?.toFixed(2) || totals?.total?.toFixed(2) || '0.00'}</p>
-    <p>Tax: $${totals?.tax?.toFixed(2) || '0.00'}</p>
-    <p class="total-row">Total Due: $${totals?.total?.toFixed(2) || '0.00'}</p>
+    <p>Subtotal: $${(totals?.subtotal || totals?.total || 0).toFixed(2)}</p>
+    <p>Tax: $${(totals?.tax || 0).toFixed(2)}</p>
+    <p class="total-row">Total Due: $${(totals?.total || 0).toFixed(2)}</p>
     ${dueDate ? `<p style="color:#666;margin-top:8px;">Due: ${dueDate}</p>` : ''}
   </div>
 </body>
