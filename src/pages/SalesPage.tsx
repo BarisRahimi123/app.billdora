@@ -78,6 +78,7 @@ export default function SalesPage() {
     name: string;
     companyName: string;
     companyId: string | null;
+    trade: string;
     phone: string;
     projectCount: number;
     lastCollaboration: string;
@@ -1268,12 +1269,14 @@ export default function SalesPage() {
                         {collabProjects.map(quote => {
                           const quoteCollabs = sentCollaborations.filter(c => c.parent_quote_id === quote.id);
                           return (
-                            <div key={quote.id} className="grid grid-cols-12 gap-4 px-4 py-4 items-center hover:bg-neutral-50/80 transition-colors cursor-pointer group" onClick={() => navigate(`/quotes/${quote.id}/document`)}>
+                            <div key={quote.id} className="grid grid-cols-12 gap-4 px-4 py-4 items-center hover:bg-neutral-50/80 transition-colors cursor-pointer group" onClick={() => navigate(`/quotes/${quote.id}/document?view=collaboration`)}>
                               <div className="col-span-4 min-w-0">
                                 <p className="font-semibold text-neutral-900 truncate">{quote.title}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Users className="w-3 h-3 text-purple-500" />
-                                  <span className="text-xs text-purple-600 font-medium">{quoteCollabs.length} Partner{quoteCollabs.length !== 1 ? 's' : ''}</span>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                  <Users className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                                  <span className="text-xs text-purple-600 font-medium truncate">
+                                    {quoteCollabs.map(c => c.collaborator_company_name || c.collaborator_name || c.collaborator_email?.split('@')[0]).join(', ') || 'No partners'}
+                                  </span>
                                 </div>
                               </div>
                               <div className="col-span-3 min-w-0">
@@ -1412,6 +1415,7 @@ export default function SalesPage() {
                     <thead className="bg-neutral-50 border-b border-neutral-200">
                       <tr>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Partner</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Trade</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Contact</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Projects</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Relationship</th>
@@ -1434,6 +1438,15 @@ export default function SalesPage() {
                                 )}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {partner.trade ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
+                                {partner.trade}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-400 text-sm">-</span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className="space-y-1">

@@ -64,6 +64,9 @@ export default function QuoteDocumentPage() {
   // View-only mode (for viewing signed proposals without edit functionality)
   const isViewOnly = searchParams.get('mode') === 'view';
 
+  // Collaboration view mode (shows collaboration status panel with preview)
+  const isCollaborationView = searchParams.get('view') === 'collaboration';
+
   const [quote, setQuote] = useState<Quote | null>(null);
 
   // Lock editing when proposal is sent or approved, or in owner signing mode, or in view-only mode
@@ -633,6 +636,8 @@ export default function QuoteDocumentPage() {
 
           // Load line items
           const dbLineItems = await api.getQuoteLineItems(quoteId);
+          console.log('[QuoteDocument] Loaded line items from DB:', dbLineItems?.length, 'items');
+          console.log('[QuoteDocument] Line items preview:', dbLineItems?.slice(0, 3).map(i => ({ desc: i.description?.substring(0, 50), price: i.unit_price })));
           if (dbLineItems && dbLineItems.length > 0) {
             setLineItems(dbLineItems.map(item => ({
               id: item.id,
@@ -832,6 +837,11 @@ export default function QuoteDocumentPage() {
         setCurrentStep(step as WizardStep);
       }
     }
+
+    // Collaboration view mode - go to preview with status panel visible
+    if (isCollaborationView && !stepParam) {
+      setCurrentStep(5);
+    }
   }
 
   // Apply template data to the current document
@@ -986,31 +996,146 @@ export default function QuoteDocumentPage() {
 
 
   const handleDownloadPdf = async () => {
+    // FORCE PREVIEW TO OPEN - Critical for DOM capture to work
+    if (!showExportPreview) {
+      console.log('[PDF] Preview not open - opening it now...');
+      setShowExportPreview(true);
+
+      // Wait for preview to render before generating PDF
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     setGeneratingPdf(true);
     try {
       showToast('Generating PDF...', 'info');
+
+      // Get the user's session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('No active session. Please log in again.');
+      }
+
+      // FORCE WAIT for DOM to be ready
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Try to CAPTURE THE ACTUAL DOM HTML from the preview
+      const exportPages = document.querySelectorAll('.export-page');
+      const useRawHtml = exportPages.length > 0;
+
+      console.log(`[PDF] DOM CAPTURE CHECK: Found ${exportPages.length} export pages`);
+
+      let requestBody;
+
+      // ALWAYS use raw HTML capture - no fallback to old generation
+      if (!useRawHtml) {
+        console.error('[PDF] CRITICAL ERROR: No export pages found even after opening preview!');
+        console.error('[PDF] This should never happen. Debugging info:');
+        console.error('[PDF] - showExportPreview:', showExportPreview);
+        console.error('[PDF] - All elements with export-page class:', document.querySelectorAll('.export-page'));
+        console.error('[PDF] - All elements in body:', document.body.children.length);
+        throw new Error('Preview failed to render. Please refresh the page and try again.');
+      }
+
+      // DOM capture mode - preview is open
+      console.log('[PDF] Capturing DOM with INLINE COMPUTED STYLES for exact match...');
+
+      // Function to inline all computed styles on an element and its children
+      const inlineComputedStyles = (element: Element) => {
+        if (!(element instanceof HTMLElement)) return;
+
+        const computed = window.getComputedStyle(element);
+        let styleString = '';
+
+        // Key properties that affect layout and appearance
+        const importantProps = [
+          'display', 'position', 'top', 'right', 'bottom', 'left',
+          'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+          'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+          'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+          'border', 'border-width', 'border-style', 'border-color', 'border-radius',
+          'background', 'background-color', 'background-image', 'background-size', 'background-position',
+          'color', 'font-family', 'font-size', 'font-weight', 'font-style',
+          'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
+          'flex', 'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'gap',
+          'grid', 'grid-template-columns', 'grid-template-rows', 'grid-gap',
+          'opacity', 'transform', 'box-shadow', 'z-index', 'overflow'
+        ];
+
+        importantProps.forEach(prop => {
+          const value = computed.getPropertyValue(prop);
+          if (value && value !== 'none' && value !== 'auto' && value !== 'initial' && value !== 'inherit') {
+            styleString += `${prop}:${value} !important;`;
+          }
+        });
+
+        if (styleString) {
+          element.setAttribute('style', styleString);
+        }
+
+        // Process all children recursively
+        Array.from(element.children).forEach(child => inlineComputedStyles(child));
+      };
+
+      // Collect all page HTML with inlined styles
+      const pagesHtml = Array.from(exportPages).map((page, idx) => {
+        console.log(`[PDF] Processing page ${idx + 1} of ${exportPages.length}...`);
+        const clone = page.cloneNode(true) as HTMLElement;
+
+        // Remove interactive/hidden elements
+        clone.querySelectorAll('button, input, [contenteditable], .print\\:hidden').forEach(el => el.remove());
+
+        // Inline all computed styles
+        console.log(`[PDF] Inlining computed styles for page ${idx + 1}...`);
+        inlineComputedStyles(clone);
+
+        return clone.outerHTML;
+      }).join('\n');
+
+      console.log(`[PDF] Captured ${exportPages.length} pages with ${pagesHtml.length} total characters`);
+
+      // Minimal CSS - everything is now inlined
+      const cssStyles = `
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+          @page { size: letter; margin: 0; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          body { font-family: 'Inter', sans-serif !important; }
+          .export-page { page-break-after: always !important; }
+          .export-page:last-child { page-break-after: auto !important; }
+        `;
+
+      requestBody = {
+        type: 'raw-html',
+        returnType: 'pdf',
+        data: {
+          html: pagesHtml,
+          css: cssStyles,
+          title: documentTitle || projectName || 'Proposal',
+        }
+      };
+
+      // CRITICAL DEBUG LOGGING
+      console.log('='.repeat(80));
+      console.log('PDF GENERATION DEBUG');
+      console.log('='.repeat(80));
+      console.log('[PDF] Request type:', requestBody.type);
+      console.log('[PDF] Using raw HTML:', useRawHtml);
+      console.log('[PDF] Export pages found:', exportPages.length);
+      console.log('[PDF] Request body keys:', Object.keys(requestBody));
+      console.log('[PDF] Data keys:', Object.keys(requestBody.data));
+      if (requestBody.type === 'raw-html') {
+        console.log('[PDF] HTML length:', requestBody.data.html?.length || 0);
+        console.log('[PDF] CSS length:', requestBody.data.css?.length || 0);
+        console.log('[PDF] HTML preview (first 500 chars):', requestBody.data.html?.substring(0, 500));
+      }
+      console.log('='.repeat(80));
 
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          type: 'quote',
-          returnType: 'pdf',
-          data: {
-            title: documentTitle || projectName || 'Proposal',
-            company: companyInfo,
-            client,
-            lineItems: lineItems.filter(item => item.description.trim()),
-            totals: { subtotal, tax: taxDue, total },
-            coverBgUrl,
-            volumeNumber,
-            validUntil,
-            terms,
-          }
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
@@ -1027,12 +1152,14 @@ export default function QuoteDocumentPage() {
         throw new Error(result.error.message || 'PDF generation failed on server');
       }
 
-      if (!result.data?.pdf) {
+      // Handle both response formats
+      const pdfData = result.pdf || result.data?.pdf;
+
+      if (!pdfData) {
         throw new Error('No PDF data received from server');
       }
 
       // Decode base64 PDF and trigger download
-      const pdfData = result.data.pdf;
       console.log('[PDF] Decoding base64, length:', pdfData.length, 'first 50 chars:', pdfData.substring(0, 50));
 
       // Check if it starts with PDF header (base64 encoded "%PDF" = "JVBER")
@@ -3001,11 +3128,10 @@ export default function QuoteDocumentPage() {
           )}
 
           {/* STEP 5: Preview & Send */}
-          {/* STEP 5: Preview & Send */}
           {currentStep === 5 && (
-            <div className="space-y-6 bg-neutral-100/50 -mx-4 md:-mx-8 px-4 md:px-8 py-12 min-h-screen">
+            <div className="space-y-3 bg-neutral-100/50 -mx-4 md:-mx-8 px-4 md:px-8 py-4 min-h-screen">
               {/* Action Buttons at Top - Floating Modern Bar */}
-              <div className="sticky top-4 z-40 mx-auto w-full max-w-[600px] mb-8">
+              <div className="sticky top-2 z-40 mx-auto w-full max-w-[600px] mb-3">
                 {isViewOnly && collaborationId ? (
                   /* Collaborator View Bar - Specific CTA to Respond */
                   <div className="bg-white/90 backdrop-blur-xl border border-purple-200/50 shadow-xl shadow-purple-900/5 rounded-full p-2 flex items-center justify-between gap-2">
@@ -3109,10 +3235,125 @@ export default function QuoteDocumentPage() {
                 )}
               </div>
 
+              {/* Collaboration Status Panel - Show when viewing collaboration project */}
+              {isCollaborationView && sentCollaborators.length > 0 && (
+                <div className="mx-auto w-full max-w-[600px] mb-3 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="bg-white border border-neutral-200 rounded-xl shadow-sm overflow-hidden">
+                    {/* Header */}
+                    <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                            <Users className="w-5 h-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-neutral-900">Collaboration Status</h3>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                              {sentCollaborators.filter(c => c.status === 'submitted' || c.status === 'merged').length} of {sentCollaborators.length} partners responded
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setCurrentStep(4)}
+                          className="text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                        >
+                          Manage
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Collaborators List */}
+                    <div className="divide-y divide-neutral-100">
+                      {sentCollaborators.map((collab, idx) => (
+                        <div key={idx} className="px-5 py-3 flex items-center justify-between hover:bg-neutral-50/50 transition-colors">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${collab.status === 'submitted' || collab.status === 'merged' || collab.status === 'approved'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : collab.status === 'accepted'
+                                ? 'bg-blue-100 text-blue-700'
+                                : collab.status === 'declined'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-amber-100 text-amber-700'
+                              }`}>
+                              {(collab.company || collab.name || collab.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-neutral-900 truncate">
+                                {collab.company || collab.name || collab.email.split('@')[0]}
+                              </p>
+                              <p className="text-xs text-neutral-500">{collab.categoryName}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${collab.status === 'submitted'
+                              ? 'bg-purple-100 text-purple-700'
+                              : collab.status === 'merged'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : collab.status === 'approved'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : collab.status === 'accepted'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : collab.status === 'declined'
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-amber-100 text-amber-700'
+                              }`}>
+                              {collab.status === 'submitted' && <FileText className="w-3 h-3" />}
+                              {collab.status === 'merged' && <CheckCircle2 className="w-3 h-3" />}
+                              {collab.status === 'approved' && <CheckCircle2 className="w-3 h-3" />}
+                              {collab.status === 'accepted' && <User className="w-3 h-3" />}
+                              {collab.status === 'pending' && <Timer className="w-3 h-3" />}
+                              {collab.status === 'submitted' ? 'Ready to Review'
+                                : collab.status === 'merged' ? 'Merged'
+                                  : collab.status === 'approved' ? 'Approved'
+                                    : collab.status === 'accepted' ? 'Working on it'
+                                      : collab.status === 'declined' ? 'Declined'
+                                        : 'Waiting'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Footer Status */}
+                    <div className="px-5 py-3 bg-neutral-50/80 border-t border-neutral-100">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-4">
+                          {quote?.status === 'sent' ? (
+                            <span className="flex items-center gap-1.5 text-emerald-600">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Sent to client
+                            </span>
+                          ) : quote?.status === 'pending_collaborators' ? (
+                            <span className="flex items-center gap-1.5 text-amber-600">
+                              <Timer className="w-3.5 h-3.5" />
+                              Waiting for collaborators
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1.5 text-neutral-500">
+                              <FileText className="w-3.5 h-3.5" />
+                              Draft
+                            </span>
+                          )}
+                        </div>
+                        {sentCollaborators.some(c => c.status === 'submitted') && (
+                          <button
+                            onClick={() => setCurrentStep(4)}
+                            className="text-purple-600 hover:text-purple-700 font-medium"
+                          >
+                            Review Submissions →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Merge Success Banner - Show after successful merge */}
               {justMergedCollaborator && !isCollaborationResponse && (
-                <div className="mx-auto w-full max-w-[600px] mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div className="mx-auto w-full max-w-[600px] mb-3 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-4 shadow-lg relative overflow-hidden">
                     {/* Animated background decoration */}
                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100 rounded-full opacity-30 -mr-16 -mt-16" />
                     <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-100 rounded-full opacity-30 -ml-12 -mb-12" />
@@ -3156,8 +3397,8 @@ export default function QuoteDocumentPage() {
 
               {/* Send History Banner - Show when proposal has been sent */}
               {(quote?.last_sent_at || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
-                <div className="mx-auto w-full max-w-[600px] mb-6">
-                  <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+                <div className="mx-auto w-full max-w-[600px] mb-3">
+                  <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-3 shadow-sm">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                         <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -3236,7 +3477,7 @@ export default function QuoteDocumentPage() {
 
               {/* Retainer Payment Configuration - Sleek Floating Panel */}
               {!isViewOnly && (
-                <div className="mx-auto w-full max-w-[600px] mb-12 transform transition-all duration-300">
+                <div className="mx-auto w-full max-w-[600px] mb-3 transform transition-all duration-300">
                   <div className={`
                   overflow-hidden transition-all duration-300 border
                   ${retainerEnabled
@@ -4778,14 +5019,24 @@ export default function QuoteDocumentPage() {
                   <span className="hidden sm:inline">Back</span>
                 </button>
                 <h2 className="font-semibold text-neutral-900 text-sm sm:text-base">Preview</h2>
-                <button
-                  onClick={handleDownloadPdf}
-                  disabled={generatingPdf}
-                  className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 min-h-[44px] disabled:opacity-50"
-                >
-                  {generatingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{generatingPdf ? 'Exporting...' : 'Download PDF'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark min-h-[44px]"
+                    title="Use browser's print dialog (Ctrl/Cmd+P) for exact preview match"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Print to PDF</span>
+                  </button>
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={generatingPdf}
+                    className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 min-h-[44px] disabled:opacity-50"
+                  >
+                    {generatingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    <span className="hidden sm:inline">{generatingPdf ? 'Export' : 'Download'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="py-8 flex flex-col items-center gap-8 print:p-0 print:gap-0">

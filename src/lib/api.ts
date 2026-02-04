@@ -2902,12 +2902,13 @@ export const collaborationApi = {
     projectCount: number;
     lastCollaboration: string;
     relationship: 'invited' | 'received' | 'mutual';
+    trade: string;
   }>> {
     try {
       // Fetch collaborations where current company is owner (people we invited)
       const { data: sentData, error: sentError } = await supabase
         .from('proposal_collaborations')
-        .select('collaborator_email, collaborator_name, collaborator_company_name, collaborator_company_id, collaborator_user_id, invited_at, status')
+        .select('collaborator_email, collaborator_name, collaborator_company_name, collaborator_company_id, collaborator_user_id, invited_at, status, category_id')
         .eq('owner_company_id', companyId);
 
       // Fetch collaborations where current user is collaborator (people who invited us)
@@ -2919,6 +2920,21 @@ export const collaborationApi = {
       if (sentError) console.error('[CollaborationAPI] Error fetching sent partners:', sentError);
       if (receivedError) console.error('[CollaborationAPI] Error fetching received partners:', receivedError);
 
+      // Fetch category names for trade display
+      const categoryIds = [...new Set((sentData || []).map((s: any) => s.category_id).filter(Boolean))];
+      let categoryMap = new Map<string, string>();
+      
+      if (categoryIds.length > 0) {
+        const { data: categoryData } = await supabase
+          .from('collaborator_categories')
+          .select('id, name')
+          .in('id', categoryIds);
+        
+        for (const cat of categoryData || []) {
+          categoryMap.set(cat.id, cat.name);
+        }
+      }
+
       const partnersMap = new Map<string, {
         id: string;
         email: string;
@@ -2929,6 +2945,7 @@ export const collaborationApi = {
         projectCount: number;
         lastCollaboration: string;
         relationship: 'invited' | 'received' | 'mutual';
+        trade: string;
       }>();
 
       // Process people we've invited
@@ -2936,12 +2953,18 @@ export const collaborationApi = {
         const key = item.collaborator_email?.toLowerCase() || item.collaborator_company_id || '';
         if (!key) continue;
         
+        const tradeName = (item as any).category_id ? categoryMap.get((item as any).category_id) || '' : '';
+        
         const existing = partnersMap.get(key);
         if (existing) {
           existing.projectCount++;
           existing.relationship = 'mutual';
           if (new Date(item.invited_at) > new Date(existing.lastCollaboration)) {
             existing.lastCollaboration = item.invited_at;
+          }
+          // Update trade if not set and this one has it
+          if (!existing.trade && tradeName) {
+            existing.trade = tradeName;
           }
         } else {
           partnersMap.set(key, {
@@ -2953,7 +2976,8 @@ export const collaborationApi = {
             phone: '',
             projectCount: 1,
             lastCollaboration: item.invited_at || '',
-            relationship: 'invited'
+            relationship: 'invited',
+            trade: tradeName
           });
         }
       }
@@ -2995,7 +3019,8 @@ export const collaborationApi = {
             phone: '',
             projectCount: 1,
             lastCollaboration: item.invited_at || '',
-            relationship: 'received'
+            relationship: 'received',
+            trade: '' // Trade info is from the inviter's perspective, not available here
           });
         }
       }
