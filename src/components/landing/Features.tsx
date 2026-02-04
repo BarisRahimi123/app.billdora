@@ -58,7 +58,7 @@ export const Features = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => {
             const isHighlighted = feature.isHighlighted;
-            
+
             return (
               <motion.div
                 key={feature.title}
@@ -66,36 +66,32 @@ export const Features = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: index * 0.08 }}
-                className={`bg-white p-8 border transition-all duration-300 group hover:shadow-md ${
-                  isHighlighted 
-                    ? 'border-green-600' 
+                className={`bg-white p-8 border transition-all duration-300 group hover:shadow-md ${isHighlighted
+                    ? 'border-green-600'
                     : 'border-gray-200 hover:border-gray-400'
-                }`}
+                  }`}
               >
                 {/* Icon - Line Work Style */}
                 <div
-                  className={`w-14 h-14 rounded-xl flex items-center justify-center mb-6 border-2 ${
-                    isHighlighted 
-                      ? 'border-green-600' 
+                  className={`w-14 h-14 rounded-xl flex items-center justify-center mb-6 border-2 ${isHighlighted
+                      ? 'border-green-600'
                       : 'border-gray-300 group-hover:border-gray-500'
-                  }`}
-                >
-                  <feature.icon 
-                    className={`w-7 h-7 ${
-                      isHighlighted 
-                        ? 'text-green-600' 
-                        : 'text-gray-600 group-hover:text-gray-800'
                     }`}
-                    strokeWidth={1.5} 
+                >
+                  <feature.icon
+                    className={`w-7 h-7 ${isHighlighted
+                        ? 'text-green-600'
+                        : 'text-gray-600 group-hover:text-gray-800'
+                      }`}
+                    strokeWidth={1.5}
                   />
                 </div>
-                
+
                 {/* Content */}
-                <h3 className={`text-xl font-bold mb-3 transition-colors ${
-                  isHighlighted 
-                    ? 'text-green-600' 
+                <h3 className={`text-xl font-bold mb-3 transition-colors ${isHighlighted
+                    ? 'text-green-600'
                     : 'text-gray-900'
-                }`}>
+                  }`}>
                   {feature.title}
                 </h3>
                 <p className="text-base leading-relaxed text-gray-600">

@@ -372,11 +372,31 @@ Deno.serve(async (req) => {
       const clientInfo = (await clientInfoRes.json())[0];
       const clientName = clientInfo?.primary_contact_name?.trim() || clientInfo?.name || 'Client';
 
+      // Check for merged collaborations if proposal was accepted
+      let hasMergedCollaborations = false;
+      let mergedCollabCount = 0;
+      if (status === 'accepted') {
+        const collabsRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/proposal_collaborations?parent_quote_id=eq.${quoteId}&status=eq.merged&select=id`,
+          {
+            headers: {
+              'apikey': SUPABASE_SERVICE_ROLE_KEY!,
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            }
+          }
+        );
+        const collabs = await collabsRes.json();
+        hasMergedCollaborations = collabs && collabs.length > 0;
+        mergedCollabCount = collabs?.length || 0;
+      }
+
       // Create notification for proposal response
       const notificationType = status === 'accepted' ? 'proposal_signed' : status === 'declined' ? 'proposal_declined' : 'proposal_response';
       const notificationTitle = status === 'accepted' ? '🎉 Proposal Signed!' : status === 'declined' ? 'Proposal Declined' : 'Proposal Response';
       const notificationMessage = status === 'accepted' 
-        ? `${clientName} signed proposal #${quoteInfo?.quote_number || ''} - ${quoteInfo?.title || 'Untitled'}`
+        ? hasMergedCollaborations 
+          ? `${clientName} signed proposal #${quoteInfo?.quote_number || ''} - ${quoteInfo?.title || 'Untitled'}. ${mergedCollabCount} collaborator${mergedCollabCount !== 1 ? 's' : ''} ready to approve!`
+          : `${clientName} signed proposal #${quoteInfo?.quote_number || ''} - ${quoteInfo?.title || 'Untitled'}`
         : status === 'declined'
         ? `${clientName} declined proposal #${quoteInfo?.quote_number || ''}`
         : `${clientName} responded to proposal #${quoteInfo?.quote_number || ''}`;

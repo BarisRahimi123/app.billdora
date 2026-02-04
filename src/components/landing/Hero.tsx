@@ -80,8 +80,8 @@ export default function Hero() {
             className="flex-1 w-full max-w-md md:max-w-lg lg:max-w-xl"
           >
             {animationData ? (
-              <Lottie 
-                animationData={animationData} 
+              <Lottie
+                animationData={animationData}
                 loop={true}
                 className="w-full h-auto"
               />

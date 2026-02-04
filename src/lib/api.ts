@@ -242,6 +242,7 @@ export interface Quote {
   created_at?: string;
   view_count?: number;
   last_viewed_at?: string;
+  last_sent_at?: string;
   client?: Client;
   // Collaborator tracking fields
   collaborators_invited?: number;
@@ -495,7 +496,7 @@ export const api = {
 
   async updateTaskBilling(taskId: string, billedPercentage: number, billedAmount: number) {
     const { data, error } = await supabase.from('tasks')
-      .update({ 
+      .update({
         billed_percentage: billedPercentage,
         billed_amount: billedAmount,
       })
@@ -600,11 +601,11 @@ export const api = {
         .from('time_entries')
         .select('*, project:projects(id, name, client:clients(id, name)), task:tasks(id, name)')
         .eq('company_id', companyId);
-      
+
       if (userId) query = query.eq('user_id', userId);
       if (startDate) query = query.gte('date', startDate);
       if (endDate) query = query.lte('date', endDate);
-      
+
       const { data, error } = await query.order('date', { ascending: false });
       if (error) throw error;
       return data as TimeEntry[];
@@ -619,7 +620,7 @@ export const api = {
           .select('billing_mode')
           .eq('id', entry.task_id)
           .single();
-        
+
         if (task) {
           if (task.billing_mode && task.billing_mode !== 'unset' && task.billing_mode !== 'time') {
             throw new Error(`Cannot add time entry: Task is set to ${task.billing_mode} billing mode`);
@@ -630,7 +631,7 @@ export const api = {
           }
         }
       }
-      
+
       const { data, error } = await supabase.from('time_entries')
         .insert(entry)
         .select()
@@ -665,9 +666,9 @@ export const api = {
       .from('expenses')
       .select('*, project:projects(id, name)')
       .eq('company_id', companyId);
-    
+
     if (userId) query = query.eq('user_id', userId);
-    
+
     const { data, error } = await query.order('date', { ascending: false });
     if (error) throw error;
     return data as Expense[];
@@ -700,13 +701,13 @@ export const api = {
   async uploadReceipt(file: File, companyId: string): Promise<string> {
     const fileExt = file.name.split('.').pop();
     const fileName = `${companyId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    
+
     const { error: uploadError } = await supabase.storage
       .from('receipts')
       .upload(fileName, file);
-    
+
     if (uploadError) throw uploadError;
-    
+
     const { data } = supabase.storage.from('receipts').getPublicUrl(fileName);
     return data.publicUrl;
   },
@@ -718,13 +719,13 @@ export const api = {
       .select('*, project:projects(id, name), task:tasks(id, name)')
       .eq('company_id', companyId)
       .eq('approval_status', 'approved');
-    
+
     if (startDate) query = query.gte('date', startDate);
     if (endDate) query = query.lte('date', endDate);
-    
+
     const { data: entries, error } = await query.order('date', { ascending: false });
     if (error) throw error;
-    
+
     const userIds = [...new Set(entries?.map(e => e.user_id).filter(Boolean))];
     if (userIds.length > 0) {
       const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
@@ -740,13 +741,13 @@ export const api = {
       .select('*, project:projects(id, name)')
       .eq('company_id', companyId)
       .eq('approval_status', 'approved');
-    
+
     if (startDate) query = query.gte('date', startDate);
     if (endDate) query = query.lte('date', endDate);
-    
+
     const { data: expenses, error } = await query.order('date', { ascending: false });
     if (error) throw error;
-    
+
     const userIds = [...new Set(expenses?.map(e => e.user_id).filter(Boolean))];
     if (userIds.length > 0) {
       const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
@@ -764,16 +765,16 @@ export const api = {
       .eq('approval_status', 'pending')
       .order('date', { ascending: false });
     if (error) throw error;
-    
+
     // Get unique user IDs
     const userIds = [...new Set(entries?.map(e => e.user_id).filter(Boolean))];
-    
+
     // Fetch user profiles
     if (userIds.length > 0) {
       const { data: profiles } = await supabase.from('profiles')
         .select('id, full_name, email')
         .in('id', userIds);
-      
+
       // Map profiles to entries
       const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
       return entries?.map(e => ({
@@ -781,7 +782,7 @@ export const api = {
         user: profileMap.get(e.user_id) || null
       })) as TimeEntry[];
     }
-    
+
     return entries as TimeEntry[];
   },
 
@@ -793,16 +794,16 @@ export const api = {
       .eq('approval_status', 'pending')
       .order('date', { ascending: false });
     if (error) throw error;
-    
+
     // Get unique user IDs
     const userIds = [...new Set(expenses?.map(e => e.user_id).filter(Boolean))];
-    
+
     // Fetch user profiles
     if (userIds.length > 0) {
       const { data: profiles } = await supabase.from('profiles')
         .select('id, full_name, email')
         .in('id', userIds);
-      
+
       // Map profiles to expenses
       const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
       return expenses?.map(e => ({
@@ -810,16 +811,16 @@ export const api = {
         user: profileMap.get(e.user_id) || null
       })) as Expense[];
     }
-    
+
     return expenses as Expense[];
   },
 
   async approveTimeEntry(id: string, approverId: string) {
     const { data, error } = await supabase.from('time_entries')
-      .update({ 
-        approval_status: 'approved', 
-        approved_by: approverId, 
-        approved_at: new Date().toISOString() 
+      .update({
+        approval_status: 'approved',
+        approved_by: approverId,
+        approved_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
@@ -830,10 +831,10 @@ export const api = {
 
   async rejectTimeEntry(id: string, approverId: string) {
     const { data, error } = await supabase.from('time_entries')
-      .update({ 
-        approval_status: 'rejected', 
-        approved_by: approverId, 
-        approved_at: new Date().toISOString() 
+      .update({
+        approval_status: 'rejected',
+        approved_by: approverId,
+        approved_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
@@ -844,10 +845,10 @@ export const api = {
 
   async approveExpense(id: string, approverId: string) {
     const { data, error } = await supabase.from('expenses')
-      .update({ 
-        approval_status: 'approved', 
-        approved_by: approverId, 
-        approved_at: new Date().toISOString() 
+      .update({
+        approval_status: 'approved',
+        approved_by: approverId,
+        approved_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
@@ -858,10 +859,10 @@ export const api = {
 
   async rejectExpense(id: string, approverId: string) {
     const { data, error } = await supabase.from('expenses')
-      .update({ 
-        approval_status: 'rejected', 
-        approved_by: approverId, 
-        approved_at: new Date().toISOString() 
+      .update({
+        approval_status: 'rejected',
+        approved_by: approverId,
+        approved_at: new Date().toISOString()
       })
       .eq('id', id)
       .select()
@@ -877,9 +878,9 @@ export const api = {
       .eq('company_id', companyId)
       .eq('approval_status', 'approved')
       .is('invoice_id', null);
-    
+
     if (projectId) query = query.eq('project_id', projectId);
-    
+
     const { data, error } = await query.order('date', { ascending: false });
     if (error) throw error;
     return data as TimeEntry[];
@@ -892,9 +893,9 @@ export const api = {
       .eq('company_id', companyId)
       .eq('approval_status', 'approved')
       .eq('billable', true);
-    
+
     if (projectId) query = query.eq('project_id', projectId);
-    
+
     const { data, error } = await query.order('date', { ascending: false });
     if (error) throw error;
     return data as Expense[];
@@ -924,7 +925,7 @@ export const api = {
   },
 
   async createInvoiceWithTaskBilling(
-    invoice: Partial<Invoice>, 
+    invoice: Partial<Invoice>,
     taskBillings: { taskId: string; billingType: string; percentageToBill: number; amountToBill: number; totalBudget: number; previousBilledPercentage: number; previousBilledAmount: number }[]
   ) {
     // Create the invoice
@@ -936,7 +937,7 @@ export const api = {
 
     // Create invoice line items and update task billing
     const errors: { taskId: string; error: Error }[] = [];
-    
+
     for (const billing of taskBillings) {
       try {
         // Get task details for description and quantity/rate calculation
@@ -950,10 +951,10 @@ export const api = {
         const taskQuantity = task?.estimated_hours || 1;  // estimated_hours stores quantity for both hours and units
         const taskFees = task?.estimated_fees || billing.totalBudget;
         const taskRate = taskFees / taskQuantity;  // Unit rate = total / quantity (works for both hours and units)
-        
+
         // For percentage billing, quantity is proportional to the percentage being billed
         const billedQuantity = taskQuantity * billing.percentageToBill / 100;
-        
+
         // Create invoice line item with proper quantity and rate
         const { error: lineItemError } = await supabase.from('invoice_line_items').insert({
           invoice_id: invoiceData.id,
@@ -967,7 +968,7 @@ export const api = {
           task_total_budget: billing.totalBudget,
           unit: isHourBased ? 'hr' : 'unit',
         });
-        
+
         if (lineItemError) {
           console.error('Failed to create line item for task:', billing.taskId, lineItemError);
           errors.push({ taskId: billing.taskId, error: lineItemError });
@@ -977,16 +978,16 @@ export const api = {
         // Update task's cumulative billed percentage and amount, and lock billing_mode
         const newBilledPercentage = billing.previousBilledPercentage + billing.percentageToBill;
         const newBilledAmount = billing.previousBilledAmount + billing.amountToBill;
-        
+
         const { error: updateError } = await supabase.from('tasks')
-          .update({ 
+          .update({
             billed_percentage: newBilledPercentage,
             billed_amount: newBilledAmount,
             total_budget: billing.totalBudget,
             billing_mode: billing.billingType as 'milestone' | 'percentage',  // Lock billing mode
           })
           .eq('id', billing.taskId);
-        
+
         if (updateError) {
           console.error('Failed to update task billing:', billing.taskId, updateError);
           errors.push({ taskId: billing.taskId, error: updateError });
@@ -1024,21 +1025,21 @@ export const api = {
         console.error('Failed to clear time entries:', timeEntriesError);
         return { success: false, error: timeEntriesError, step: 'time_entries' };
       }
-      
+
       // Delete related line items
       const { error: lineItemsError } = await supabase.from('invoice_line_items').delete().eq('invoice_id', id);
       if (lineItemsError) {
         console.error('Failed to delete line items:', lineItemsError);
         return { success: false, error: lineItemsError, step: 'line_items' };
       }
-      
+
       // Then delete the invoice
       const { error } = await supabase.from('invoices').delete().eq('id', id);
       if (error) {
         console.error('Failed to delete invoice:', error);
         return { success: false, error, step: 'invoice' };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Unexpected error deleting invoice:', err);
@@ -1054,21 +1055,21 @@ export const api = {
         console.error('Failed to clear time entries:', timeEntriesError);
         return { success: false, error: timeEntriesError, step: 'time_entries' };
       }
-      
+
       // Delete related line items for all invoices
       const { error: lineItemsError } = await supabase.from('invoice_line_items').delete().in('invoice_id', ids);
       if (lineItemsError) {
         console.error('Failed to delete line items:', lineItemsError);
         return { success: false, error: lineItemsError, step: 'line_items' };
       }
-      
+
       // Then delete the invoices
       const { error } = await supabase.from('invoices').delete().in('id', ids);
       if (error) {
         console.error('Failed to delete invoices:', error);
         return { success: false, error, step: 'invoices' };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Unexpected error deleting invoices:', err);
@@ -1275,6 +1276,30 @@ export const api = {
     return response.json();
   },
 
+  async approveMergedCollaborations(parentQuoteId: string, collaborationIds: string[]) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not authenticated - please log in again');
+
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/approve-merged-collaborations`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ parentQuoteId, collaborationIds })
+      }
+    );
+
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || 'Failed to approve collaborations');
+    }
+
+    return response.json();
+  },
+
   async createQuoteLineItem(item: Partial<QuoteLineItem>) {
     const { data, error } = await supabase.from('quote_line_items')
       .insert(item)
@@ -1305,19 +1330,19 @@ export const api = {
       .select('id')
       .eq('quote_id', quoteId);
     const existingIds = new Set((existingItems || []).map(i => i.id));
-    
+
     // Helper to check if ID looks like a valid UUID
     const isValidUUID = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    
+
     // Determine which IDs to keep and which to delete (only consider valid UUIDs)
     const newIds = new Set(items.filter(i => i.id && isValidUUID(i.id)).map(i => i.id));
     const idsToDelete = [...existingIds].filter(id => !newIds.has(id));
-    
+
     // Delete removed items
     if (idsToDelete.length > 0) {
       await supabase.from('quote_line_items').delete().in('id', idsToDelete);
     }
-    
+
     // Upsert items (preserving IDs)
     if (items.length > 0) {
       const itemsWithQuoteId = items.map((item, index) => ({
@@ -1357,16 +1382,16 @@ export const api = {
       .eq('project_id', projectId)
       .order('created_at');
     if (error) throw error;
-    
+
     // Build hierarchical structure
     const taskMap = new Map<string, Task>();
     const rootTasks: Task[] = [];
-    
+
     (data as Task[]).forEach(task => {
       task.children = [];
       taskMap.set(task.id, task);
     });
-    
+
     (data as Task[]).forEach(task => {
       if (task.parent_task_id && taskMap.has(task.parent_task_id)) {
         taskMap.get(task.parent_task_id)!.children!.push(task);
@@ -1374,7 +1399,7 @@ export const api = {
         rootTasks.push(task);
       }
     });
-    
+
     return rootTasks;
   },
 
@@ -1663,7 +1688,7 @@ export const userManagementApi = {
     const token = crypto.randomUUID();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
-    
+
     const { data, error } = await supabase.from('company_invitations')
       .insert({
         ...invitation,
@@ -1687,9 +1712,9 @@ export const userManagementApi = {
   async resendInvitation(id: string) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
-    
+
     const { data, error } = await supabase.from('company_invitations')
-      .update({ 
+      .update({
         status: 'pending',
         expires_at: expiresAt.toISOString(),
       })
@@ -2326,8 +2351,8 @@ export const clientPortalApi = {
 
   getPortalUrl(token: string) {
     // Use production URL for portal links (not Capacitor's internal URL)
-    const baseUrl = (window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) 
-      ? 'https://billdora.com' 
+    const baseUrl = (window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost'))
+      ? 'https://billdora.com'
       : window.location.origin;
     return `${baseUrl}/portal/${token}`;
   },
@@ -2412,7 +2437,7 @@ export const bankStatementsApi = {
     await supabase.from('bank_transactions')
       .delete()
       .eq('statement_id', id);
-    
+
     // Then delete the statement
     const { error } = await supabase.from('bank_statements')
       .delete()
@@ -2445,9 +2470,9 @@ export const bankStatementsApi = {
     const { error: uploadError } = await supabase.storage
       .from('bank-statements')
       .upload(fileName, file);
-    
+
     if (uploadError) throw uploadError;
-    
+
     // Create statement record
     const statement = await this.createStatement({
       company_id: companyId,
@@ -2456,7 +2481,7 @@ export const bankStatementsApi = {
       original_filename: file.name,
       status: 'pending'
     });
-    
+
     return statement;
   },
 
@@ -2465,11 +2490,11 @@ export const bankStatementsApi = {
     formData.append('file', file);
     formData.append('company_id', companyId);
     formData.append('statement_id', statementId);
-    
+
     const { data, error } = await supabase.functions.invoke('parse-bank-statement', {
       body: formData
     });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2478,7 +2503,7 @@ export const bankStatementsApi = {
     const { data, error } = await supabase.functions.invoke('reconcile-statement', {
       body: { statement_id: statementId, company_id: companyId }
     });
-    
+
     if (error) throw error;
     return data;
   },
@@ -2489,7 +2514,7 @@ export const bankStatementsApi = {
     const discrepancies = transactions.filter(t => t.match_status === 'discrepancy');
     const deposits = transactions.filter(t => t.amount > 0);
     const withdrawals = transactions.filter(t => t.amount < 0);
-    
+
     return {
       totalTransactions: transactions.length,
       matchedCount: matched.length,
@@ -2569,15 +2594,15 @@ export const leadsApi = {
         .select()
         .single();
       if (error) throw error;
-      
+
       // Update lead status to won
       await supabase.from('leads').update({ status: 'won', updated_at: new Date().toISOString() }).eq('id', lead.id);
-      
+
       // Link any projects created from this lead's quotes to the new client
       const { data: leadQuotes } = await supabase.from('quotes')
         .select('id')
         .eq('lead_id', lead.id);
-      
+
       if (leadQuotes && leadQuotes.length > 0) {
         const quoteIds = leadQuotes.map(q => q.id);
         // Update projects that were created from these quotes
@@ -2585,7 +2610,7 @@ export const leadsApi = {
           .update({ client_id: data.id })
           .in('quote_id', quoteIds);
       }
-      
+
       return data;
     });
   }
@@ -2601,17 +2626,17 @@ export const collaborationApi = {
       .eq('collaborator_email', userEmail.toLowerCase())
       .in('status', ['pending', 'accepted', 'submitted', 'merged', 'approved'])
       .order('invited_at', { ascending: false });
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error fetching received invitations:', error);
       return [];
     }
-    
+
     // Enrich with owner profile and parent quote data
     if (data && data.length > 0) {
       const ownerUserIds = [...new Set(data.map(d => d.owner_user_id).filter(Boolean))];
       const parentQuoteIds = [...new Set(data.map(d => d.parent_quote_id).filter(Boolean))];
-      
+
       // Fetch owner profiles with company info
       let profilesMap: Record<string, { full_name: string; email: string; company_name?: string; company_id?: string }> = {};
       if (ownerUserIds.length > 0) {
@@ -2619,12 +2644,12 @@ export const collaborationApi = {
           .from('profiles')
           .select('id, full_name, email, company_id')
           .in('id', ownerUserIds);
-        
+
         if (profiles && profiles.length > 0) {
           // Fetch company names for these profiles
           const companyIds = [...new Set(profiles.map(p => p.company_id).filter(Boolean))];
           let companiesMap: Record<string, string> = {};
-          
+
           if (companyIds.length > 0) {
             const { data: companies } = await supabase
               .from('companies')
@@ -2634,7 +2659,7 @@ export const collaborationApi = {
               companiesMap = companies.reduce((acc, c) => ({ ...acc, [c.id]: c.company_name }), {});
             }
           }
-          
+
           profilesMap = profiles.reduce((acc, p) => ({
             ...acc,
             [p.id]: {
@@ -2646,7 +2671,7 @@ export const collaborationApi = {
           }), {});
         }
       }
-      
+
       // Fetch parent quotes
       let quotesMap: Record<string, { id: string; title: string; quote_number?: string }> = {};
       if (parentQuoteIds.length > 0) {
@@ -2658,7 +2683,7 @@ export const collaborationApi = {
           quotesMap = quotes.reduce((acc, q) => ({ ...acc, [q.id]: q }), {});
         }
       }
-      
+
       // Enrich the data
       const enriched = data.map(collab => ({
         ...collab,
@@ -2668,7 +2693,7 @@ export const collaborationApi = {
       console.log('[CollaborationAPI] Enriched invitations:', enriched.map(e => ({ id: e.id, owner: e.owner_profile?.email, company: e.owner_profile?.company_name, quote: e.parent_quote?.title })));
       return enriched;
     }
-    
+
     return data || [];
   },
 
@@ -2682,12 +2707,12 @@ export const collaborationApi = {
       `)
       .eq('owner_company_id', companyId)
       .order('invited_at', { ascending: false });
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error fetching sent invitations:', error);
       return [];
     }
-    
+
     // Fetch client names separately if we have client_ids
     if (data && data.length > 0) {
       const clientIds = [...new Set(data.map((d: any) => d.parent_quote?.client_id).filter(Boolean))];
@@ -2696,9 +2721,9 @@ export const collaborationApi = {
           .from('clients')
           .select('id, name')
           .in('id', clientIds);
-        
+
         const clientMap = (clients || []).reduce((acc: any, c: any) => ({ ...acc, [c.id]: c.name }), {});
-        
+
         return data.map((d: any) => ({
           ...d,
           parent_quote: d.parent_quote ? {
@@ -2708,7 +2733,7 @@ export const collaborationApi = {
         }));
       }
     }
-    
+
     return data || [];
   },
 
@@ -2736,7 +2761,7 @@ export const collaborationApi = {
       })
       .select()
       .single();
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error creating invitation:', error);
       throw error;
@@ -2755,7 +2780,7 @@ export const collaborationApi = {
         updated_at: new Date().toISOString()
       })
       .eq('id', invitationId);
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error accepting invitation:', error);
       throw error;
@@ -2770,7 +2795,7 @@ export const collaborationApi = {
         updated_at: new Date().toISOString()
       })
       .eq('id', invitationId);
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error declining invitation:', error);
       throw error;
@@ -2783,7 +2808,7 @@ export const collaborationApi = {
       .select('*')
       .eq('parent_quote_id', quoteId)
       .order('invited_at', { ascending: false });
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error fetching collaborations:', error);
       return [];
@@ -2792,7 +2817,17 @@ export const collaborationApi = {
   },
 
   async submitResponse(invitationId: string, responseQuoteId: string): Promise<void> {
-    const { error } = await supabase
+    // Try using the secure RPC first (bypass RLS for status update)
+    const { error: rpcError } = await supabase.rpc('submit_collaboration_response', {
+      p_invitation_id: invitationId,
+      p_response_quote_id: responseQuoteId
+    });
+
+    if (!rpcError) return;
+
+    console.warn('[CollaborationAPI] RPC failed, falling back to direct update:', rpcError);
+
+    const { data, error } = await supabase
       .from('proposal_collaborations')
       .update({
         status: 'submitted',
@@ -2800,11 +2835,22 @@ export const collaborationApi = {
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq('id', invitationId);
-    
+      .eq('id', invitationId)
+      .select('parent_quote_id')
+      .single();
+
     if (error) {
       console.error('[CollaborationAPI] Error submitting response:', error);
       throw error;
+    }
+
+    // Update parent quote status to 'review' to indicate responses are ready
+    if (data?.parent_quote_id) {
+      await supabase
+        .from('quotes')
+        .update({ status: 'review' })
+        .eq('id', data.parent_quote_id)
+        .eq('status', 'pending_collaborators'); // Only update if currently waiting
     }
   },
 
@@ -2821,12 +2867,12 @@ export const collaborationApi = {
       .select('collaborator_email, collaborator_name, collaborator_company_name, category_id, invited_at')
       .eq('owner_company_id', companyId)
       .order('invited_at', { ascending: false });
-    
+
     if (error) {
       console.error('[CollaborationAPI] Error fetching previous collaborators:', error);
       return [];
     }
-    
+
     // Deduplicate by email, keeping the most recent entry
     const collaboratorMap = new Map<string, { email: string; name: string; company: string; categoryId: string; lastUsed: string }>();
     for (const item of data || []) {
@@ -2841,7 +2887,7 @@ export const collaborationApi = {
         });
       }
     }
-    
+
     return Array.from(collaboratorMap.values());
   }
 };
@@ -2862,6 +2908,8 @@ export interface ProposalCollaboration {
   message?: string;
   transparency_mode?: string;
   payment_mode?: string;
+  collaborator_visible?: boolean;
+  collaborator_stripe_account_id?: string;
   status?: 'pending' | 'accepted' | 'declined' | 'submitted' | 'merged' | 'approved';
   invited_at?: string;
   accepted_at?: string;
@@ -2927,7 +2975,7 @@ export const collaboratorCategoryApi = {
       .eq('company_id', companyId)
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
-    
+
     if (error) {
       console.error('[CollaboratorCategoryAPI] Error fetching categories:', error);
       throw error;
@@ -2941,7 +2989,7 @@ export const collaboratorCategoryApi = {
       .insert(category)
       .select()
       .single();
-    
+
     if (error) {
       console.error('[CollaboratorCategoryAPI] Error creating category:', error);
       throw error;
@@ -2956,7 +3004,7 @@ export const collaboratorCategoryApi = {
       .eq('id', id)
       .select()
       .single();
-    
+
     if (error) {
       console.error('[CollaboratorCategoryAPI] Error updating category:', error);
       throw error;
@@ -2970,7 +3018,7 @@ export const collaboratorCategoryApi = {
       .from('collaborator_categories')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', id);
-    
+
     if (error) {
       console.error('[CollaboratorCategoryAPI] Error deleting category:', error);
       throw error;
@@ -2986,7 +3034,7 @@ export const retainerApi = {
       .select('*, client:clients(*), quote:quotes(*), project:projects(*)')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data || [];
   },
@@ -2997,7 +3045,7 @@ export const retainerApi = {
       .select('*, quote:quotes(*), project:projects(*)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     return data || [];
   },
@@ -3008,14 +3056,14 @@ export const retainerApi = {
       .select('amount, applied_amount')
       .eq('client_id', clientId)
       .eq('status', 'completed');
-    
+
     if (error) throw error;
-    
+
     // Calculate total retainer minus what's been applied
     const balance = (data || []).reduce((sum, p) => {
       return sum + (Number(p.amount) - Number(p.applied_amount || 0));
     }, 0);
-    
+
     return balance;
   },
 
@@ -3025,7 +3073,7 @@ export const retainerApi = {
       .insert(payment)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -3033,15 +3081,15 @@ export const retainerApi = {
   async applyToInvoice(retainerPaymentId: string, invoiceId: string, amount: number): Promise<RetainerPayment> {
     const { data, error } = await supabase
       .from('retainer_payments')
-      .update({ 
-        applied_to_invoice_id: invoiceId, 
+      .update({
+        applied_to_invoice_id: invoiceId,
         applied_amount: amount,
         updated_at: new Date().toISOString()
       })
       .eq('id', retainerPaymentId)
       .select()
       .single();
-    
+
     if (error) throw error;
     return data;
   },
@@ -3049,13 +3097,13 @@ export const retainerApi = {
   async markQuoteRetainerPaid(quoteId: string, stripePaymentId?: string): Promise<void> {
     const { error } = await supabase
       .from('quotes')
-      .update({ 
-        retainer_paid: true, 
+      .update({
+        retainer_paid: true,
         retainer_paid_at: new Date().toISOString(),
         retainer_stripe_payment_id: stripePaymentId
       })
       .eq('id', quoteId);
-    
+
     if (error) throw error;
   }
 };

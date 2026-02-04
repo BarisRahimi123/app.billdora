@@ -13,7 +13,7 @@ export const Footer = () => {
               The operating system for modern professional service firms.
             </p>
           </div>
-          
+
           <div>
             <h4 className="font-bold uppercase tracking-wider text-sm mb-6 text-swiss-black">Product</h4>
             <ul className="space-y-4 text-sm text-swiss-charcoal">
@@ -44,7 +44,7 @@ export const Footer = () => {
             </ul>
           </div>
         </div>
-        
+
         <div className="pt-8 border-t border-swiss-gray-border flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-swiss-gray-light">
           <p>&copy; {new Date().getFullYear()} Billdora Inc. All rights reserved.</p>
           <div className="flex gap-8">

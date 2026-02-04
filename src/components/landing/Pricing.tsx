@@ -118,7 +118,7 @@ export const Pricing = () => {
     try {
       // Get current user session
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.user) {
         // Not logged in - redirect to login with plan info
         window.location.href = getAppUrl(`/login?signup=true&plan=${plan.id}`);
@@ -170,22 +170,22 @@ export const Pricing = () => {
     if (isFree) return true;
     return billingCycle === 'monthly' ? isMonthly : isYearly;
   });
-  
+
   const tiers = filteredPlans.length > 0 ? filteredPlans.map((plan) => {
     const planKey = plan.name.toLowerCase().split(' ')[0];
-    const features = plan.features?.length > 0 
-      ? plan.features 
+    const features = plan.features?.length > 0
+      ? plan.features
       : defaultFeatures[planKey] || defaultFeatures.starter;
 
     const isProfessional = plan.name.toLowerCase().includes('professional');
     const isStarter = plan.name.toLowerCase().includes('starter');
     const isFree = plan.name.toLowerCase() === 'free' || plan.amount === 0;
-    
+
     // Handle pricing based on billing cycle for Professional
     let displayPrice: string;
     let period = '/ month';
     let yearlyTotal: number | null = null;
-    
+
     if (isFree) {
       displayPrice = 'Free';
       period = '';
@@ -214,7 +214,7 @@ export const Pricing = () => {
       icon: getIconForPlan(plan.name),
       features,
       cta: isFree
-        ? 'Get Started Free' 
+        ? 'Get Started Free'
         : 'Start 14-Day Trial',
       highlighted: isStarter,
       plan,
@@ -338,11 +338,10 @@ export const Pricing = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: index * 0.1 }}
-                  className={`relative rounded-2xl p-8 ${
-                    tier.highlighted
+                  className={`relative rounded-2xl p-8 ${tier.highlighted
                       ? 'bg-white shadow-xl border-2 mt-4'
                       : 'bg-white border border-gray-200'
-                  }`}
+                    }`}
                   style={tier.highlighted ? { borderColor: '#476E66' } : {}}
                 >
                   {tier.highlighted && (
@@ -408,9 +407,8 @@ export const Pricing = () => {
                   <button
                     onClick={() => tier.plan ? handleCheckout(tier.plan) : (tier.name === 'Enterprise' ? window.location.href = 'mailto:sales@billdora.com' : window.location.href = getAppUrl('/login?signup=true'))}
                     disabled={checkoutLoading === tier.id}
-                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 ${
-                      tier.highlighted ? 'text-white' : ''
-                    }`}
+                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 ${tier.highlighted ? 'text-white' : ''
+                      }`}
                     style={
                       tier.highlighted
                         ? { backgroundColor: '#476E66', color: '#fff' }

@@ -486,7 +486,7 @@ export default function Layout() {
       <div className={`flex-1 ${hideSidebar ? '' : (sidebarExpanded ? 'lg:ml-64' : 'lg:ml-20')} transition-all duration-300`}>
         {/* Header */}
         <header className="bg-white sticky top-0 z-30" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', boxShadow: 'var(--shadow-sm)' }}>
-          <div className="flex items-center justify-between px-3 lg:px-5 py-2 lg:py-3">
+          <div className="flex items-center justify-between px-3 lg:px-5 py-1.5 lg:py-3">
             {/* Mobile menu button - Only show when sidebar is hidden (mobile/tablet portrait) */}
             {!hideSidebar && (
               <button 
@@ -504,7 +504,7 @@ export default function Layout() {
             <div ref={searchRef} className="relative flex-1 max-w-md mx-2 lg:mx-0 lg:flex-none lg:w-96">
               <button
                 onClick={() => setSearchOpen(true)}
-                className="flex items-center gap-2.5 w-full px-3.5 py-2 lg:py-2.5 text-left bg-neutral-100/80 hover:bg-neutral-100 rounded-xl text-neutral-500 transition-colors"
+                className="flex items-center gap-2 w-full px-3 py-1.5 lg:py-2.5 text-left bg-neutral-100/80 hover:bg-neutral-100 rounded-lg lg:rounded-xl text-neutral-500 transition-colors"
               >
                 <Search className="w-4 h-4" />
                 <span className="text-sm hidden sm:inline">Search projects, clients...</span>

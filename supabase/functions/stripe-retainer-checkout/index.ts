@@ -113,6 +113,53 @@ Deno.serve(async (req) => {
       throw new Error('Company has not connected a Stripe account');
     }
 
+    // Check for merged collaborations to handle payment routing
+    const collabsRes = await fetch(
+      `${supabaseUrl}/rest/v1/proposal_collaborations?parent_quote_id=eq.${quote_id}&status=eq.merged&select=*`,
+      {
+        headers: {
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'apikey': serviceRoleKey!
+        }
+      }
+    );
+    const mergedCollaborations = await collabsRes.json();
+    const hasMergedCollaborations = mergedCollaborations && mergedCollaborations.length > 0;
+
+    // Calculate payment splits if there are merged collaborations with direct payment mode
+    let collaboratorTransfers: Array<{ destination: string; amount: number; description: string }> = [];
+    if (hasMergedCollaborations) {
+      // Get line items to calculate splits
+      for (const collab of mergedCollaborations) {
+        if (collab.payment_mode === 'direct' && collab.collaborator_stripe_account_id && collab.response_quote_id) {
+          // Get collaborator's line items total
+          const collabItemsRes = await fetch(
+            `${supabaseUrl}/rest/v1/quote_line_items?quote_id=eq.${collab.response_quote_id}&select=*`,
+            {
+              headers: {
+                'Authorization': `Bearer ${serviceRoleKey}`,
+                'apikey': serviceRoleKey!
+              }
+            }
+          );
+          const collabItems = await collabItemsRes.json();
+          const collabTotal = collabItems.reduce((sum: number, item: any) => 
+            sum + (Number(item.quantity) * Number(item.unit_price)), 0);
+          
+          // Calculate this collaborator's share of the retainer
+          const collabRetainerShare = (collabTotal / totalAmount) * retainerAmount;
+          
+          if (collabRetainerShare > 0) {
+            collaboratorTransfers.push({
+              destination: collab.collaborator_stripe_account_id,
+              amount: Math.round(collabRetainerShare * 100), // in cents
+              description: `Retainer payment for ${collab.collaborator_company_name || collab.collaborator_name || 'collaborator'}`
+            });
+          }
+        }
+      }
+    }
+
     // Get origin for URLs
     const reqOrigin = req.headers.get('origin') || 'https://nczbg3970nza.space.minimax.io';
     
@@ -155,16 +202,28 @@ Deno.serve(async (req) => {
     checkoutParams.append('metadata[type]', 'retainer');
     checkoutParams.append('metadata[total_project_amount]', totalAmount.toString());
     checkoutParams.append('metadata[retainer_percentage]', (quote.retainer_percentage || 0).toString());
+    checkoutParams.append('metadata[has_collaborations]', hasMergedCollaborations ? 'true' : 'false');
 
     if (clientEmail) {
       checkoutParams.append('customer_email', clientEmail);
     }
 
-    // Create session on platform account (direct charges)
+    // Add transfer data for direct payment mode collaborators
+    if (collaboratorTransfers.length > 0) {
+      collaboratorTransfers.forEach((transfer, index) => {
+        checkoutParams.append(`payment_intent_data[transfer_data][destination]`, transfer.destination);
+        // Note: Stripe only supports one destination in transfer_data
+        // For multiple collaborators, we'll handle additional transfers in the webhook
+        checkoutParams.append(`metadata[collab_transfer_${index}]`, JSON.stringify(transfer));
+      });
+    }
+
+    // Create session on connected account (consistent with invoice payments)
     const checkoutResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${stripeSecretKey}`,
+        'Stripe-Account': stripeAccountId,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
       body: checkoutParams.toString()

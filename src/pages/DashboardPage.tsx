@@ -526,35 +526,25 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* Hero Metrics Row - 4 Equal Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {/* Hero Metrics Row - 4 Uniform Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-4">
             {/* Profit/Loss Card */}
             {canViewFinancials && (
               <div 
                 onClick={() => setShowProfitTargetModal(true)}
-                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all group" 
+                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all group min-w-0" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center ${isOnTrack ? 'bg-emerald-100' : isBehind ? 'bg-amber-100' : 'bg-red-100'}`}>
-                    <Target className={`w-4 h-4 sm:w-5 sm:h-5 ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`} />
+                <div className="flex items-center gap-2 sm:block">
+                  <div className={`w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl flex items-center justify-center flex-shrink-0 sm:mb-3 ${isOnTrack ? 'bg-emerald-100' : isBehind ? 'bg-amber-100' : 'bg-red-100'}`}>
+                    <Target className={`w-3 h-3 sm:w-5 sm:h-5 ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`} />
                   </div>
-                  <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-300 group-hover:text-neutral-400 transition-colors" />
-                </div>
-                <p className={`text-lg sm:text-2xl font-bold ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
-                  {formatCurrency(actualProfit)}
-                </p>
-                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Profit / Loss</p>
-                <div className="mt-2 sm:mt-3 flex items-center gap-2">
-                  <div className="flex-1 h-1 sm:h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${isOnTrack ? 'bg-emerald-500' : isBehind ? 'bg-amber-500' : 'bg-red-500'}`}
-                      style={{ width: `${Math.min(100, Math.max(0, profitPct))}%` }}
-                    />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm sm:text-2xl font-bold truncate ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
+                      {formatCurrency(actualProfit)}
+                    </p>
+                    <p className="text-[9px] sm:text-sm text-neutral-500">P&L</p>
                   </div>
-                  <span className={`text-[10px] sm:text-xs font-medium ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`}>
-                    {profitPct.toFixed(0)}%
-                  </span>
                 </div>
               </div>
             )}
@@ -563,16 +553,18 @@ export default function DashboardPage() {
             {canViewFinancials && (
               <div 
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
+                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
+                <div className="flex items-center gap-2 sm:block">
+                  <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
+                    <DollarSign className="w-3 h-3 sm:w-5 sm:h-5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm sm:text-2xl font-bold text-neutral-900 truncate">{formatCurrency(stats?.totalRevenue || 0)}</p>
+                    <p className="text-[9px] sm:text-sm text-neutral-500">Revenue</p>
                   </div>
                 </div>
-                <p className="text-lg sm:text-2xl font-bold text-neutral-900">{formatCurrency(stats?.totalRevenue || 0)}</p>
-                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Total Revenue</p>
               </div>
             )}
 
@@ -580,123 +572,117 @@ export default function DashboardPage() {
             {canViewFinancials && (
               <div 
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
+                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
                 style={{ boxShadow: 'var(--shadow-card)' }}
               >
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+                <div className="flex items-center gap-2 sm:block">
+                  <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
+                    <Wallet className="w-3 h-3 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
-                  {(stats?.outstandingInvoices || 0) > 0 && (
-                    <span className="px-1.5 sm:px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] sm:text-xs font-medium rounded-full">Pending</span>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm sm:text-2xl font-bold text-neutral-900 truncate">{formatCurrency(stats?.outstandingInvoices || 0)}</p>
+                    <p className="text-[9px] sm:text-sm text-neutral-500">Outstanding</p>
+                  </div>
                 </div>
-                <p className="text-lg sm:text-2xl font-bold text-neutral-900">{formatCurrency(stats?.outstandingInvoices || 0)}</p>
-                <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Outstanding</p>
               </div>
             )}
 
             {/* Hours Card */}
             <div 
               onClick={() => navigate('/time-expense')}
-              className="bg-white rounded-xl p-3.5 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
+              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
               style={{ boxShadow: 'var(--shadow-card)' }}
             >
-              <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+              <div className="flex items-center gap-2 sm:block">
+                <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
+                  <Clock className="w-3 h-3 sm:w-5 sm:h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-2xl font-bold text-neutral-900">{stats?.hoursThisWeek || 0}h</p>
+                  <p className="text-[9px] sm:text-sm text-neutral-500">Hours</p>
                 </div>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-neutral-900">{stats?.hoursThisWeek || 0}h</p>
-              <p className="text-xs sm:text-sm text-neutral-500 mt-0.5 sm:mt-1">Hours This Week</p>
-              <p className="text-[10px] sm:text-xs text-neutral-400 mt-0.5 sm:mt-1">{stats?.hoursToday || 0}h today</p>
             </div>
           </div>
 
           {/* Work in Progress Section */}
-          <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Work in Progress</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+          <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Work in Progress</h2>
+            <div className="flex justify-between sm:grid sm:grid-cols-4 sm:gap-4">
               <div 
                 onClick={() => navigate('/projects')}
-                className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
               >
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
-                  <span className="text-[10px] sm:text-xs text-neutral-500">Active Projects</span>
+                <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
+                <div className="sm:block">
+                  <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.activeProjects || 0}</span>
+                  <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">proj</span>
                 </div>
-                <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.activeProjects || 0}</p>
               </div>
               <div 
                 onClick={() => navigate('/projects')}
-                className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
               >
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
-                  <span className="text-[10px] sm:text-xs text-neutral-500">Pending Tasks</span>
+                <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
+                <div className="sm:block">
+                  <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.pendingTasks || 0}</span>
+                  <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">tasks</span>
                 </div>
-                <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.pendingTasks || 0}</p>
               </div>
               {canViewFinancials && (
                 <div 
                   onClick={() => navigate('/time-expense')}
-                  className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                  className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
                 >
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                    <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
-                    <span className="text-[10px] sm:text-xs text-neutral-500">Unbilled WIP</span>
+                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
+                  <div className="sm:block">
+                    <span className="text-sm sm:text-xl font-bold text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</span>
+                    <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block hidden sm:inline">wip</span>
                   </div>
-                  <p className="text-lg sm:text-xl font-bold text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</p>
                 </div>
               )}
               {canViewFinancials && (
                 <div 
                   onClick={() => navigate('/invoicing')}
-                  className="p-3 sm:p-4 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors"
+                  className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
                 >
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                    <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
-                    <span className="text-[10px] sm:text-xs text-neutral-500">Draft Invoices</span>
+                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
+                  <div className="sm:block">
+                    <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</span>
+                    <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">drafts</span>
                   </div>
-                  <p className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Insights Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
             {/* Billability */}
-            <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Billability</h2>
-              <div className="flex items-center gap-4 sm:gap-6">
-                <div className="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
+            <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Billability</h2>
+              <div className="flex items-center gap-2 sm:gap-6">
+                <div className="relative w-10 h-10 sm:w-24 sm:h-24 flex-shrink-0">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
-                    <circle cx="48" cy="48" r="40" fill="none" stroke="#F3F4F6" strokeWidth="8" />
+                    <circle cx="48" cy="48" r="40" fill="none" stroke="#F3F4F6" strokeWidth="12" />
                     <circle
-                      cx="48" cy="48" r="40" fill="none" stroke="#476E66" strokeWidth="8"
+                      cx="48" cy="48" r="40" fill="none" stroke="#476E66" strokeWidth="12"
                       strokeDasharray={`${(stats?.utilization || 0) * 2.51} 251`}
                       strokeLinecap="round"
                     />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-lg sm:text-xl font-bold text-neutral-900">{stats?.utilization || 0}%</span>
+                    <span className="text-[10px] sm:text-xl font-bold text-neutral-900">{stats?.utilization || 0}%</span>
                   </div>
                 </div>
-                <div className="flex-1 space-y-2 sm:space-y-3">
+                <div className="flex-1 space-y-1 sm:space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#476E66]" />
-                      <span className="text-xs sm:text-sm text-neutral-600">Billable</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-semibold text-neutral-900">{stats?.billableHours || 0}h</span>
+                    <span className="text-[8px] sm:text-sm text-neutral-600">Billable</span>
+                    <span className="text-[8px] sm:text-sm font-semibold text-neutral-900">{stats?.billableHours || 0}h</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-neutral-200" />
-                      <span className="text-xs sm:text-sm text-neutral-600">Non-Billable</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-semibold text-neutral-900">{stats?.nonBillableHours || 0}h</span>
+                    <span className="text-[8px] sm:text-sm text-neutral-600">Non-bill</span>
+                    <span className="text-[8px] sm:text-sm font-semibold text-neutral-900">{stats?.nonBillableHours || 0}h</span>
                   </div>
                 </div>
               </div>
@@ -704,20 +690,17 @@ export default function DashboardPage() {
 
             {/* Payment Aging */}
             {canViewFinancials && (
-              <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Payment Aging</h2>
-                <div className="space-y-2.5 sm:space-y-3">
+              <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Aging</h2>
+                <div className="space-y-1 sm:space-y-3">
                   {agingData.map((d, i) => {
                     const maxAmount = Math.max(...agingData.map(a => a.amount), 1);
                     const width = (d.amount / maxAmount) * 100;
                     const colors = ['#476E66', '#8B7355', '#6B5B4F', '#4A4A4A'];
                     return (
-                      <div key={d.range}>
-                        <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
-                          <span className="text-neutral-600">{d.range} days</span>
-                          <span className="font-semibold text-neutral-900">{formatCurrency(d.amount)}</span>
-                        </div>
-                        <div className="h-1.5 sm:h-2 bg-neutral-100 rounded-full overflow-hidden">
+                      <div key={d.range} className="flex items-center gap-1.5">
+                        <span className="text-[8px] sm:text-sm text-neutral-500 w-7 sm:w-auto">{d.range}d</span>
+                        <div className="flex-1 h-1.5 sm:h-2 bg-neutral-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full rounded-full transition-all"
                             style={{ width: `${Math.max(width, 2)}%`, backgroundColor: colors[i] }}
@@ -726,22 +709,19 @@ export default function DashboardPage() {
                       </div>
                     );
                   })}
-                  {agingData.every(d => d.amount === 0) && (
-                    <p className="text-center text-neutral-400 py-3 sm:py-4 text-xs sm:text-sm">No outstanding invoices</p>
-                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Revenue Trend */}
+          {/* Revenue Trend - Hidden on mobile */}
           {canViewFinancials && (
-            <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
-                <h2 className="text-xs sm:text-sm font-semibold text-neutral-900">Revenue Trend</h2>
+            <div className="hidden sm:block bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="w-4 h-4 text-neutral-400" />
+                <h2 className="text-sm font-semibold text-neutral-900">Revenue Trend</h2>
               </div>
-              <div className="h-36 sm:h-48">
+              <div className="h-48">
                 {revenueData.length > 0 && revenueData.some(d => d.revenue > 0) ? (
                   <div className="flex items-end justify-between h-full gap-1 sm:gap-2">
                     {revenueData.map((d, i) => {
@@ -775,15 +755,15 @@ export default function DashboardPage() {
           )}
 
           {/* Recent Activity */}
-          <div className="bg-white rounded-xl p-3.5 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 mb-3 sm:mb-4">Recent Activity</h2>
+          <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
+            <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Recent Activity</h2>
             {activities.length === 0 ? (
-              <p className="text-neutral-400 text-center py-6 sm:py-8 text-xs sm:text-sm">No recent activity</p>
+              <p className="text-neutral-400 text-center py-3 sm:py-8 text-[9px] sm:text-sm">No recent activity</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 {activities.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-neutral-50 rounded-xl hover:bg-neutral-100 transition-colors">
-                    <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  <div key={activity.id} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-neutral-50 rounded-lg sm:rounded-xl hover:bg-neutral-100 transition-colors">
+                    <div className={`w-6 h-6 sm:w-9 sm:h-9 rounded-md sm:rounded-xl flex items-center justify-center flex-shrink-0 ${
                       activity.type === 'time' ? 'bg-[#476E66]/10' :
                       activity.type === 'proposal_signed' ? 'bg-emerald-100' :
                       activity.type === 'proposal_viewed' ? 'bg-blue-100' :
@@ -792,16 +772,16 @@ export default function DashboardPage() {
                       'bg-neutral-100'
                     }`}>
                       {activity.icon ? (
-                        <span className="text-sm sm:text-base">{activity.icon}</span>
+                        <span className="text-xs sm:text-base">{activity.icon}</span>
                       ) : (
-                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66]" />
+                        <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-[#476E66]" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm font-medium text-neutral-900 line-clamp-1">{activity.description}</p>
-                      {activity.meta && <p className="text-[10px] sm:text-xs text-neutral-500 truncate mt-0.5">{activity.meta}</p>}
+                      <p className="text-[10px] sm:text-sm font-medium text-neutral-900 line-clamp-1">{activity.description}</p>
+                      {activity.meta && <p className="text-[8px] sm:text-xs text-neutral-500 truncate">{activity.meta}</p>}
                     </div>
-                    <span className="text-[10px] sm:text-xs text-neutral-400 flex-shrink-0">{formatDate(activity.date)}</span>
+                    <span className="text-[8px] sm:text-xs text-neutral-400 flex-shrink-0">{formatDate(activity.date)}</span>
                   </div>
                 ))}
               </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabaseRest } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, Loader2, Building2, FileText, User } from 'lucide-react';
@@ -26,7 +26,7 @@ export default function CollaboratorAcceptPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const [invite, setInvite] = useState<CollaborationInvite | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,7 +39,7 @@ export default function CollaboratorAcceptPage() {
   // If user is already logged in and this invite belongs to them, redirect to proposal
   useEffect(() => {
     if (user && invite && invite.status === 'accepted') {
-      navigate(`/quotes/${invite.parent_quote_id}/document`);
+      navigate(`/quotes/${invite.parent_quote_id}/document?mode=view&collaboration_id=${invite.id}`);
     }
   }, [user, invite, navigate]);
 
@@ -51,59 +51,74 @@ export default function CollaboratorAcceptPage() {
     }
 
     try {
-      // Fetch the collaboration invitation with related data
-      const { data: collab, error: collabError } = await supabaseRest.query<CollaborationInvite[]>(
-        'proposal_collaborations',
-        {
-          select: '*',
-          eq: { id: id }
-        }
-      );
+      // Use secure RPC to fetch all details bypassing RLS
+      const { data, error } = await supabase
+        .rpc('get_collaboration_details', { lookup_id: id });
 
-      if (collabError || !collab || collab.length === 0) {
+      if (error || !data || data.length === 0) {
+        console.error('Error loading invitation:', error);
         setError('Invitation not found or has expired');
         setLoading(false);
         return;
       }
 
-      const invitation = collab[0];
-
-      // Fetch project name from quotes table
-      const { data: quote } = await supabaseRest.query<{ project_name: string }[]>(
-        'quotes',
-        {
-          select: 'project_name',
-          eq: { id: invitation.parent_quote_id }
-        }
-      );
-
-      // Fetch inviter info from profiles
-      const { data: inviterProfile } = await supabaseRest.query<{ full_name: string }[]>(
-        'profiles',
-        {
-          select: 'full_name',
-          eq: { id: invitation.owner_user_id }
-        }
-      );
-
-      // Fetch inviter company
-      const { data: inviterCompany } = await supabaseRest.query<{ name: string }[]>(
-        'companies',
-        {
-          select: 'name',
-          eq: { id: invitation.owner_company_id }
-        }
-      );
+      const invitation = data[0]; // RPC returns an array
 
       setInvite({
-        ...invitation,
-        project_name: quote?.[0]?.project_name || 'Untitled Project',
-        inviter_name: inviterProfile?.[0]?.full_name || 'Unknown',
-        inviter_company_name: inviterCompany?.[0]?.name || 'Unknown Company'
+        id: invitation.id,
+        collaborator_email: invitation.collaborator_email,
+        collaborator_name: invitation.collaborator_name,
+        collaborator_company_name: invitation.collaborator_company_name,
+        collaborator_user_id: null, // Not needed for display, handled in invite logic
+        message: invitation.message,
+        status: invitation.status,
+        parent_quote_id: invitation.parent_quote_id,
+        owner_company_id: invitation.owner_company_id,
+        owner_user_id: invitation.owner_user_id,
+        project_name: invitation.project_name || 'Untitled Project',
+        inviter_name: invitation.inviter_name || 'Unknown',
+        inviter_company_name: invitation.inviter_company_name || 'Unknown Company'
       });
     } catch (err) {
-      console.error('Error loading invitation:', err);
-      setError('Failed to load invitation details');
+      console.warn('RPC load failed, attempting direct fetch...', err);
+
+      // Fallback: Try direct fetch (works if user is authenticated and has RLS access, e.g. owner)
+      try {
+        const { data: directData, error: directError } = await supabase
+          .from('proposal_collaborations')
+          .select(`
+            *,
+            parent_quote:quotes(title),
+            owner_profile:profiles(full_name, company_id),
+            owner_company:companies(name)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (directError || !directData) {
+          throw directError || new Error('Direct fetch failed');
+        }
+
+        // Map direct data to interface
+        setInvite({
+          id: directData.id,
+          collaborator_email: directData.collaborator_email,
+          collaborator_name: directData.collaborator_name || '',
+          collaborator_company_name: directData.collaborator_company_name || '',
+          collaborator_user_id: directData.collaborator_user_id,
+          message: directData.message || '',
+          status: directData.status,
+          parent_quote_id: directData.parent_quote_id,
+          owner_company_id: directData.owner_company_id,
+          owner_user_id: directData.owner_user_id,
+          project_name: (directData.parent_quote as any)?.title || 'Untitled Project',
+          inviter_name: (directData.owner_profile as any)?.full_name || 'Unknown',
+          inviter_company_name: (directData.owner_company as any)?.name || 'Unknown Company'
+        });
+      } catch (fallbackErr) {
+        console.error('Error loading invitation details (fallback):', fallbackErr);
+        setError('Invitation not found or has expired');
+      }
     } finally {
       setLoading(false);
     }
@@ -115,11 +130,10 @@ export default function CollaboratorAcceptPage() {
 
     try {
       // Update status to 'accepted'
-      const { error: updateError } = await supabaseRest.update(
-        'proposal_collaborations',
-        { status: 'accepted', accepted_at: new Date().toISOString() },
-        { id: `eq.${invite.id}` }
-      );
+      const { error: updateError } = await supabase
+        .from('proposal_collaborations')
+        .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+        .eq('id', invite.id);
 
       if (updateError) throw updateError;
 
@@ -132,7 +146,7 @@ export default function CollaboratorAcceptPage() {
         collaborator: 'true',
         collaboration_id: invite.id
       });
-      
+
       navigate(`/login?${params.toString()}`);
     } catch (err) {
       console.error('Error accepting invitation:', err);
@@ -147,11 +161,10 @@ export default function CollaboratorAcceptPage() {
 
     try {
       // Update status to 'rejected'
-      const { error: updateError } = await supabaseRest.update(
-        'proposal_collaborations',
-        { status: 'rejected' },
-        { id: `eq.${invite.id}` }
-      );
+      const { error: updateError } = await supabase
+        .from('proposal_collaborations')
+        .update({ status: 'rejected' })
+        .eq('id', invite.id);
 
       if (updateError) throw updateError;
 
@@ -259,7 +272,7 @@ export default function CollaboratorAcceptPage() {
               <p className="text-sm text-neutral-600">{invite?.inviter_name}</p>
             </div>
           </div>
-          
+
           <div className="flex items-start gap-3">
             <FileText className="w-5 h-5 text-[#476E66] mt-0.5" />
             <div>

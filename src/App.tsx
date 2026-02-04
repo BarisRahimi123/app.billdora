@@ -60,19 +60,19 @@ function ComingSoonPage({ title }: { title: string }) {
 // Loading spinner component for Suspense fallback - compact and fast with timeout recovery
 function PageLoader() {
   const [showRetry, setShowRetry] = useState(false);
-  
+
   useEffect(() => {
     // If loading takes more than 5 seconds, show retry button
     const timer = setTimeout(() => setShowRetry(true), 5000);
     return () => clearTimeout(timer);
   }, []);
-  
+
   if (showRetry) {
     return (
       <div className="min-h-[200px] flex flex-col items-center justify-center gap-3">
         <div className="animate-spin w-6 h-6 border-2 border-[#476E66] border-t-transparent rounded-full" />
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="px-3 py-1.5 text-xs text-[#476E66] border border-[#476E66] rounded-lg hover:bg-[#476E66]/5"
         >
           Taking too long? Tap to refresh
@@ -80,7 +80,7 @@ function PageLoader() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-[200px] flex items-center justify-center">
       <div className="animate-spin w-6 h-6 border-2 border-[#476E66] border-t-transparent rounded-full" />
@@ -92,14 +92,14 @@ function PageLoader() {
 function useAppLifecycleLogging() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    
+
     let listener: any = null;
     import('@capacitor/app').then(({ App }) => {
       listener = App.addListener('appStateChange', ({ isActive }) => {
         console.log('[App] State:', isActive ? 'FOREGROUND' : 'BACKGROUND');
       });
     }).catch(console.error);
-    
+
     return () => { listener?.remove(); };
   }, []);
 }
@@ -109,64 +109,64 @@ function useAppLifecycleLogging() {
 // Domain-based redirect component (client-side fallback)
 function DomainRedirect({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  
+
   useEffect(() => {
     // Skip in dev/Capacitor - handled by domains.ts
     if (Capacitor.isNativePlatform()) return;
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') return;
-    
+
     const isLanding = hostname === 'billdora.com' || hostname === 'www.billdora.com';
     const isApp = hostname === 'app.billdora.com';
     const path = location.pathname;
-    
+
     // On landing domain, redirect app routes to app domain
     if (isLanding && !LANDING_ROUTES.includes(path) && path !== '/') {
       window.location.href = `${DOMAINS.APP}${path}${location.search}`;
       return;
     }
-    
+
     // On app domain, redirect landing page to dashboard (for logged in) or login
     if (isApp && path === '/') {
       // Let the route handler decide (it will check auth)
       return;
     }
   }, [location]);
-  
+
   return <>{children}</>;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return <PageLoader />;
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
 // Component to handle root route based on domain
 function RootRoute() {
   const { user, loading } = useAuth();
-  
+
   // In production on app.billdora.com, redirect to dashboard or login
   if (typeof window !== 'undefined' && window.location.hostname === 'app.billdora.com') {
     if (loading) return <PageLoader />;
     return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
   }
-  
+
   // On landing domain or dev, show landing page
   return <LandingPage />;
 }
 
 function AppRoutes() {
   const { user, loading, passwordRecoveryMode } = useAuth();
-  
+
   // Just log app lifecycle, don't force re-renders
   useAppLifecycleLogging();
 
@@ -179,16 +179,17 @@ function AppRoutes() {
           <Route path="/check-email" element={<CheckEmailPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/quotes/:quoteId/document" element={<ProtectedRoute><QuoteDocumentPage /></ProtectedRoute>} />
+
           <Route path="/proposal/:token" element={<ErrorBoundary><ProposalPortalPage /></ErrorBoundary>} />
           <Route path="/invoice-view/:invoiceId" element={<InvoiceViewPage />} />
           <Route path="/portal/:token" element={<ClientPortalPage />} />
           <Route path="/lead/:formId" element={<LeadFormPage />} />
           <Route path="/collaborate/:id" element={<CollaboratorAcceptPage />} />
-          
+
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
             <Route path="/sales" element={<ErrorBoundary><SalesPage /></ErrorBoundary>} />
+            <Route path="/quotes/:quoteId/document" element={<ErrorBoundary><QuoteDocumentPage /></ErrorBoundary>} />
             <Route path="/projects" element={<ErrorBoundary><ProjectsPage /></ErrorBoundary>} />
             <Route path="/projects/:projectId" element={<ErrorBoundary><ProjectsPage /></ErrorBoundary>} />
             <Route path="/time-expense" element={<ErrorBoundary><TimeExpensePage /></ErrorBoundary>} />

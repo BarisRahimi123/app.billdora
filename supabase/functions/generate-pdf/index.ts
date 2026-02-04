@@ -1,6 +1,8 @@
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
 
+const BROWSERLESS_API_KEY = Deno.env.get('BROWSERLESS_API_KEY');
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -15,7 +17,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { type, data } = await req.json();
+    const requestBody = await req.json();
+    console.log('[generate-pdf] Request body keys:', Object.keys(requestBody));
+    console.log('[generate-pdf] returnType value:', requestBody.returnType, 'type:', typeof requestBody.returnType);
+    
+    const { type, data, returnType = 'pdf' } = requestBody;
+    
+    console.log('[generate-pdf] After destructure - returnType:', returnType, 'type:', typeof returnType);
     
     if (!type || !data) {
       throw new Error('Type and data are required');
@@ -32,18 +40,139 @@ Deno.serve(async (req) => {
       throw new Error('Invalid document type');
     }
 
-    // Return HTML for client-side PDF generation
-    // In production, you would use a service like Puppeteer/Playwright
+    // DIAGNOSTIC: Log what we received
+    console.log('[generate-pdf] returnType received:', returnType, 'type:', typeof returnType);
+    console.log('[generate-pdf] returnType === "html":', returnType === 'html');
+    console.log('[generate-pdf] returnType === "pdf":', returnType === 'pdf');
+    
+    // TEMPORARY: Force PDF mode for testing
+    const forcePdfMode = true;
+    
+    // If returnType is 'html', return HTML for preview (legacy support)
+    if (returnType === 'html' && !forcePdfMode) {
+      console.log('[generate-pdf] Returning HTML (legacy mode)');
+      return new Response(JSON.stringify({
+        data: { html, type }
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('[generate-pdf] Proceeding to PDF generation with Browserless');
+    
+    // Generate PDF using Browserless
+    if (!BROWSERLESS_API_KEY) {
+      console.error('[generate-pdf] BROWSERLESS_API_KEY not found in environment');
+      throw new Error('Browserless API key not configured');
+    }
+
+    console.log('[generate-pdf] API key present, length:', BROWSERLESS_API_KEY.length);
+    console.log('[generate-pdf] HTML length:', html.length);
+    console.log('[generate-pdf] Calling Browserless API...');
+    
+    const browserlessUrl = `https://production-sfo.browserless.io/pdf?token=${BROWSERLESS_API_KEY}`;
+    const requestBody = {
+      html: html,
+      options: {
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0px',
+          right: '0px',
+          bottom: '0px',
+          left: '0px'
+        }
+      }
+    };
+    
+    console.log('[generate-pdf] Request body keys:', Object.keys(requestBody));
+    
+    let browserlessResponse;
+    try {
+      browserlessResponse = await fetch(browserlessUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (fetchError) {
+      console.error('[generate-pdf] Fetch error:', fetchError);
+      throw new Error(`Failed to reach Browserless API: ${fetchError.message}`);
+    }
+
+    console.log('[generate-pdf] Browserless response status:', browserlessResponse.status);
+    console.log('[generate-pdf] Browserless response headers:', Object.fromEntries(browserlessResponse.headers));
+    
+    if (!browserlessResponse.ok) {
+      const errorText = await browserlessResponse.text();
+      console.error('[generate-pdf] Browserless error response:', errorText);
+      throw new Error(`Browserless API error: ${browserlessResponse.status} - ${errorText.substring(0, 300)}`);
+    }
+
+    const contentType = browserlessResponse.headers.get('content-type') || '';
+    console.log('[generate-pdf] Content-Type:', contentType);
+    
+    if (!contentType.includes('application/pdf') && !contentType.includes('application/octet-stream')) {
+      const bodyText = await browserlessResponse.text();
+      console.error('[generate-pdf] Unexpected content type:', contentType);
+      console.error('[generate-pdf] Response body:', bodyText.substring(0, 500));
+      throw new Error(`Browserless returned ${contentType} instead of PDF`);
+    }
+
+    // Get PDF as ArrayBuffer
+    const pdfBuffer = await browserlessResponse.arrayBuffer();
+    console.log('[generate-pdf] PDF generated, size:', pdfBuffer.byteLength, 'bytes');
+    
+    // Verify it's a PDF (starts with %PDF)
+    const firstBytes = new Uint8Array(pdfBuffer.slice(0, 4));
+    const header = String.fromCharCode(...firstBytes);
+    console.log('[generate-pdf] PDF header:', header);
+    if (header !== '%PDF') {
+      throw new Error('Response does not appear to be a valid PDF');
+    }
+
+    // Convert ArrayBuffer to base64 using Deno's standard encoding
+    const uint8Array = new Uint8Array(pdfBuffer);
+    
+    // Use standard base64 encoding that works with binary data
+    const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let pdfBase64 = '';
+    const len = uint8Array.length;
+    
+    for (let i = 0; i < len; i += 3) {
+      const byte1 = uint8Array[i];
+      const byte2 = i + 1 < len ? uint8Array[i + 1] : 0;
+      const byte3 = i + 2 < len ? uint8Array[i + 2] : 0;
+      
+      pdfBase64 += base64Chars[byte1 >> 2];
+      pdfBase64 += base64Chars[((byte1 & 3) << 4) | (byte2 >> 4)];
+      pdfBase64 += i + 1 < len ? base64Chars[((byte2 & 15) << 2) | (byte3 >> 6)] : '=';
+      pdfBase64 += i + 2 < len ? base64Chars[byte3 & 63] : '=';
+    }
+    
+    console.log('[generate-pdf] Base64 length:', pdfBase64.length);
+    console.log('[generate-pdf] Base64 preview:', pdfBase64.substring(0, 50));
+    
     return new Response(JSON.stringify({
-      data: { html, type }
+      data: { 
+        pdf: pdfBase64, 
+        type,
+        filename: `${data.title || type}-${new Date().toISOString().split('T')[0]}.pdf`
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('PDF generation error:', error);
+    console.error('Error stack:', error.stack);
     return new Response(JSON.stringify({
-      error: { code: 'PDF_FAILED', message: error.message }
+      error: { 
+        code: 'PDF_FAILED', 
+        message: error.message || 'Unknown error occurred',
+        details: error.stack?.split('\n')[0] || ''
+      }
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

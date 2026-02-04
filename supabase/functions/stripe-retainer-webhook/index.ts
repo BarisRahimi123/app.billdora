@@ -72,6 +72,116 @@ Deno.serve(async (req) => {
           })
         });
 
+        // Handle collaboration payment transfers for "through_owner" mode
+        const hasCollaborations = metadata.has_collaborations === 'true';
+        if (hasCollaborations) {
+          const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
+          
+          // Get merged collaborations with through_owner payment mode
+          const collabsRes = await fetch(
+            `${supabaseUrl}/rest/v1/proposal_collaborations?parent_quote_id=eq.${quoteId}&status=eq.merged&payment_mode=eq.through_owner&select=*`,
+            {
+              headers: {
+                'Authorization': `Bearer ${serviceRoleKey}`,
+                'apikey': serviceRoleKey!
+              }
+            }
+          );
+          const throughOwnerCollabs = await collabsRes.json();
+
+          // Create transfers to collaborators
+          for (const collab of throughOwnerCollabs) {
+            if (collab.collaborator_stripe_account_id && collab.response_quote_id) {
+              try {
+                // Get collaborator's line items total
+                const collabItemsRes = await fetch(
+                  `${supabaseUrl}/rest/v1/quote_line_items?quote_id=eq.${collab.response_quote_id}&select=*`,
+                  {
+                    headers: {
+                      'Authorization': `Bearer ${serviceRoleKey}`,
+                      'apikey': serviceRoleKey!
+                    }
+                  }
+                );
+                const collabItems = await collabItemsRes.json();
+                const collabTotal = collabItems.reduce((sum: number, item: any) => 
+                  sum + (Number(item.quantity) * Number(item.unit_price)), 0);
+                
+                // Calculate this collaborator's share of the retainer
+                const collabRetainerShare = (collabTotal / totalProjectAmount) * amountPaid;
+                
+                if (collabRetainerShare > 0) {
+                  // Create Stripe Transfer
+                  const transferParams = new URLSearchParams();
+                  transferParams.append('amount', Math.round(collabRetainerShare * 100).toString());
+                  transferParams.append('currency', 'usd');
+                  transferParams.append('destination', collab.collaborator_stripe_account_id);
+                  transferParams.append('description', `Retainer share for ${collab.collaborator_company_name || collab.collaborator_name || 'collaborator'}`);
+                  transferParams.append('metadata[quote_id]', quoteId);
+                  transferParams.append('metadata[collaboration_id]', collab.id);
+                  transferParams.append('metadata[type]', 'retainer_share');
+
+                  const transferRes = await fetch('https://api.stripe.com/v1/transfers', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${stripeSecretKey}`,
+                      'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: transferParams.toString()
+                  });
+
+                  if (transferRes.ok) {
+                    const transfer = await transferRes.json();
+                    console.log(`Created transfer of $${collabRetainerShare} to ${collab.collaborator_company_name}`);
+                    
+                    // Update collaboration with transfer info
+                    await fetch(`${supabaseUrl}/rest/v1/proposal_collaborations?id=eq.${collab.id}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${serviceRoleKey}`,
+                        'apikey': serviceRoleKey!
+                      },
+                      body: JSON.stringify({
+                        retainer_transfer_id: transfer.id,
+                        retainer_amount_transferred: collabRetainerShare,
+                        retainer_transferred_at: new Date().toISOString()
+                      })
+                    });
+
+                    // Send notification to collaborator
+                    if (collab.collaborator_user_id && collab.collaborator_company_id) {
+                      await fetch(`${supabaseUrl}/rest/v1/notifications`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${serviceRoleKey}`,
+                          'apikey': serviceRoleKey!
+                        },
+                        body: JSON.stringify({
+                          company_id: collab.collaborator_company_id,
+                          user_id: collab.collaborator_user_id,
+                          type: 'payment_received',
+                          title: '💰 Retainer Payment Received!',
+                          message: `$${collabRetainerShare.toLocaleString()} retainer payment transferred to your account for "${quote.title || 'Project'}"`,
+                          reference_id: collab.response_quote_id || quoteId,
+                          reference_type: 'quote',
+                          is_read: false
+                        })
+                      });
+                    }
+                  } else {
+                    const error = await transferRes.text();
+                    console.error(`Failed to create transfer to ${collab.collaborator_company_name}:`, error);
+                  }
+                }
+              } catch (transferError) {
+                console.error(`Error processing transfer for collaboration ${collab.id}:`, transferError);
+              }
+            }
+          }
+        }
+
         // Check if project already exists for this quote
         const existingProjectRes = await fetch(
           `${supabaseUrl}/rest/v1/projects?proposal_id=eq.${quoteId}&select=id`,
