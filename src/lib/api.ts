@@ -2889,6 +2889,124 @@ export const collaborationApi = {
     }
 
     return Array.from(collaboratorMap.values());
+  },
+
+  // Get all trade partners (both directions: people you've invited AND people who've invited you)
+  async getPartners(companyId: string, userId: string, userEmail: string): Promise<Array<{
+    id: string;
+    email: string;
+    name: string;
+    companyName: string;
+    companyId: string | null;
+    phone: string;
+    projectCount: number;
+    lastCollaboration: string;
+    relationship: 'invited' | 'received' | 'mutual';
+  }>> {
+    try {
+      // Fetch collaborations where current company is owner (people we invited)
+      const { data: sentData, error: sentError } = await supabase
+        .from('proposal_collaborations')
+        .select('collaborator_email, collaborator_name, collaborator_company_name, collaborator_company_id, collaborator_user_id, invited_at, status')
+        .eq('owner_company_id', companyId);
+
+      // Fetch collaborations where current user is collaborator (people who invited us)
+      const { data: receivedData, error: receivedError } = await supabase
+        .from('proposal_collaborations')
+        .select('owner_user_id, owner_company_id, invited_at, status')
+        .or(`collaborator_email.eq.${userEmail},collaborator_user_id.eq.${userId}`);
+
+      if (sentError) console.error('[CollaborationAPI] Error fetching sent partners:', sentError);
+      if (receivedError) console.error('[CollaborationAPI] Error fetching received partners:', receivedError);
+
+      const partnersMap = new Map<string, {
+        id: string;
+        email: string;
+        name: string;
+        companyName: string;
+        companyId: string | null;
+        phone: string;
+        projectCount: number;
+        lastCollaboration: string;
+        relationship: 'invited' | 'received' | 'mutual';
+      }>();
+
+      // Process people we've invited
+      for (const item of sentData || []) {
+        const key = item.collaborator_email?.toLowerCase() || item.collaborator_company_id || '';
+        if (!key) continue;
+        
+        const existing = partnersMap.get(key);
+        if (existing) {
+          existing.projectCount++;
+          existing.relationship = 'mutual';
+          if (new Date(item.invited_at) > new Date(existing.lastCollaboration)) {
+            existing.lastCollaboration = item.invited_at;
+          }
+        } else {
+          partnersMap.set(key, {
+            id: item.collaborator_company_id || crypto.randomUUID(),
+            email: item.collaborator_email || '',
+            name: item.collaborator_name || '',
+            companyName: item.collaborator_company_name || '',
+            companyId: item.collaborator_company_id || null,
+            phone: '',
+            projectCount: 1,
+            lastCollaboration: item.invited_at || '',
+            relationship: 'invited'
+          });
+        }
+      }
+
+      // Process people who've invited us - need to fetch their company info
+      const ownerCompanyIds = [...new Set((receivedData || []).map(r => r.owner_company_id).filter(Boolean))];
+      
+      let companyInfoMap = new Map<string, { name: string; email: string }>();
+      if (ownerCompanyIds.length > 0) {
+        const { data: companyData } = await supabase
+          .from('company_settings')
+          .select('company_id, company_name, email')
+          .in('company_id', ownerCompanyIds);
+        
+        for (const c of companyData || []) {
+          companyInfoMap.set(c.company_id, { name: c.company_name || '', email: c.email || '' });
+        }
+      }
+
+      for (const item of receivedData || []) {
+        if (!item.owner_company_id) continue;
+        const key = item.owner_company_id;
+        const companyInfo = companyInfoMap.get(key) || { name: '', email: '' };
+        
+        const existing = partnersMap.get(key);
+        if (existing) {
+          existing.projectCount++;
+          existing.relationship = 'mutual';
+          if (new Date(item.invited_at) > new Date(existing.lastCollaboration)) {
+            existing.lastCollaboration = item.invited_at;
+          }
+        } else {
+          partnersMap.set(key, {
+            id: key,
+            email: companyInfo.email,
+            name: companyInfo.name,
+            companyName: companyInfo.name,
+            companyId: key,
+            phone: '',
+            projectCount: 1,
+            lastCollaboration: item.invited_at || '',
+            relationship: 'received'
+          });
+        }
+      }
+
+      return Array.from(partnersMap.values()).sort((a, b) => 
+        new Date(b.lastCollaboration).getTime() - new Date(a.lastCollaboration).getTime()
+      );
+    } catch (err) {
+      console.error('[CollaborationAPI] Error fetching partners:', err);
+      return [];
+    }
   }
 };
 

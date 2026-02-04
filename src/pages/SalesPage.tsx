@@ -15,7 +15,7 @@ import { LeadModal, ConvertToClientModal } from '../components/leads';
 import { QuoteModal } from '../components/quotes';
 
 type Tab = 'leads' | 'clients' | 'proposals';
-type ProposalsSubTab = 'direct' | 'collaborations' | 'signed' | 'templates';
+type ProposalsSubTab = 'direct' | 'collaborations' | 'signed' | 'partners' | 'templates';
 type CollaborationsSubTab = 'my-projects' | 'invited';
 type DirectFilter = 'all' | 'drafts' | 'sent';
 type LeadsViewMode = 'list' | 'kanban';
@@ -72,6 +72,17 @@ export default function SalesPage() {
 
   const [collaborationInbox, setCollaborationInbox] = useState<ProposalCollaboration[]>([]);
   const [sentCollaborations, setSentCollaborations] = useState<ProposalCollaboration[]>([]);
+  const [partners, setPartners] = useState<Array<{
+    id: string;
+    email: string;
+    name: string;
+    companyName: string;
+    companyId: string | null;
+    phone: string;
+    projectCount: number;
+    lastCollaboration: string;
+    relationship: 'invited' | 'received' | 'mutual';
+  }>>([]);
   const [editingTemplate, setEditingTemplate] = useState<ProposalTemplate | null>(null);
   const [showDeleteTemplateConfirm, setShowDeleteTemplateConfirm] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<ProposalTemplate | null>(null);
@@ -190,7 +201,7 @@ export default function SalesPage() {
       // Use individual try/catch so one failure doesn't block others
       const userEmail = profile?.email || '';
       const userId = profile?.id;
-      const [leadsData, clientsData, quotesData, responsesData, templatesData, inboxData, sentData] = await Promise.all([
+      const [leadsData, clientsData, quotesData, responsesData, templatesData, inboxData, sentData, partnersData] = await Promise.all([
         leadsApi.getLeads(companyId).catch(err => { console.warn('[SalesPage] Failed to load leads:', err?.message); return []; }),
         api.getClients(companyId).catch(err => { console.warn('[SalesPage] Failed to load clients:', err?.message); return []; }),
         api.getQuotes(companyId).catch(err => { console.warn('[SalesPage] Failed to load quotes:', err?.message); return []; }),
@@ -198,6 +209,7 @@ export default function SalesPage() {
         api.getProposalTemplates(companyId).catch(err => { console.warn('[SalesPage] Failed to load templates:', err?.message); return []; }),
         collaborationApi.getReceivedInvitations(userEmail, userId).catch(err => { console.warn('[SalesPage] Failed to load inbox:', err?.message); return []; }),
         collaborationApi.getSentInvitations(companyId).catch(err => { console.warn('[SalesPage] Failed to load sent:', err?.message); return []; }),
+        collaborationApi.getPartners(companyId, userId || '', userEmail).catch(err => { console.warn('[SalesPage] Failed to load partners:', err?.message); return []; }),
       ]);
 
       const elapsed = Date.now() - startTime;
@@ -226,6 +238,7 @@ export default function SalesPage() {
       setTemplates(templatesData);
       setCollaborationInbox(inboxData);
       setSentCollaborations(sentData);
+      setPartners(partnersData);
 
       // STEP 4: Cache the fresh data for next time
       setCachedData(CACHE_KEYS.SALES_LEADS, leadsData);
@@ -1098,6 +1111,15 @@ export default function SalesPage() {
                 </span>
               </button>
               <button
+                onClick={() => setProposalsSubTab('partners')}
+                className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${proposalsSubTab === 'partners' ? 'border-[#476E66] text-[#476E66]' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
+              >
+                Partners
+                <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${proposalsSubTab === 'partners' ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-neutral-200 text-neutral-400'}`}>
+                  {partners.length}
+                </span>
+              </button>
+              <button
                 onClick={() => setProposalsSubTab('templates')}
                 className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${proposalsSubTab === 'templates' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
               >
@@ -1107,7 +1129,7 @@ export default function SalesPage() {
           </div>
 
           {/* List Headers - Visible for document lists */}
-          {proposalsSubTab !== 'templates' && (
+          {proposalsSubTab !== 'templates' && proposalsSubTab !== 'partners' && (
             <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-neutral-200 text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
               <div className="col-span-4">Proposal</div>
               <div className="col-span-3">Client</div>
@@ -1370,6 +1392,110 @@ export default function SalesPage() {
             </div>
           )}
 
+
+          {/* PARTNERS TAB */}
+          {proposalsSubTab === 'partners' && (
+            <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+              {partners.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="w-8 h-8 text-neutral-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-neutral-900 mb-2">No Trade Partners Yet</h3>
+                  <p className="text-neutral-500 max-w-md mx-auto">
+                    When you collaborate with other companies on proposals, they'll appear here as your trade partners.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-neutral-50 border-b border-neutral-200">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Partner</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Contact</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Projects</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Relationship</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Activity</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {partners.map((partner) => (
+                        <tr key={partner.id} className="hover:bg-neutral-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-[#476E66]/10 rounded-full flex items-center justify-center">
+                                <Building2 className="w-5 h-5 text-[#476E66]" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-neutral-900">{partner.companyName || partner.name || 'Unknown'}</p>
+                                {partner.name && partner.companyName && partner.name !== partner.companyName && (
+                                  <p className="text-sm text-neutral-500">{partner.name}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="space-y-1">
+                              {partner.email && (
+                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                  <Mail className="w-4 h-4 text-neutral-400" />
+                                  <a href={`mailto:${partner.email}`} className="hover:text-[#476E66]">{partner.email}</a>
+                                </div>
+                              )}
+                              {partner.phone && (
+                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                  <Phone className="w-4 h-4 text-neutral-400" />
+                                  <span>{partner.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-full text-sm font-medium">
+                              <FileText className="w-4 h-4" />
+                              {partner.projectCount}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                              partner.relationship === 'mutual' 
+                                ? 'bg-emerald-50 text-emerald-700' 
+                                : partner.relationship === 'invited' 
+                                  ? 'bg-blue-50 text-blue-700' 
+                                  : 'bg-purple-50 text-purple-700'
+                            }`}>
+                              {partner.relationship === 'mutual' && <CheckCircle2 className="w-3.5 h-3.5" />}
+                              {partner.relationship === 'mutual' ? 'Mutual Partner' : partner.relationship === 'invited' ? 'You Invited' : 'Invited You'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-neutral-500">
+                            {partner.lastCollaboration ? new Date(partner.lastCollaboration).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => {
+                                // Pre-fill new proposal with this partner
+                                setShowProposalChoiceModal({ type: 'client' });
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#476E66] hover:bg-[#476E66]/5 rounded-lg transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                              New Proposal
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* TEMPLATES TAB */}
           {proposalsSubTab === 'templates' && (
