@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -45,6 +45,7 @@ function generateQuoteNumber(): string {
 export default function SalesPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile, loading: authLoading, authReady, resumeCount } = useAuth();
   const { isAdmin } = usePermissions();
   const { checkAndProceed } = useFeatureGating();
@@ -115,6 +116,47 @@ export default function SalesPage() {
     setExpandedClients(newExpanded);
     localStorage.setItem('quotesExpandedClients', JSON.stringify([...newExpanded]));
   }, [expandedClients]);
+
+  // Handle URL parameters for deep linking (e.g., from notification clicks)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const subtab = searchParams.get('subtab');
+    const collab = searchParams.get('collab');
+    
+    // Set main tab from URL
+    if (tab === 'proposals') {
+      setActiveTab('proposals');
+    } else if (tab === 'clients') {
+      setActiveTab('clients');
+    } else if (tab === 'leads') {
+      setActiveTab('leads');
+    }
+    
+    // Set proposals subtab from URL
+    if (subtab === 'collaborations') {
+      setProposalsSubTab('collaborations');
+    } else if (subtab === 'direct') {
+      setProposalsSubTab('direct');
+    } else if (subtab === 'signed') {
+      setProposalsSubTab('signed');
+    } else if (subtab === 'partners') {
+      setProposalsSubTab('partners');
+    } else if (subtab === 'templates') {
+      setProposalsSubTab('templates');
+    }
+    
+    // Set collaborations sub-subtab from URL
+    if (collab === 'invited') {
+      setCollaborationsSubTab('invited');
+    } else if (collab === 'my-projects') {
+      setCollaborationsSubTab('my-projects');
+    }
+    
+    // Clear URL params after applying them (keep URL clean)
+    if (tab || subtab || collab) {
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams]);
 
   // Simple data loading - loads when auth is ready, we have a company, or on resume
   useEffect(() => {
@@ -1209,7 +1251,7 @@ export default function SalesPage() {
                                 }`}></span>
                               <span className="text-sm font-medium text-neutral-700 capitalize">{quote.status === 'pending' ? 'Draft' : quote.status}</span>
                             </div>
-                            {quote.last_sent_at && <p className="text-[10px] text-neutral-400 mt-0.5 ml-3.5">Sent {new Date(quote.last_sent_at).toLocaleDateString()}</p>}
+                            {quote.status === 'sent' && <p className="text-[10px] text-neutral-400 mt-0.5 ml-3.5">Sent</p>}
                           </div>
                           <div className="col-span-1 flex justify-end">
                             <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
@@ -1268,32 +1310,53 @@ export default function SalesPage() {
                       <div className="bg-white rounded-xl border border-neutral-100 shadow-sm overflow-hidden divide-y divide-neutral-50">
                         {collabProjects.map(quote => {
                           const quoteCollabs = sentCollaborations.filter(c => c.parent_quote_id === quote.id);
+                          const submittedCollabs = quoteCollabs.filter(c => c.status === 'submitted');
+                          const hasSubmitted = submittedCollabs.length > 0;
                           return (
-                            <div key={quote.id} className="grid grid-cols-12 gap-4 px-4 py-4 items-center hover:bg-neutral-50/80 transition-colors cursor-pointer group" onClick={() => navigate(`/quotes/${quote.id}/document?view=collaboration`)}>
-                              <div className="col-span-4 min-w-0">
-                                <p className="font-semibold text-neutral-900 truncate">{quote.title}</p>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <Users className="w-3 h-3 text-purple-500 flex-shrink-0" />
-                                  <span className="text-xs text-purple-600 font-medium truncate">
-                                    {quoteCollabs.map(c => c.collaborator_company_name || c.collaborator_name || c.collaborator_email?.split('@')[0]).join(', ') || 'No partners'}
-                                  </span>
+                            <div key={quote.id} className="px-4 py-4 hover:bg-neutral-50/80 transition-colors">
+                              <div className="grid grid-cols-12 gap-4 items-center cursor-pointer group" onClick={() => navigate(`/quotes/${quote.id}/document?view=collaboration`)}>
+                                <div className="col-span-4 min-w-0">
+                                  <p className="font-semibold text-neutral-900 truncate">{quote.title}</p>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                    <Users className="w-3 h-3 text-purple-500 flex-shrink-0" />
+                                    <span className="text-xs text-purple-600 font-medium truncate">
+                                      {quoteCollabs.map(c => c.collaborator_company_name || c.collaborator_name || c.collaborator_email?.split('@')[0]).join(', ') || 'No partners'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="col-span-3 min-w-0">
+                                  <p className="text-sm text-neutral-600 truncate">{quote.client?.name || 'No Client'}</p>
+                                </div>
+                                <div className="col-span-2">
+                                  <p className="text-sm font-medium text-neutral-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(quote.total_amount || 0))}</p>
+                                </div>
+                                <div className="col-span-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${hasSubmitted ? 'bg-emerald-500' : quote.status === 'pending_collaborators' ? 'bg-purple-500' : 'bg-neutral-400'}`}></span>
+                                    <span className={`text-sm capitalize ${hasSubmitted ? 'text-emerald-700 font-medium' : 'text-neutral-700'}`}>
+                                      {hasSubmitted ? 'Ready to Merge' : quote.status === 'pending_collaborators' ? 'Waiting' : quote.status}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="col-span-1 flex justify-end">
+                                  <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
                                 </div>
                               </div>
-                              <div className="col-span-3 min-w-0">
-                                <p className="text-sm text-neutral-600 truncate">{quote.client?.name || 'No Client'}</p>
-                              </div>
-                              <div className="col-span-2">
-                                <p className="text-sm font-medium text-neutral-900">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(quote.total_amount || 0))}</p>
-                              </div>
-                              <div className="col-span-2">
-                                <div className="flex items-center gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${quote.status === 'pending_collaborators' ? 'bg-purple-500' : 'bg-neutral-400'}`}></span>
-                                  <span className="text-sm text-neutral-700 capitalize">{quote.status === 'pending_collaborators' ? 'Waiting' : quote.status}</span>
+                              {/* Show Review & Merge buttons for submitted collaborations */}
+                              {hasSubmitted && (
+                                <div className="mt-3 pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
+                                  {submittedCollabs.map(collab => (
+                                    <button
+                                      key={collab.id}
+                                      onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${quote.id}/document?merge_collaboration_id=${collab.id}`); }}
+                                      className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-200 transition flex items-center gap-1.5 font-medium"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      Review & Merge: {collab.collaborator_company_name || collab.collaborator_name || collab.collaborator_email?.split('@')[0]}
+                                    </button>
+                                  ))}
                                 </div>
-                              </div>
-                              <div className="col-span-1 flex justify-end">
-                                <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
-                              </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1309,34 +1372,84 @@ export default function SalesPage() {
                   {collaborationInbox.length === 0 ? (
                     <div className="py-12 text-center text-neutral-400 text-sm">No new invitations</div>
                   ) : (
-                    collaborationInbox.map(collab => (
-                      <div key={collab.id} className="grid grid-cols-12 gap-4 px-4 py-4 items-center hover:bg-neutral-50 transition-colors">
-                        <div className="col-span-4 min-w-0">
-                          <p className="font-semibold text-neutral-900 truncate">{(collab.parent_quote as any)?.title || 'Invitation'}</p>
-                          <p className="text-xs text-neutral-500 mt-0.5">From {collab.owner_profile?.company_name || 'Partner'}</p>
-                        </div>
-                        <div className="col-span-3">
-                          <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-1 rounded-md">{collab.message ? 'Message attached' : 'No message'}</span>
-                        </div>
-                        <div className="col-span-2"></div>
-                        <div className="col-span-2">
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${collab.status === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'
+                    collaborationInbox.map(collab => {
+                      const projectTitle = (collab.parent_quote as any)?.title || 'Invitation';
+                      const canRespond = collab.status === 'accepted';
+                      const handleRowClick = () => {
+                        if (collab.status === 'pending') {
+                          navigate(`/collaborate/${collab.id}`);
+                        } else if (canRespond) {
+                          const title = encodeURIComponent(projectTitle);
+                          navigate(`/quotes/new/document?collaboration_id=${collab.id}&parent_quote_id=${collab.parent_quote_id}&project_title=${title}`);
+                        } else if (collab.status === 'submitted') {
+                          // Navigate to parent quote with merge mode for owner to review and merge
+                          navigate(`/quotes/${collab.parent_quote_id}/document?merge_collaboration_id=${collab.id}`);
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={collab.id}
+                          className={`grid grid-cols-12 gap-4 px-4 py-4 items-center hover:bg-neutral-50 transition-colors ${canRespond || collab.status === 'pending' || collab.status === 'submitted' ? 'cursor-pointer' : ''}`}
+                          onClick={handleRowClick}
+                        >
+                          <div className="col-span-4 min-w-0">
+                            <p className="font-semibold text-neutral-900 truncate">{projectTitle}</p>
+                            <p className="text-xs text-neutral-500 mt-0.5">From {collab.owner_profile?.company_name || 'Partner'}</p>
+                          </div>
+                          <div className="col-span-3">
+                            <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-1 rounded-md">{collab.message ? 'Message attached' : 'No message'}</span>
+                          </div>
+                          <div className="col-span-2"></div>
+                          <div className="col-span-2">
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                              collab.status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                              collab.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :
+                              collab.status === 'submitted' ? 'bg-purple-100 text-purple-700' :
+                              collab.status === 'merged' ? 'bg-indigo-100 text-indigo-700' :
+                              'bg-neutral-100 text-neutral-600'
                             }`}>
-                            {collab.status}
-                          </span>
+                              {collab.status}
+                            </span>
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            {collab.status === 'pending' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/collaborate/${collab.id}`); }}
+                                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition"
+                              >
+                                View
+                              </button>
+                            )}
+                            {collab.status === 'accepted' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const title = encodeURIComponent(projectTitle);
+                                  navigate(`/quotes/new/document?collaboration_id=${collab.id}&parent_quote_id=${collab.parent_quote_id}&project_title=${title}`);
+                                }}
+                                className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded hover:bg-emerald-700 transition"
+                              >
+                                Respond
+                              </button>
+                            )}
+                            {collab.status === 'submitted' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${collab.parent_quote_id}/document?merge_collaboration_id=${collab.id}`); }}
+                                className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded hover:bg-emerald-200 transition flex items-center gap-1"
+                              >
+                                <CheckCircle2 className="w-3 h-3" /> Review & Merge
+                              </button>
+                            )}
+                            {collab.status === 'merged' && (
+                              <span className="text-xs text-indigo-600 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3" /> Merged
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="col-span-1 flex justify-end">
-                          {collab.status === 'pending' && (
-                            <button
-                              onClick={() => navigate(`/collaborate/${collab.id}`)}
-                              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition"
-                            >
-                              View
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}

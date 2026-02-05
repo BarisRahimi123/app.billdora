@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature, Timer, Layout, Link, ArrowRight, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,8 @@ import SaveAsTemplateModal from '../components/SaveAsTemplateModal';
 import TemplatePickerModal from '../components/TemplatePickerModal';
 import { useToast } from '../components/Toast';
 
+// ============================================
+// SIMPLE FIELD HINT STYLES
 interface LineItem {
   id: string;
   description: string;
@@ -153,8 +155,11 @@ export default function QuoteDocumentPage() {
 
   // Debug: Log merge panel visibility conditions
   useEffect(() => {
-    console.log('[MergePanel Debug] isMergeMode:', isMergeMode, 'showMergePanel:', showMergePanel, 'collaboratorLineItems:', collaboratorLineItems.length);
-  }, [isMergeMode, showMergePanel, collaboratorLineItems]);
+    console.log('[MergePanel Debug] isMergeMode:', isMergeMode, 'showMergePanel:', showMergePanel, 'collaboratorLineItems:', collaboratorLineItems.length, 'collaboratorQuote:', collaboratorQuote?.id || 'none', 'mergeCollaboration:', mergeCollaboration?.id || 'none');
+    if (collaboratorLineItems.length > 0) {
+      console.log('[MergePanel Debug] First item:', collaboratorLineItems[0]);
+    }
+  }, [isMergeMode, showMergePanel, collaboratorLineItems, collaboratorQuote, mergeCollaboration]);
 
   const [services, setServices] = useState<Service[]>([]);
   const [showServicesModal, setShowServicesModal] = useState(false);
@@ -360,7 +365,7 @@ export default function QuoteDocumentPage() {
     }
     load();
     return () => { mounted = false; };
-  }, [quoteId, profile?.company_id]);
+  }, [quoteId, profile?.company_id, mergeCollaborationId]);
 
   // Warn before leaving with unsaved changes
   useEffect(() => {
@@ -439,16 +444,84 @@ export default function QuoteDocumentPage() {
         setIsCollaborationResponse(true);
         console.log('[QuoteDocument] Pre-filled project from collaboration:', decodedTitle);
 
-        // Load collaboration record to get share_line_items setting
+        // Load collaboration record to get share_line_items setting AND owner info
         try {
           const { data: collabData } = await (await import('../lib/supabase')).supabase
             .from('proposal_collaborations')
-            .select('share_line_items')
+            .select('share_line_items, owner_user_id, owner_company_id')
             .eq('id', collaborationId)
             .single();
+          
           if (collabData?.share_line_items) {
             setParentSharePricing(true);
             console.log('[QuoteDocument] Owner shared pricing with collaborator');
+          }
+
+          // Fetch owner's company info to pre-fill as the recipient
+          if (collabData?.owner_company_id) {
+            try {
+              // First check if owner is already in collaborator's leads
+              const existingLeadMatch = leadsData?.find(
+                (l: Lead) => l.company === collabData.owner_company_id
+              );
+              
+              if (existingLeadMatch) {
+                // Use existing lead
+                setSelectedLeadId(existingLeadMatch.id);
+                setSelectedLead(existingLeadMatch);
+                setRecipientType('lead');
+                console.log('[QuoteDocument] Owner found as existing lead:', existingLeadMatch.name);
+              } else {
+                // Fetch owner company name from companies table
+                const { data: ownerCompanyData } = await (await import('../lib/supabase')).supabase
+                  .from('companies')
+                  .select('name')
+                  .eq('id', collabData.owner_company_id)
+                  .single();
+
+                // Fetch owner profile
+                const { data: ownerProfile } = await (await import('../lib/supabase')).supabase
+                  .from('profiles')
+                  .select('full_name, email')
+                  .eq('id', collabData.owner_user_id)
+                  .single();
+
+                // Also try to get company settings for additional details
+                let ownerCompanySettings: { company_name?: string; email?: string; phone?: string } | null = null;
+                try {
+                  const { data } = await (await import('../lib/supabase')).supabase
+                    .from('company_settings')
+                    .select('company_name, email, phone')
+                    .eq('company_id', collabData.owner_company_id)
+                    .maybeSingle();
+                  ownerCompanySettings = data;
+                } catch {
+                  // Ignore errors from company_settings
+                }
+
+                const companyName = ownerCompanySettings?.company_name || ownerCompanyData?.name || '';
+                
+                if (companyName || ownerProfile) {
+                  // Create a pseudo-lead to display owner info
+                  // Use company_name property to match what displayClientName expects
+                  const ownerAsLead = {
+                    id: 'owner-' + collabData.owner_company_id,
+                    name: ownerProfile?.full_name || companyName || 'Project Owner',
+                    company_name: companyName,
+                    email: ownerProfile?.email || ownerCompanySettings?.email || '',
+                    company: companyName,
+                    phone: ownerCompanySettings?.phone || '',
+                    status: 'qualified' as const,
+                    created_at: new Date().toISOString()
+                  };
+                  setSelectedLead(ownerAsLead as Lead);
+                  setRecipientType('lead');
+                  console.log('[QuoteDocument] Pre-filled owner as recipient:', ownerAsLead.company_name || ownerAsLead.name);
+                }
+              }
+            } catch (ownerErr) {
+              console.warn('[QuoteDocument] Could not load owner info:', ownerErr);
+            }
           }
         } catch (err) {
           console.warn('[QuoteDocument] Could not load collaboration settings:', err);
@@ -632,6 +705,95 @@ export default function QuoteDocumentPage() {
               setSelectedLead(foundLead);
               setRecipientType('lead');
             }
+          } else {
+            // Check if this is a collaboration response quote (no client/lead set)
+            // If so, load the owner's info as the recipient
+            try {
+              const { data: collabRecord } = await (await import('../lib/supabase')).supabase
+                .from('proposal_collaborations')
+                .select('id, owner_company_id, owner_user_id, parent_quote_id')
+                .eq('response_quote_id', quoteId)
+                .maybeSingle();
+
+              if (collabRecord) {
+                console.log('[QuoteDocument] This is a collaboration response, loading owner info');
+                setIsCollaborationResponse(true);
+
+                // Fetch owner company name
+                const { data: ownerCompanyData } = await (await import('../lib/supabase')).supabase
+                  .from('companies')
+                  .select('name')
+                  .eq('id', collabRecord.owner_company_id)
+                  .single();
+
+                // Fetch owner profile
+                const { data: ownerProfile } = await (await import('../lib/supabase')).supabase
+                  .from('profiles')
+                  .select('full_name, email')
+                  .eq('id', collabRecord.owner_user_id)
+                  .single();
+
+                // Also try to get company settings
+                let ownerCompanySettings: { company_name?: string; email?: string; phone?: string } | null = null;
+                try {
+                  const { data } = await (await import('../lib/supabase')).supabase
+                    .from('company_settings')
+                    .select('company_name, email, phone')
+                    .eq('company_id', collabRecord.owner_company_id)
+                    .maybeSingle();
+                  ownerCompanySettings = data;
+                } catch {
+                  // Ignore
+                }
+
+                const companyName = ownerCompanySettings?.company_name || ownerCompanyData?.name || '';
+                
+                if (companyName || ownerProfile) {
+                  const ownerAsLead = {
+                    id: 'owner-' + collabRecord.owner_company_id,
+                    name: ownerProfile?.full_name || companyName || 'Project Owner',
+                    company_name: companyName,
+                    email: ownerProfile?.email || ownerCompanySettings?.email || '',
+                    company: companyName,
+                    phone: ownerCompanySettings?.phone || '',
+                    status: 'qualified' as const,
+                    created_at: new Date().toISOString()
+                  };
+                  setSelectedLead(ownerAsLead as Lead);
+                  setRecipientType('lead');
+                  console.log('[QuoteDocument] Loaded owner as recipient:', ownerAsLead.company_name || ownerAsLead.name);
+                }
+
+                // Load parent quote line items for reference
+                if (collabRecord.parent_quote_id) {
+                  const { data: parentItems } = await (await import('../lib/supabase')).supabase
+                    .from('quote_line_items')
+                    .select('*')
+                    .eq('quote_id', collabRecord.parent_quote_id)
+                    .order('created_at', { ascending: true });
+
+                  if (parentItems && parentItems.length > 0) {
+                    const mappedParentItems = parentItems.map(item => ({
+                      id: `parent-${item.id}`,
+                      description: item.description,
+                      unitPrice: item.unit_price,
+                      qty: item.quantity,
+                      unit: item.unit || 'each',
+                      taxed: item.taxed,
+                      estimatedDays: item.estimated_days || 1,
+                      startOffset: item.start_offset || 0,
+                      dependsOn: '',
+                      startType: 'parallel' as const,
+                      overlapDays: 0
+                    }));
+                    setParentQuoteLineItems(mappedParentItems);
+                    console.log('[QuoteDocument] Loaded parent quote line items:', mappedParentItems.length);
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('[QuoteDocument] Could not check if collaboration response:', err);
+            }
           }
 
           // Load line items
@@ -747,67 +909,77 @@ export default function QuoteDocumentPage() {
             setShowMergePanel(true);
             setCurrentStep(4); // Auto-navigate to Collaborators tab in merge mode
 
-            // Load the response quote (collaborator's submission)
+            // Load the response quote (collaborator's submission) using edge function to bypass RLS
             if (collabData.response_quote_id) {
-              const responseQuotes = await api.getQuotes(profile.company_id);
-              // The response quote is in the collaborator's company, so we need to fetch it differently
-              const { data: responseQuote } = await (await import('../lib/supabase')).supabase
-                .from('quotes')
-                .select('*')
-                .eq('id', collabData.response_quote_id)
-                .single();
+              try {
+                console.log('[QuoteDocument] Fetching collaboration quote via edge function...');
+                const collabQuoteData = await api.getCollaborationQuote(
+                  collabData.response_quote_id,
+                  mergeCollaborationId
+                );
+                console.log('[QuoteDocument] Collaboration quote data received:', collabQuoteData);
 
-              if (responseQuote) {
-                setCollaboratorQuote(responseQuote);
+                if (collabQuoteData?.quote) {
+                  setCollaboratorQuote(collabQuoteData.quote);
 
-                // Load collaborator's line items
-                const collabLineItems = await api.getQuoteLineItems(collabData.response_quote_id);
-                if (collabLineItems && collabLineItems.length > 0) {
-                  const mappedItems = collabLineItems.map(item => ({
-                    id: `collab-${item.id}`,
-                    description: item.description,
-                    unitPrice: item.unit_price,
-                    qty: item.quantity,
-                    unit: item.unit || 'each',
-                    taxed: item.taxed,
-                    estimatedDays: item.estimated_days || 1,
-                    startOffset: item.start_offset || 0,
-                    dependsOn: (item as any).depends_on || '',
-                    startType: (item as any).start_type || 'parallel',
-                    overlapDays: (item as any).overlap_days || 0
-                  }));
-                  setCollaboratorLineItems(mappedItems);
-                  // Select all collaborator items by default
-                  setSelectedCollabItems(new Set(mappedItems.map(i => i.id)));
+                  // Load collaborator's line items from edge function response
+                  const collabLineItems = collabQuoteData.lineItems || [];
+                  console.log('[QuoteDocument] Collaborator line items count:', collabLineItems.length);
+                  
+                  if (collabLineItems.length > 0) {
+                    const mappedItems = collabLineItems.map((item: any) => ({
+                      id: `collab-${item.id}`,
+                      description: item.description,
+                      unitPrice: item.unit_price,
+                      qty: item.quantity,
+                      unit: item.unit || 'each',
+                      taxed: item.taxed,
+                      estimatedDays: item.estimated_days || 1,
+                      startOffset: item.start_offset || 0,
+                      dependsOn: item.depends_on || '',
+                      startType: item.start_type || 'parallel',
+                      overlapDays: item.overlap_days || 0
+                    }));
+                    console.log('[QuoteDocument] Mapped collaborator items:', mappedItems);
+                    setCollaboratorLineItems(mappedItems);
+                    // Select all collaborator items by default
+                    setSelectedCollabItems(new Set(mappedItems.map((i: any) => i.id)));
+                  } else {
+                    console.warn('[QuoteDocument] No line items found in collaborator response');
+                  }
+
+                  // Load collaborator info from edge function response
+                  const collaboratorCompany = collabQuoteData.collaboratorAsContractor;
+                  setCollaboratorInfo({
+                    name: collabData.collaborator_name || collaboratorCompany?.name || '',
+                    email: collabData.collaborator_email || collaboratorCompany?.email || '',
+                    company: collabData.collaborator_company_name || collaboratorCompany?.name || ''
+                  });
+                  console.log('[QuoteDocument] Collaborator info set:', {
+                    name: collabData.collaborator_name || collaboratorCompany?.name,
+                    company: collabData.collaborator_company_name || collaboratorCompany?.name
+                  });
                 }
-
-                // Load collaborator info
-                const { data: collabProfile } = await (await import('../lib/supabase')).supabase
-                  .from('profiles')
-                  .select('full_name, email, company_id')
-                  .eq('id', collabData.collaborator_user_id || collabData.owner_user_id)
+              } catch (collabFetchError) {
+                console.error('[QuoteDocument] Failed to fetch collaboration quote via edge function:', collabFetchError);
+                
+                // Fallback: try direct fetch (may fail due to RLS)
+                const { data: responseQuote } = await (await import('../lib/supabase')).supabase
+                  .from('quotes')
+                  .select('*')
+                  .eq('id', collabData.response_quote_id)
                   .single();
 
-                if (collabProfile) {
-                  const { data: collabCompany } = await (await import('../lib/supabase')).supabase
-                    .from('companies')
-                    .select('company_name')
-                    .eq('id', collabProfile.company_id)
-                    .single();
-
-                  setCollaboratorInfo({
-                    name: collabData.collaborator_name || collabProfile.full_name || '',
-                    email: collabData.collaborator_email || collabProfile.email || '',
-                    company: collabData.collaborator_company_name || collabCompany?.company_name || ''
-                  });
-                } else {
-                  // Fallback to collaboration record data
-                  setCollaboratorInfo({
-                    name: collabData.collaborator_name || '',
-                    email: collabData.collaborator_email || '',
-                    company: collabData.collaborator_company_name || ''
-                  });
+                if (responseQuote) {
+                  setCollaboratorQuote(responseQuote);
                 }
+                
+                // Set collaborator info from collaboration record
+                setCollaboratorInfo({
+                  name: collabData.collaborator_name || '',
+                  email: collabData.collaborator_email || '',
+                  company: collabData.collaborator_company_name || ''
+                });
               }
             }
             console.log('[QuoteDocument] Merge mode initialized');
@@ -996,15 +1168,17 @@ export default function QuoteDocumentPage() {
 
 
   const handleDownloadPdf = async () => {
-    // FORCE PREVIEW TO OPEN - Critical for DOM capture to work
-    if (!showExportPreview) {
-      console.log('[PDF] Preview not open - opening it now...');
-      setShowExportPreview(true);
-
-      // Wait for preview to render before generating PDF
+    // IMPORTANT: We ONLY capture from Step 5 preview now
+    // The export modal has old UI and should not be used for PDF
+    const isOnStep5 = currentStep === 5;
+    
+    // If NOT on step 5, navigate to step 5 first
+    if (!isOnStep5) {
+      console.log('[PDF] Not on Step 5 - navigating to Step 5 for PDF capture...');
+      setCurrentStep(5);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-
+    
     setGeneratingPdf(true);
     try {
       showToast('Generating PDF...', 'info');
@@ -1018,11 +1192,11 @@ export default function QuoteDocumentPage() {
       // FORCE WAIT for DOM to be ready
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Try to CAPTURE THE ACTUAL DOM HTML from the preview
+      // CAPTURE from Step 5 inline preview ONLY (has .export-page class)
       const exportPages = document.querySelectorAll('.export-page');
       const useRawHtml = exportPages.length > 0;
-
-      console.log(`[PDF] DOM CAPTURE CHECK: Found ${exportPages.length} export pages`);
+      
+      console.log(`[PDF] DOM CAPTURE: Found ${exportPages.length} export pages from Step 5 preview`);
 
       let requestBody;
 
@@ -1039,41 +1213,62 @@ export default function QuoteDocumentPage() {
       // DOM capture mode - preview is open
       console.log('[PDF] Capturing DOM with INLINE COMPUTED STYLES for exact match...');
 
-      // Function to inline all computed styles on an element and its children
-      const inlineComputedStyles = (element: Element) => {
-        if (!(element instanceof HTMLElement)) return;
+      // Key properties that affect layout and appearance
+      const importantProps = [
+        'display', 'position', 'top', 'right', 'bottom', 'left',
+        'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+        'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+        'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+        'border', 'border-width', 'border-style', 'border-color', 'border-radius',
+        'background', 'background-color', 'background-image', 'background-size', 'background-position',
+        'color', 'font-family', 'font-size', 'font-weight', 'font-style',
+        'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
+        'flex', 'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'gap',
+        'grid', 'grid-template-columns', 'grid-template-rows', 'grid-gap',
+        'opacity', 'transform', 'box-shadow', 'z-index', 'overflow'
+      ];
 
-        const computed = window.getComputedStyle(element);
-        let styleString = '';
-
-        // Key properties that affect layout and appearance
-        const importantProps = [
-          'display', 'position', 'top', 'right', 'bottom', 'left',
-          'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-          'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-          'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-          'border', 'border-width', 'border-style', 'border-color', 'border-radius',
-          'background', 'background-color', 'background-image', 'background-size', 'background-position',
-          'color', 'font-family', 'font-size', 'font-weight', 'font-style',
-          'line-height', 'letter-spacing', 'text-align', 'text-transform', 'text-decoration',
-          'flex', 'flex-direction', 'flex-wrap', 'justify-content', 'align-items', 'gap',
-          'grid', 'grid-template-columns', 'grid-template-rows', 'grid-gap',
-          'opacity', 'transform', 'box-shadow', 'z-index', 'overflow'
-        ];
-
+      // Function to inline computed styles ITERATIVELY (no recursion)
+      const inlineComputedStylesIterative = (rootElement: HTMLElement, originalRoot: Element) => {
+        // Get all elements from both clone and original in the same order
+        const cloneElements = rootElement.querySelectorAll('*');
+        const originalElements = originalRoot.querySelectorAll('*');
+        
+        // Process root element first
+        const rootComputed = window.getComputedStyle(originalRoot as HTMLElement);
+        let rootStyleString = '';
         importantProps.forEach(prop => {
-          const value = computed.getPropertyValue(prop);
+          const value = rootComputed.getPropertyValue(prop);
           if (value && value !== 'none' && value !== 'auto' && value !== 'initial' && value !== 'inherit') {
-            styleString += `${prop}:${value} !important;`;
+            rootStyleString += `${prop}:${value} !important;`;
           }
         });
-
-        if (styleString) {
-          element.setAttribute('style', styleString);
+        if (rootStyleString) {
+          rootElement.setAttribute('style', rootStyleString);
         }
-
-        // Process all children recursively
-        Array.from(element.children).forEach(child => inlineComputedStyles(child));
+        
+        // Process all children (limit to first 500 elements for safety)
+        const maxElements = Math.min(cloneElements.length, originalElements.length, 500);
+        for (let i = 0; i < maxElements; i++) {
+          const cloneEl = cloneElements[i];
+          const originalEl = originalElements[i];
+          
+          if (!(cloneEl instanceof HTMLElement) || !(originalEl instanceof HTMLElement)) continue;
+          
+          const computed = window.getComputedStyle(originalEl);
+          let styleString = '';
+          
+          importantProps.forEach(prop => {
+            const value = computed.getPropertyValue(prop);
+            if (value && value !== 'none' && value !== 'auto' && value !== 'initial' && value !== 'inherit') {
+              styleString += `${prop}:${value} !important;`;
+            }
+          });
+          
+          if (styleString) {
+            cloneEl.setAttribute('style', styleString);
+          }
+        }
       };
 
       // Collect all page HTML with inlined styles
@@ -1084,9 +1279,25 @@ export default function QuoteDocumentPage() {
         // Remove interactive/hidden elements
         clone.querySelectorAll('button, input, [contenteditable], .print\\:hidden').forEach(el => el.remove());
 
-        // Inline all computed styles
+        // CRITICAL: Strip out ALL data-* attributes to reduce HTML size
+        // These are debug attributes from React dev tools and can bloat HTML from 50KB to 300KB+
+        console.log(`[PDF] Stripping data-* attributes from page ${idx + 1}...`);
+        const allElements = [clone, ...Array.from(clone.querySelectorAll('*'))];
+        allElements.forEach((el) => {
+          if (!(el instanceof HTMLElement)) return;
+          // Get all attributes
+          const attrs = Array.from(el.attributes);
+          attrs.forEach((attr) => {
+            // Remove data-* attributes (React dev tools, debugging, etc.)
+            if (attr.name.startsWith('data-')) {
+              el.removeAttribute(attr.name);
+            }
+          });
+        });
+
+        // Inline all computed styles ITERATIVELY
         console.log(`[PDF] Inlining computed styles for page ${idx + 1}...`);
-        inlineComputedStyles(clone);
+        inlineComputedStylesIterative(clone, page);
 
         return clone.outerHTML;
       }).join('\n');
@@ -1129,99 +1340,105 @@ export default function QuoteDocumentPage() {
       }
       console.log('='.repeat(80));
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const result = await response.json();
-      console.log('[PDF] Full response:', JSON.stringify(result).substring(0, 500));
-      console.log('[PDF] Response received:', {
-        hasError: !!result.error,
-        hasData: !!result.data,
-        hasPdf: !!result.data?.pdf,
-        pdfType: typeof result.data?.pdf,
-        pdfPreview: result.data?.pdf?.substring(0, 100)
-      });
-
-      if (result.error) {
-        throw new Error(result.error.message || 'PDF generation failed on server');
+      // ========== SIMPLE BROWSER PRINT-TO-PDF (No Browserless) ==========
+      // This opens a new window with the EXACT modern UI and triggers print dialog
+      console.log('[PDF] Opening browser print dialog with modern UI...');
+      
+      const printWindow = window.open('', '_blank', 'width=900,height=700');
+      if (!printWindow) {
+        throw new Error('Could not open print window. Please allow popups.');
       }
-
-      // Handle both response formats
-      const pdfData = result.pdf || result.data?.pdf;
-
-      if (!pdfData) {
-        throw new Error('No PDF data received from server');
+      
+      const printHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${documentTitle || projectName || 'Proposal'}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page { 
+      size: letter; 
+      margin: 0; 
+    }
+    
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      box-sizing: border-box;
+    }
+    
+    body { 
+      margin: 0; 
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f5f5f5;
+    }
+    
+    .export-page {
+      width: 8.5in;
+      min-height: 11in;
+      margin: 20px auto;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      page-break-after: always;
+      overflow: hidden;
+    }
+    
+    .export-page:last-child {
+      page-break-after: auto;
+    }
+    
+    /* Table styles for proper rendering */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    
+    th, td {
+      padding: 12px 8px;
+      vertical-align: top;
+    }
+    
+    @media print {
+      body { background: white; }
+      .export-page { 
+        box-shadow: none; 
+        margin: 0;
       }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="background: #10b981; color: white; padding: 15px 20px; text-align: center; font-weight: 600;">
+    📄 Click PRINT below or press Ctrl+P → Choose "Save as PDF" in destination
+  </div>
+  
+  ${pagesHtml}
+  
+  <div class="no-print" style="text-align: center; padding: 30px;">
+    <button onclick="window.print()" style="background: #10b981; color: white; border: none; padding: 15px 40px; font-size: 16px; font-weight: 600; border-radius: 8px; cursor: pointer;">
+      🖨️ PRINT / SAVE AS PDF
+    </button>
+  </div>
+</body>
+</html>`;
 
-      // Decode base64 PDF and trigger download
-      console.log('[PDF] Decoding base64, length:', pdfData.length, 'first 50 chars:', pdfData.substring(0, 50));
-
-      // Check if it starts with PDF header (base64 encoded "%PDF" = "JVBER")
-      if (!pdfData.startsWith('JVBER')) {
-        console.error('[PDF] Invalid PDF header. Expected JVBER, got:', pdfData.substring(0, 10));
-        throw new Error('Response is not a valid PDF');
-      }
-
-      const byteCharacters = atob(pdfData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-
-      console.log('[PDF] Created blob, size:', blob.size, 'bytes');
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = result.data.filename || `${documentTitle || 'proposal'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      showToast('PDF downloaded successfully!', 'success');
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+      
+      // Auto-trigger print after a short delay to let content render
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 1000);
+      
+      showToast('Print dialog opened! Choose "Save as PDF" to download', 'success');
+      
     } catch (error: any) {
       console.error('PDF generation failed:', error);
-      console.error('Error details:', error.stack);
-
-      // Show detailed error message
-      const errorMsg = error.message || 'Unknown error';
-
-      // Check for common errors
-      let userMessage = `PDF Generation Error: ${errorMsg}`;
-      if (errorMsg.includes('Browserless API key')) {
-        userMessage = 'PDF service is not configured correctly (missing API key). Please contact support or use Print Preview.';
-      } else if (errorMsg.includes('Payload Too Large') || errorMsg.includes('413')) {
-        userMessage = 'The proposal content (likely images) is too large for the PDF generator. Try removing large images or using Print Preview.';
-      }
-
-      // If already in preview modal, offer native print
-      if (showExportPreview) {
-        if (confirm(`${userMessage}\n\nWould you like to print using the browser instead?`)) {
-          window.print();
-        }
-        return;
-      }
-
-      // If in preview step (step 5), show toast and offer preview
-      if (currentStep === 5) {
-        showToast(userMessage, 'error');
-        if (confirm('PDF generation failed. Would you like to open the Print Preview instead?')) {
-          setShowExportPreview(true);
-        }
-      } else {
-        alert(`${userMessage}\n\nOpening print preview as fallback.`);
-        setShowExportPreview(true);
-      }
+      showToast(`Error: ${error.message}`, 'error');
     } finally {
       setGeneratingPdf(false);
     }
@@ -1241,7 +1458,9 @@ export default function QuoteDocumentPage() {
       showToast('Please enter a quote title', 'error');
       return;
     }
-    if (!selectedClientId && !selectedLeadId) {
+    // For collaboration responses, the recipient is the project owner (implicit)
+    // For regular proposals, require a client or lead to be selected
+    if (!isCollaborationResponse && !selectedClientId && !selectedLeadId) {
       showToast('Please select a client or lead', 'error');
       return;
     }
@@ -1319,7 +1538,7 @@ export default function QuoteDocumentPage() {
         try {
           await collaborationApi.submitResponse(collaborationId, savedQuoteId);
           console.log('[QuoteDocument] Collaboration response submitted:', collaborationId, savedQuoteId);
-          showToast('Response submitted to collaborator!', 'success');
+          showToast('Response submitted successfully! The project owner has been notified.', 'success');
 
           // Send notification to the collaboration owner
           try {
@@ -1343,6 +1562,10 @@ export default function QuoteDocumentPage() {
           } catch (notifErr) {
             console.error('[QuoteDocument] Failed to send owner notification:', notifErr);
           }
+
+          // Navigate back to the Invited tab to see the submitted status
+          navigate('/sales?tab=proposals&subtab=collaborations&collab=invited');
+          return; // Exit early after navigation
         } catch (collabErr) {
           console.error('[QuoteDocument] Failed to update collaboration status:', collabErr);
         }
@@ -1600,13 +1823,11 @@ export default function QuoteDocumentPage() {
       if (data.error) throw new Error(data.error);
 
       setSentAccessCode(data.accessCode);
-      const sentTimestamp = new Date().toISOString();
       await api.updateQuote(quote.id, {
-        status: 'sent',
-        last_sent_at: sentTimestamp
+        status: 'sent'
       });
       // Update local state to reflect the sent status immediately
-      setQuote(prev => prev ? { ...prev, status: 'sent', last_sent_at: sentTimestamp } : null);
+      setQuote(prev => prev ? { ...prev, status: 'sent' } : null);
       showToast('Proposal sent successfully!', 'success');
     } catch (error: any) {
       console.error('Failed to send proposal:', error);
@@ -1713,11 +1934,11 @@ export default function QuoteDocumentPage() {
               <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full font-medium">Unsaved Changes</span>
             )}
             {/* Sent Status Badge */}
-            {(quote?.last_sent_at || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
+            {(quote?.status === 'sent' || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
               <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-medium flex items-center gap-1" title={
-                quote?.last_sent_at
-                  ? `Sent on ${new Date(quote.last_sent_at).toLocaleDateString()} at ${new Date(quote.last_sent_at).toLocaleTimeString()}`
-                  : `Submitted on ${new Date(mergeCollaboration?.submitted_at || '').toLocaleDateString()}`
+                isCollaborationResponse && mergeCollaboration?.submitted_at
+                  ? `Submitted on ${new Date(mergeCollaboration.submitted_at).toLocaleDateString()}`
+                  : 'Proposal sent'
               }>
                 <CheckCircle2 className="w-3 h-3" />
                 {isCollaborationResponse ? 'Submitted' : 'Sent'}
@@ -1836,7 +2057,11 @@ export default function QuoteDocumentPage() {
                           <input
                             type="text"
                             value={projectName || documentTitle}
-                            onChange={(e) => { setProjectName(e.target.value); setHasUnsavedChanges(true); }}
+                            onChange={(e) => { 
+                              setProjectName(e.target.value); 
+                              setDocumentTitle(e.target.value); // Keep in sync for database save
+                              setHasUnsavedChanges(true); 
+                            }}
                             placeholder="Project Name"
                             className="text-4xl md:text-5xl font-bold tracking-tight bg-transparent border-b-2 border-white/50 text-center outline-none"
                             autoFocus
@@ -1942,7 +2167,7 @@ export default function QuoteDocumentPage() {
           )}
 
           {/* MERGE PANEL - Shows when reviewing collaborator's response */}
-          {isMergeMode && showMergePanel && collaboratorLineItems.length > 0 && currentStep === 4 && (
+          {isMergeMode && showMergePanel && currentStep === 4 && (
             <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden mb-8 shadow-sm">
               {/* Header */}
               <div className="px-6 py-5 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/30">
@@ -2081,58 +2306,153 @@ export default function QuoteDocumentPage() {
 
                 {/* List Items */}
                 <div className="divide-y divide-neutral-100 max-h-[400px] overflow-y-auto">
-                  {collaboratorLineItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`px-6 py-3 flex items-center hover:bg-neutral-50 cursor-pointer transition-colors group ${selectedCollabItems.has(item.id) ? 'bg-amber-50/10' : ''}`}
-                      onClick={() => {
-                        const newSelected = new Set(selectedCollabItems);
-                        if (newSelected.has(item.id)) newSelected.delete(item.id);
-                        else newSelected.add(item.id);
-                        setSelectedCollabItems(newSelected);
-                      }}
-                    >
-                      <div className="w-10 flex-shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedCollabItems.has(item.id)}
-                          onChange={() => { }}
-                          className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer"
-                        />
+                  {collaboratorLineItems.length === 0 ? (
+                    <div className="px-6 py-8 text-center">
+                      <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-3">
+                        <Package className="w-6 h-6 text-amber-500" />
                       </div>
-                      <div className="flex-1 min-w-0 pr-4">
-                        <p className={`text-sm font-medium truncate ${selectedCollabItems.has(item.id) ? 'text-neutral-900' : 'text-neutral-600'}`}>
-                          {item.description}
-                        </p>
-                        {item.startType !== 'parallel' && (
-                          <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
-                            <Link className="w-3 h-3" /> Depends on previous task
-                          </p>
-                        )}
-                      </div>
-                      <div className="w-24 text-center text-sm text-neutral-500">
-                        {item.qty} × <span className="text-xs text-neutral-400">${item.unitPrice}</span>
-                      </div>
-                      <div className="w-32 text-right">
-                        <p className="text-sm font-semibold text-neutral-900 font-mono">
-                          ${(item.qty * item.unitPrice).toLocaleString()}
-                        </p>
-                      </div>
+                      <p className="text-sm font-medium text-neutral-700 mb-1">No line items from collaborator</p>
+                      <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                        {collaboratorInfo?.company || collaboratorInfo?.name || 'The collaborator'} didn't add any line items to their response.
+                        {collaboratorQuote?.scope_of_work ? ' However, they did provide a scope of work which you can still merge.' : ' They may have only accepted the collaboration without adding their own pricing.'}
+                      </p>
+                      {!collaboratorQuote && (
+                        <button
+                          onClick={async () => {
+                            // Manual retry - refetch collaboration data
+                            console.log('[QuoteDocument] Manual retry - refetching collaboration data');
+                            if (mergeCollaboration?.response_quote_id) {
+                              try {
+                                const collabQuoteData = await api.getCollaborationQuote(
+                                  mergeCollaboration.response_quote_id,
+                                  mergeCollaboration.id
+                                );
+                                console.log('[QuoteDocument] Retry response:', collabQuoteData);
+                                if (collabQuoteData?.lineItems?.length > 0) {
+                                  const mappedItems = collabQuoteData.lineItems.map((item: any) => ({
+                                    id: `collab-${item.id}`,
+                                    description: item.description,
+                                    unitPrice: item.unit_price,
+                                    qty: item.quantity,
+                                    unit: item.unit || 'each',
+                                    taxed: item.taxed,
+                                    estimatedDays: item.estimated_days || 1,
+                                    startOffset: item.start_offset || 0,
+                                    dependsOn: item.depends_on || '',
+                                    startType: item.start_type || 'parallel',
+                                    overlapDays: item.overlap_days || 0
+                                  }));
+                                  setCollaboratorLineItems(mappedItems);
+                                  setSelectedCollabItems(new Set(mappedItems.map((i: any) => i.id)));
+                                  showToast?.(`Loaded ${mappedItems.length} items from collaborator`, 'success');
+                                } else {
+                                  showToast?.('Collaborator has no line items to merge', 'warning');
+                                }
+                                if (collabQuoteData?.quote) {
+                                  setCollaboratorQuote(collabQuoteData.quote);
+                                }
+                              } catch (err) {
+                                console.error('[QuoteDocument] Retry failed:', err);
+                                showToast?.('Failed to load collaborator items: ' + (err as Error).message, 'error');
+                              }
+                            }
+                          }}
+                          className="mt-3 px-4 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+                        >
+                          Retry Loading
+                        </button>
+                      )}
                     </div>
-                  ))}
+                  ) : (
+                    collaboratorLineItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`px-6 py-3 flex items-center hover:bg-neutral-50 cursor-pointer transition-colors group ${selectedCollabItems.has(item.id) ? 'bg-amber-50/10' : ''}`}
+                        onClick={() => {
+                          const newSelected = new Set(selectedCollabItems);
+                          if (newSelected.has(item.id)) newSelected.delete(item.id);
+                          else newSelected.add(item.id);
+                          setSelectedCollabItems(newSelected);
+                        }}
+                      >
+                        <div className="w-10 flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedCollabItems.has(item.id)}
+                            onChange={() => { }}
+                            className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 pr-4">
+                          <p className={`text-sm font-medium truncate ${selectedCollabItems.has(item.id) ? 'text-neutral-900' : 'text-neutral-600'}`}>
+                            {item.description}
+                          </p>
+                          {item.startType !== 'parallel' && (
+                            <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+                              <Link className="w-3 h-3" /> Depends on previous task
+                            </p>
+                          )}
+                        </div>
+                        <div className="w-24 text-center text-sm text-neutral-500">
+                          {item.qty} × <span className="text-xs text-neutral-400">${item.unitPrice}</span>
+                        </div>
+                        <div className="w-32 text-right">
+                          <p className="text-sm font-semibold text-neutral-900 font-mono">
+                            ${(item.qty * item.unitPrice).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
+
+              {/* Collaborator Scope of Work Preview */}
+              {collaboratorQuote?.scope_of_work && (
+                <div className="px-6 py-4 bg-amber-50/50 border-t border-amber-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-amber-900 mb-2">
+                        Collaborator's Scope of Work
+                        {showCollaboratorInfo && (
+                          <span className="ml-2 text-xs font-normal text-amber-600">(will be merged when transparent)</span>
+                        )}
+                      </h4>
+                      <div className="text-sm text-amber-800/80 whitespace-pre-line bg-white/60 rounded-lg p-3 border border-amber-100 max-h-32 overflow-y-auto">
+                        {collaboratorQuote.scope_of_work}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Action Footer */}
               <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 flex items-center justify-between">
                 <div className="text-xs text-neutral-500">
                   <Info className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-neutral-400" />
-                  Merged items will be added to your project scope.
+                  {collaboratorLineItems.length > 0 
+                    ? 'Merged items will be added to your project scope.'
+                    : collaboratorQuote?.scope_of_work 
+                      ? 'Scope of work will be merged into your proposal.'
+                      : 'No items or scope to merge from this collaborator.'}
                 </div>
                 <button
                   onClick={async () => {
                     if (mergingItems) return; // Prevent double-click
                     setMergingItems(true);
+
+                    // Check if there's anything to merge
+                    const hasItemsToMerge = selectedCollabItems.size > 0;
+                    const hasScopeToMerge = showCollaboratorInfo && collaboratorQuote?.scope_of_work;
+                    
+                    if (!hasItemsToMerge && !hasScopeToMerge) {
+                      showToast?.('Nothing to merge - collaborator has no line items or scope of work', 'warning');
+                      setMergingItems(false);
+                      return;
+                    }
 
                     // DUPLICATE CHECK: Verify items haven't been merged already
                     const collaboratorDescriptions = collaboratorLineItems
@@ -2252,7 +2572,14 @@ export default function QuoteDocumentPage() {
 
                       // 5. Show success message with clear next steps
                       const collaboratorName = collaboratorInfo?.company || collaboratorInfo?.name || 'Collaborator';
-                      showToast?.(`✓ ${collaboratorName}'s items merged! Review and send to client.`, 'success');
+                      const itemCount = itemsToAdd.length;
+                      const scopeMerged = showCollaboratorInfo && collaboratorQuote?.scope_of_work;
+                      const message = itemCount > 0 
+                        ? `✓ ${collaboratorName}'s ${itemCount} item${itemCount !== 1 ? 's' : ''} merged! Review and send to client.`
+                        : scopeMerged 
+                          ? `✓ ${collaboratorName}'s scope of work merged! Review and send to client.`
+                          : `✓ Collaboration with ${collaboratorName} marked as complete.`;
+                      showToast?.(message, 'success');
                       setJustMergedCollaborator(collaboratorName); // Track for banner display
 
                       // 6. Navigate to Step 5 (Preview & Send) after everything is complete
@@ -2274,8 +2601,9 @@ export default function QuoteDocumentPage() {
                       }, 500);
                     }
                   }}
-                  disabled={selectedCollabItems.size === 0 || mergingItems}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${selectedCollabItems.size > 0 && !mergingItems
+                  disabled={mergingItems || (selectedCollabItems.size === 0 && !(showCollaboratorInfo && collaboratorQuote?.scope_of_work))}
+                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                    !mergingItems && (selectedCollabItems.size > 0 || (showCollaboratorInfo && collaboratorQuote?.scope_of_work))
                     ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/30'
                     : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                     }`}
@@ -2285,10 +2613,20 @@ export default function QuoteDocumentPage() {
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Merging...
                     </>
-                  ) : (
+                  ) : selectedCollabItems.size > 0 ? (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      Add to Proposal & Preview
+                      Add {selectedCollabItems.size} Item{selectedCollabItems.size !== 1 ? 's' : ''} to Proposal
+                    </>
+                  ) : collaboratorQuote?.scope_of_work ? (
+                    <>
+                      <FileText className="w-4 h-4" />
+                      Merge Scope of Work Only
+                    </>
+                  ) : (
+                    <>
+                      <X className="w-4 h-4" />
+                      Nothing to Merge
                     </>
                   )}
                 </button>
@@ -2336,7 +2674,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Project Header - Canvas Style */}
                 <div className="space-y-6 pb-8 border-b border-neutral-100">
-                  <div>
+                  <div className={`transition-colors duration-300 rounded-lg ${!projectName.trim() && isNewQuote ? 'bg-amber-50/60 -mx-3 px-3 py-2' : ''}`}>
                     <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Project</label>
                     <input
                       type="text"
@@ -2375,59 +2713,59 @@ export default function QuoteDocumentPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex gap-8">
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Client</label>
-                        <div className="relative group">
-                          <select
-                            value={selectedClientId}
-                            onChange={(e) => {
-                              setSelectedClientId(e.target.value);
-                              if (e.target.value) {
-                                const foundClient = clients.find(c => c.id === e.target.value);
-                                if (foundClient) setClient(foundClient);
-                                setSelectedLeadId(''); setSelectedLead(null); setRecipientType('client');
-                              }
-                              setHasUnsavedChanges(true);
-                            }}
-                            disabled={recipientType === 'lead'}
-                            className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
-                          >
-                            <option value="">Select Client</option>
-                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
-                            <ChevronRight className="w-4 h-4 rotate-90" />
+                      <div className={`flex gap-8 transition-colors duration-300 rounded-lg ${!selectedClientId && !selectedLeadId && isNewQuote ? 'bg-amber-50/60 -mx-3 px-3 py-2' : ''}`}>
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Client</label>
+                          <div className="relative group">
+                            <select
+                              value={selectedClientId}
+                              onChange={(e) => {
+                                setSelectedClientId(e.target.value);
+                                if (e.target.value) {
+                                  const foundClient = clients.find(c => c.id === e.target.value);
+                                  if (foundClient) setClient(foundClient);
+                                  setSelectedLeadId(''); setSelectedLead(null); setRecipientType('client');
+                                }
+                                setHasUnsavedChanges(true);
+                              }}
+                              disabled={recipientType === 'lead'}
+                              className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
+                            >
+                              <option value="">Select Client</option>
+                              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                              <ChevronRight className="w-4 h-4 rotate-90" />
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Lead (Optional)</label>
-                        <div className="relative group">
-                          <select
-                            value={selectedLeadId}
-                            onChange={(e) => {
-                              setSelectedLeadId(e.target.value);
-                              if (e.target.value) {
-                                const foundLead = leads.find(l => l.id === e.target.value);
-                                if (foundLead) setSelectedLead(foundLead);
-                                setSelectedClientId(''); setClient(null); setRecipientType('lead');
-                              }
-                              setHasUnsavedChanges(true);
-                            }}
-                            disabled={recipientType === 'client'}
-                            className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
-                          >
-                            <option value="">Select Lead</option>
-                            {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                          </select>
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
-                            <ChevronRight className="w-4 h-4 rotate-90" />
+                        <div className="flex-1">
+                          <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Lead (Optional)</label>
+                          <div className="relative group">
+                            <select
+                              value={selectedLeadId}
+                              onChange={(e) => {
+                                setSelectedLeadId(e.target.value);
+                                if (e.target.value) {
+                                  const foundLead = leads.find(l => l.id === e.target.value);
+                                  if (foundLead) setSelectedLead(foundLead);
+                                  setSelectedClientId(''); setClient(null); setRecipientType('lead');
+                                }
+                                setHasUnsavedChanges(true);
+                              }}
+                              disabled={recipientType === 'client'}
+                              className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
+                            >
+                              <option value="">Select Lead</option>
+                              {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                            </select>
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                              <ChevronRight className="w-4 h-4 rotate-90" />
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
                   )}
                 </div>
 
@@ -2436,7 +2774,7 @@ export default function QuoteDocumentPage() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-neutral-900">Scope & Services</h3>
-                    <div className="flex gap-2">
+                    <div className={`flex gap-2 transition-colors duration-300 rounded-lg ${lineItems.length === 1 && !lineItems[0].description && isNewQuote ? 'bg-amber-50/60 -my-1 px-3 py-1' : ''}`}>
                       <button
                         onClick={addLineItem}
                         className="flex items-center gap-2 text-sm font-medium text-neutral-900 hover:text-neutral-600 transition-colors"
@@ -2512,7 +2850,7 @@ export default function QuoteDocumentPage() {
                           {/* Right: Pricing & Timeline */}
                           <div className="flex flex-row md:flex-col gap-4 md:items-end justify-between md:justify-start md:w-48 pl-10 md:pl-0">
                             {/* Price */}
-                            <div className="text-right">
+                            <div className={`text-right transition-colors duration-300 rounded-lg ${item.unitPrice === 0 && isNewQuote && idx === 0 ? 'bg-amber-50/60 px-2 py-1 -mr-2' : ''}`}>
                               <div className="flex items-center justify-end gap-2">
                                 <input
                                   type="number"
@@ -2534,7 +2872,7 @@ export default function QuoteDocumentPage() {
                             </div>
 
                             {/* Timeline */}
-                            <div className="text-right">
+                            <div className={`text-right transition-colors duration-300 rounded-lg ${item.estimatedDays === 1 && isNewQuote && idx === 0 ? 'bg-amber-50/60 px-2 py-1 -mr-2' : ''}`}>
                               <div className="flex items-center justify-end gap-1">
                                 <Calendar className="w-3 h-3 text-neutral-400" />
                                 <input
@@ -2549,7 +2887,7 @@ export default function QuoteDocumentPage() {
 
                             {/* Scheduling / Dependencies */}
                             {(lineItems.length > 1 || (isCollaborationResponse && parentQuoteLineItems.length > 0)) && (
-                              <div className="text-right mt-1">
+                              <div className={`text-right mt-1 transition-colors duration-300 rounded-lg ${item.startType === 'parallel' && lineItems.length > 1 && idx > 0 && isNewQuote ? 'bg-amber-50/60 px-2 py-1 -mr-2' : ''}`}>
                                 <div className="flex items-center justify-end gap-1">
                                   <Link className="w-3 h-3 text-neutral-400" />
                                   <select
@@ -2607,7 +2945,7 @@ export default function QuoteDocumentPage() {
                                           <option value={`overlap:${dep.id}`}>With {depIdx + 1}. {dep.description.substring(0, 15)}...</option>
                                         </React.Fragment>
                                       ))}
-                                    </optgroup>
+                                  </optgroup>
                                   </select>
                                 </div>
                               </div>
@@ -2636,16 +2974,20 @@ export default function QuoteDocumentPage() {
                   <h3 className="text-lg font-semibold text-neutral-900">Scope of Work</h3>
                   <span className="text-xs font-medium text-neutral-400 uppercase tracking-widest">Deliverables</span>
                 </div>
-                <div className="group relative">
+                <div className="group relative bg-neutral-50/50 rounded-xl border border-neutral-200 p-4 hover:border-neutral-300 focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-200 transition-all">
                   <textarea
                     value={scopeOfWork}
                     onChange={(e) => { setScopeOfWork(e.target.value); setHasUnsavedChanges(true); }}
                     readOnly={isLocked}
-                    className="w-full h-80 py-4 text-base text-neutral-700 bg-transparent border-none outline-none resize-none placeholder:text-neutral-300 focus:ring-0 leading-relaxed"
-                    placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives..."
+                    className="w-full min-h-[320px] text-base text-neutral-700 bg-transparent border-none outline-none resize-y placeholder:text-neutral-400 focus:ring-0 leading-relaxed"
+                    placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives...
+
+Example:
+• Phase 1: Discovery & Planning
+• Phase 2: Design & Development  
+• Phase 3: Testing & Launch
+• Phase 4: Training & Support"
                   />
-                  {/* Focus Indicator */}
-                  <div className="absolute top-0 bottom-0 left-[-20px] w-1 bg-neutral-900 opacity-0 group-focus-within:opacity-100 transition-opacity" />
                 </div>
               </div>
 
@@ -3186,16 +3528,16 @@ export default function QuoteDocumentPage() {
 
                     <div className="flex gap-2">
                       {/* Sent Status Badge */}
-                      {quote?.last_sent_at && (
+                      {quote?.status === 'sent' && (
                         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium border border-emerald-200 mr-2">
                           <Check className="w-3 h-3" />
-                          <span>Sent {new Date(quote.last_sent_at).toLocaleDateString()} {new Date(quote.last_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>Sent</span>
                         </div>
                       )}
 
                       <button
                         onClick={saveChanges}
-                        disabled={saving || (!selectedClientId && !selectedLeadId) || !lineItems.some(i => i.description.trim())}
+                        disabled={saving || (!isCollaborationResponse && !selectedClientId && !selectedLeadId) || !lineItems.some(i => i.description.trim())}
                         className="px-5 py-2.5 rounded-full text-sm font-semibold text-neutral-600 bg-neutral-100 hover:bg-neutral-200 hover:text-neutral-900 transition-all disabled:opacity-50"
                       >
                         {saving ? 'Saving...' : 'Save Draft'}
@@ -3225,10 +3567,10 @@ export default function QuoteDocumentPage() {
                       >
                         {(hasUnsavedChanges || isNewQuote)
                           ? (collaborationId ? 'Submit Response' : 'Save & Send')
-                          : (quote?.status === 'sent' || quote?.last_sent_at)
+                          : quote?.status === 'sent'
                             ? 'Remind Client'
                             : (collaborationId ? 'Submit Response' : 'Send Proposal')}
-                        {(quote?.status === 'sent' || quote?.last_sent_at) && !hasUnsavedChanges && !isNewQuote ? <Bell className="w-4 h-4 ml-0.5" /> : <Send className="w-4 h-4 ml-0.5" />}
+                        {quote?.status === 'sent' && !hasUnsavedChanges && !isNewQuote ? <Bell className="w-4 h-4 ml-0.5" /> : <Send className="w-4 h-4 ml-0.5" />}
                       </button>
                     </div>
                   </div>
@@ -3396,7 +3738,7 @@ export default function QuoteDocumentPage() {
               )}
 
               {/* Send History Banner - Show when proposal has been sent */}
-              {(quote?.last_sent_at || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
+              {(quote?.status === 'sent' || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
                 <div className="mx-auto w-full max-w-[600px] mb-3">
                   <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-3 shadow-sm">
                     <div className="flex items-start gap-3">
@@ -3430,26 +3772,12 @@ export default function QuoteDocumentPage() {
                               Waiting for owner to review and merge
                             </p>
                           </>
-                        ) : quote?.last_sent_at ? (
+                        ) : quote?.status === 'sent' ? (
                           // Owner proposal sent to client
                           <>
                             <h3 className="text-sm font-semibold text-emerald-900">Sent to Client</h3>
                             <p className="text-xs text-emerald-700 mt-1">
-                              Sent to <span className="font-medium">{client?.email || selectedLead?.email || 'client'}</span> on{' '}
-                              <span className="font-medium">
-                                {new Date(quote.last_sent_at).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                              {' at '}
-                              <span className="font-medium">
-                                {new Date(quote.last_sent_at).toLocaleTimeString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit'
-                                })}
-                              </span>
+                              Sent to <span className="font-medium">{client?.email || selectedLead?.email || 'client'}</span>
                             </p>
                             {(quote.view_count ?? 0) > 0 && (
                               <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
@@ -3461,7 +3789,7 @@ export default function QuoteDocumentPage() {
                           </>
                         ) : null}
                       </div>
-                      {quote?.last_sent_at && !isCollaborationResponse && (
+                      {quote?.status === 'sent' && !isCollaborationResponse && (
                         <button
                           onClick={() => setShowSendModal(true)}
                           className="px-3 py-1.5 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors flex items-center gap-1"
@@ -3576,7 +3904,7 @@ export default function QuoteDocumentPage() {
 
                 {/* 1. COVER PAGE - Standalone Visual */}
                 {showSections.cover && (
-                  <div className="w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 transform hover:scale-[1.01] transition-transform duration-500 ease-out origin-top">
+                  <div className="export-page w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 transform hover:scale-[1.01] transition-transform duration-500 ease-out origin-top print:shadow-none">
                     <div className="relative h-[1056px]">
                       <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${coverBgUrl})` }}>
                         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80 mix-blend-multiply" />
@@ -3626,7 +3954,7 @@ export default function QuoteDocumentPage() {
 
                 {/* 2. LETTER SHEET */}
                 {showSections.letter && (
-                  <div className="w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col">
+                  <div className="export-page w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col print:shadow-none">
                     <div className="p-12 md:p-16 flex-1 flex flex-col">
                       <div className="flex justify-between items-start mb-12">
                         <div className="w-16 h-16 bg-neutral-900 text-white flex items-center justify-center text-xl font-bold">
@@ -3752,7 +4080,7 @@ export default function QuoteDocumentPage() {
                     const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
 
                     return (
-                      <div key={`scope-${idx}`} className="w-full max-w-[816px] mx-auto bg-white h-[1056px] overflow-hidden shadow-2xl relative mb-12 last:mb-0 flex flex-col">
+                      <div key={`scope-${idx}`} className="export-page w-full max-w-[816px] mx-auto bg-white h-[1056px] overflow-hidden shadow-2xl relative mb-12 last:mb-0 flex flex-col print:shadow-none">
                         <div className="p-12 md:p-16 flex-1 flex flex-col">
                           {/* Header */}
                           <div className="flex items-center gap-4 mb-8 flex-shrink-0">
@@ -3936,38 +4264,38 @@ export default function QuoteDocumentPage() {
                 })()}
 
                 {/* 4. INVESTMENT SHEET */}
-                <div className="w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col">
-                  <div className="p-12 md:p-16 flex-1 flex flex-col">
-                    <div className="flex items-center gap-4 mb-8">
+                <div className="export-page w-full max-w-[816px] mx-auto bg-white h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col print:shadow-none overflow-hidden">
+                  <div className="p-10 md:p-12 flex-1 flex flex-col overflow-hidden">
+                    <div className="flex items-center gap-4 mb-6">
                       <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Investment Breakdown</h2>
                       <div className="h-px bg-neutral-200 flex-1"></div>
                     </div>
 
-                    <div className="mb-8 flex-1">
-                      <table className="w-full text-sm">
+                    <div className="mb-4 flex-1 overflow-hidden">
+                      <table className="w-full text-sm" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                         <thead>
                           <tr className="border-b-2 border-neutral-900">
-                            <th className="text-left py-4 font-bold text-neutral-900 uppercase tracking-wider">Service / Deliverable</th>
-                            <th className="text-center py-4 font-bold text-neutral-900 uppercase tracking-wider w-24">Qty</th>
-                            <th className="text-right py-4 font-bold text-neutral-900 uppercase tracking-wider w-32">Total</th>
+                            <th className="text-left py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '60%' }}>Service / Deliverable</th>
+                            <th className="text-center py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '15%' }}>Qty</th>
+                            <th className="text-right py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '25%' }}>Total</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
                           {lineItems.filter(i => i.description.trim()).map(item => (
                             <tr key={item.id}>
-                              <td className="py-4 pr-4">
-                                <p className="font-semibold text-neutral-900">{item.description}</p>
-                                <p className="text-neutral-500 text-xs mt-0.5">{formatCurrency(item.unitPrice)} / {item.unit}</p>
+                              <td className="py-2 pr-4" style={{ verticalAlign: 'top' }}>
+                                <p className="font-semibold text-neutral-900 text-sm" style={{ marginBottom: '1px' }}>{item.description}</p>
+                                <p className="text-neutral-500 text-xs" style={{ margin: 0 }}>{formatCurrency(item.unitPrice)} / {item.unit}</p>
                               </td>
-                              <td className="py-4 text-center text-neutral-600">{item.qty}</td>
-                              <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.unitPrice * item.qty)}</td>
+                              <td className="py-2 text-center text-neutral-600 text-sm" style={{ verticalAlign: 'top' }}>{item.qty}</td>
+                              <td className="py-2 text-right font-medium text-neutral-900 text-sm" style={{ verticalAlign: 'top' }}>{formatCurrency(item.unitPrice * item.qty)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
 
-                      <div className="flex justify-end border-t-2 border-neutral-900 pt-6 mt-8">
-                        <div className="w-64 space-y-3">
+                      <div className="flex justify-end border-t-2 border-neutral-900 pt-4 mt-4">
+                        <div className="w-56 space-y-2">
                           <div className="flex justify-between text-neutral-500 text-sm">
                             <span>Subtotal</span>
                             <span>{formatCurrency(subtotal)}</span>
@@ -3976,16 +4304,16 @@ export default function QuoteDocumentPage() {
                             <span>Tax ({taxRate}%)</span>
                             <span>{formatCurrency(taxDue)}</span>
                           </div>
-                          <div className="flex justify-between items-baseline pt-3 border-t border-neutral-200">
-                            <span className="font-bold text-neutral-900">Total Investment</span>
-                            <span className="text-2xl font-bold text-neutral-900">{formatCurrency(total)}</span>
+                          <div className="flex justify-between items-baseline pt-2 border-t border-neutral-200">
+                            <span className="font-bold text-neutral-900 text-sm">Total Investment</span>
+                            <span className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Retainer Inline */}
                       {retainerEnabled && (
-                        <div className="mt-8 bg-neutral-50 border border-neutral-200 p-4 flex items-center justify-between rounded-none border-l-4 border-l-neutral-900">
+                        <div className="mt-4 bg-neutral-50 border border-neutral-200 p-3 flex items-center justify-between rounded-none border-l-4 border-l-neutral-900">
                           <div className="flex items-center gap-3">
                             <div>
                               <p className="font-bold text-neutral-900 text-sm">Retainer Required</p>
@@ -4000,7 +4328,7 @@ export default function QuoteDocumentPage() {
                     </div>
 
                     {/* Footer */}
-                    <div className="mt-auto pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider">
+                    <div className="mt-auto pt-4 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider flex-shrink-0">
                       <div className="flex gap-4">
                         <span>{companyInfo.name}</span>
                         <span>|</span>
@@ -4015,7 +4343,7 @@ export default function QuoteDocumentPage() {
 
                 {/* 5. TERMS & SIGNATURE SHEET */}
                 {showSections.terms && (
-                  <div className="w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col">
+                  <div className="export-page w-full max-w-[816px] mx-auto bg-white min-h-[1056px] shadow-2xl relative mb-12 last:mb-0 flex flex-col print:shadow-none">
                     <div className="p-12 md:p-16 flex-1 flex flex-col">
                       <div className="flex items-center gap-4 mb-8">
                         <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Terms & Acceptance</h2>
@@ -5043,7 +5371,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Cover Page */}
                 {showSections.cover && (
-                  <div className="export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
                     <div className="relative h-full">
                       <div
                         className="absolute inset-0 bg-cover bg-center"
@@ -5096,7 +5424,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Letter Page */}
                 {showSections.letter && (
-                  <div className="export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
                     <div className="p-12 pb-20">
                       {/* Letterhead */}
                       <div className="flex justify-between items-start mb-12">
@@ -5159,7 +5487,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Scope of Work & Timeline Page */}
                 {(showSections.scopeOfWork || showSections.timeline) && (
-                  <div className="export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
                     <div className="p-12 pb-20">
                       <h2 className="text-2xl font-bold text-neutral-900 mb-8">Scope of Work & Project Timeline</h2>
 
@@ -5266,7 +5594,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Quote Details Page */}
                 {showSections.quoteDetails && (
-                  <div className="export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
                     <div className="pb-20">
                       {/* Header */}
                       <div className="p-8 border-b border-neutral-200">
@@ -5420,7 +5748,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Additional Offerings Page */}
                 {showSections.additionalOfferings && services.length > 0 && (
-                  <div className="export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
                     <div className="p-12 pb-32">
                       <h2 className="text-2xl font-bold text-neutral-900 mb-2">Additional Offerings</h2>
                       <p className="text-neutral-600 mb-8">Explore our complete range of professional services:</p>
@@ -5732,10 +6060,10 @@ export default function QuoteDocumentPage() {
                   <>
                     <div className="p-6 border-b">
                       <h2 className="text-xl font-semibold text-neutral-900">
-                        {(quote?.status === 'sent' || quote?.last_sent_at) ? 'Send Reminder' : 'Send Proposal'}
+                        {quote?.status === 'sent' ? 'Send Reminder' : 'Send Proposal'}
                       </h2>
                       <p className="text-sm text-neutral-500 mt-1">
-                        {(quote?.status === 'sent' || quote?.last_sent_at)
+                        {quote?.status === 'sent'
                           ? 'Send a reminder email to your recipient'
                           : `Send this proposal to your ${recipientType || 'recipient'} via email`}
                       </p>
@@ -5797,8 +6125,8 @@ export default function QuoteDocumentPage() {
                           </>
                         ) : (
                           <>
-                            {(quote?.status === 'sent' || quote?.last_sent_at) ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                            {(quote?.status === 'sent' || quote?.last_sent_at) ? 'Send Reminder Now' : 'Send Proposal Now'}
+                            {quote?.status === 'sent' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                            {quote?.status === 'sent' ? 'Send Reminder Now' : 'Send Proposal Now'}
                           </>
                         )}
                       </button>
@@ -5957,6 +6285,7 @@ export default function QuoteDocumentPage() {
           </div>
         )
       }
+
     </div >
   );
 }

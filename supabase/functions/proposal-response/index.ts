@@ -325,12 +325,35 @@ Deno.serve(async (req) => {
 
     // POST: Submit response
     if (req.method === 'POST') {
-      const { tokenId, quoteId, companyId, status, responseType, signatureData, signerName, signerTitle, comments } = await req.json();
+      const { tokenId, quoteId, companyId, status, responseType, signatureData, signerName, signerTitle, comments, auditTrail } = await req.json();
 
-      // Get client IP
-      const ip = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown';
+      // Get client IP from headers
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
+        || req.headers.get('cf-connecting-ip') 
+        || req.headers.get('x-real-ip')
+        || 'unknown';
+      
+      // Get user agent from headers (backup in case client-side didn't capture it)
+      const serverUserAgent = req.headers.get('user-agent') || 'unknown';
 
-      // Save response
+      // Build comprehensive audit trail for legal compliance
+      const completeAuditTrail = {
+        // Client-side captured data
+        ...(auditTrail || {}),
+        // Server-side captured data (more reliable)
+        serverTimestamp: new Date().toISOString(),
+        ipAddress: ip,
+        serverUserAgent: serverUserAgent,
+        // Request metadata
+        requestOrigin: req.headers.get('origin') || 'unknown',
+        requestReferer: req.headers.get('referer') || 'unknown',
+        // Compliance metadata
+        esignCompliance: true,
+        consentVersion: '1.0',
+        signatureMethod: signatureData ? 'click_to_sign_with_drawn' : 'click_to_sign'
+      };
+
+      // Save response with full audit trail
       const responseData = {
         token_id: tokenId,
         quote_id: quoteId,
@@ -342,7 +365,8 @@ Deno.serve(async (req) => {
         signer_title: signerTitle || null,
         comments: comments || null,
         ip_address: ip,
-        responded_at: new Date().toISOString()
+        responded_at: new Date().toISOString(),
+        audit_trail: completeAuditTrail // Store full audit trail as JSONB
       };
 
       const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/proposal_responses`, {

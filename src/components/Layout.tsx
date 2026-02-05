@@ -143,7 +143,7 @@ export default function Layout() {
     // Navigate based on reference type
     if (notif.reference_type === 'quote' && notif.reference_id) {
       if (notif.type?.includes('signed') || notif.type?.includes('approved') || notif.type?.includes('declined') || notif.type?.includes('response_submitted')) {
-        navigate('/sales');
+        navigate('/sales?tab=proposals&subtab=collaborations');
       } else {
         navigate(`/quotes/${notif.reference_id}/document`);
       }
@@ -152,7 +152,8 @@ export default function Layout() {
     } else if (notif.reference_type === 'project' && notif.reference_id) {
       navigate(`/projects/${notif.reference_id}`);
     } else if (notif.reference_type === 'collaboration' && notif.reference_id) {
-      navigate('/sales?tab=inbox');
+      // Navigate to Proposals > Collaborations > Invited tab
+      navigate('/sales?tab=proposals&subtab=collaborations&collab=invited');
     }
   }
 

@@ -43,6 +43,8 @@ export default function LoginPage() {
   const [collaborationId, setCollaborationId] = useState<string | null>(null);
   const [prefillName, setPrefillName] = useState<string | null>(null);
   const [prefillCompany, setPrefillCompany] = useState<string | null>(null);
+  // Track return URL for post-login redirect
+  const [returnTo, setReturnTo] = useState<string | null>(null);
 
   // Track if we've already handled the initial signup cleanup
   const [initialCleanupDone, setInitialCleanupDone] = useState(false);
@@ -56,6 +58,7 @@ export default function LoginPage() {
     const collaboratorParam = searchParams.get('collaborator');
     const collaborationIdParam = searchParams.get('collaboration_id');
     const expiredParam = searchParams.get('expired');
+    const returnToParam = searchParams.get('return_to');
     
     // Show message if session expired
     if (expiredParam === 'true') {
@@ -92,6 +95,9 @@ export default function LoginPage() {
     }
     if (companyParam) {
       setPrefillCompany(companyParam);
+    }
+    if (returnToParam) {
+      setReturnTo(returnToParam);
     }
   }, [searchParams, user, signOut, initialCleanupDone]);
 
@@ -207,7 +213,7 @@ export default function LoginPage() {
                   body: JSON.stringify({ userId: currentUser.id, collaborationId })
                 });
               }
-              navigate('/dashboard');
+              navigate(returnTo || '/dashboard');
               return;
             }
           }
@@ -252,8 +258,8 @@ export default function LoginPage() {
               return;
             }
             
-            // Successfully signed in - go to dashboard
-            navigate('/dashboard');
+            // Successfully signed in - go to return URL or dashboard
+            navigate(returnTo || '/dashboard');
             return;
           } catch (linkErr) {
             console.error('Failed to link collaborator:', linkErr);
@@ -266,7 +272,7 @@ export default function LoginPage() {
           navigate('/check-email');
           return;
         }
-        navigate('/dashboard');
+        navigate(returnTo || '/dashboard');
       } else {
         const { error } = await signIn(email, password);
         if (error) throw error;
@@ -286,7 +292,7 @@ export default function LoginPage() {
             }
           }
         }
-        navigate('/dashboard');
+        navigate(returnTo || '/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred');

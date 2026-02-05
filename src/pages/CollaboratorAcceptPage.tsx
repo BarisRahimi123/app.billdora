@@ -50,40 +50,92 @@ export default function CollaboratorAcceptPage() {
       return;
     }
 
-    try {
-      // Use secure RPC to fetch all details bypassing RLS
-      const { data, error } = await supabase
-        .rpc('get_collaboration_details', { lookup_id: id });
+    console.log('[CollaboratorAccept] Loading invitation:', id);
 
-      if (error || !data || data.length === 0) {
-        console.error('Error loading invitation:', error);
-        setError('Invitation not found or has expired');
-        setLoading(false);
-        return;
-      }
+    // Try multiple methods to load the invitation
+    let inviteLoaded = false;
 
-      const invitation = data[0]; // RPC returns an array
-
-      setInvite({
-        id: invitation.id,
-        collaborator_email: invitation.collaborator_email,
-        collaborator_name: invitation.collaborator_name,
-        collaborator_company_name: invitation.collaborator_company_name,
-        collaborator_user_id: null, // Not needed for display, handled in invite logic
-        message: invitation.message,
-        status: invitation.status,
-        parent_quote_id: invitation.parent_quote_id,
-        owner_company_id: invitation.owner_company_id,
-        owner_user_id: invitation.owner_user_id,
-        project_name: invitation.project_name || 'Untitled Project',
-        inviter_name: invitation.inviter_name || 'Unknown',
-        inviter_company_name: invitation.inviter_company_name || 'Unknown Company'
-      });
-    } catch (err) {
-      console.warn('RPC load failed, attempting direct fetch...', err);
-
-      // Fallback: Try direct fetch (works if user is authenticated and has RLS access, e.g. owner)
+    // Method 1: Try edge function with retry (if deployed)
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries && !inviteLoaded; attempt++) {
       try {
+        console.log(`[CollaboratorAccept] Trying edge function (attempt ${attempt}/${maxRetries})...`);
+        const response = await supabase.functions.invoke('get-collaboration-invite', {
+          body: { invitationId: id }
+        });
+
+        if (!response.error && response.data && !response.data.error) {
+          const invitation = response.data;
+          console.log('[CollaboratorAccept] Edge function success:', invitation);
+          setInvite({
+            id: invitation.id,
+            collaborator_email: invitation.collaborator_email,
+            collaborator_name: invitation.collaborator_name || '',
+            collaborator_company_name: invitation.collaborator_company_name || '',
+            collaborator_user_id: invitation.collaborator_user_id,
+            message: invitation.message || '',
+            status: invitation.status,
+            parent_quote_id: invitation.parent_quote_id,
+            owner_company_id: invitation.owner_company_id,
+            owner_user_id: invitation.owner_user_id,
+            project_name: invitation.project_name || 'Untitled Project',
+            inviter_name: invitation.inviter_name || 'Unknown',
+            inviter_company_name: invitation.inviter_company_name || 'Unknown Company'
+          });
+          inviteLoaded = true;
+        } else {
+          console.log('[CollaboratorAccept] Edge function failed:', response.error || response.data?.error);
+          // Wait before retry (exponential backoff)
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 500));
+          }
+        }
+      } catch (err) {
+        console.log(`[CollaboratorAccept] Edge function attempt ${attempt} error:`, err);
+        // Wait before retry
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 500));
+        }
+      }
+    }
+
+    // Method 2: Try RPC function (if exists in database)
+    if (!inviteLoaded) {
+      try {
+        console.log('[CollaboratorAccept] Trying RPC function...');
+        const { data, error } = await supabase.rpc('get_collaboration_details', { lookup_id: id });
+        
+        if (!error && data && data.length > 0) {
+          const invitation = data[0];
+          console.log('[CollaboratorAccept] RPC success:', invitation);
+          setInvite({
+            id: invitation.id,
+            collaborator_email: invitation.collaborator_email,
+            collaborator_name: invitation.collaborator_name,
+            collaborator_company_name: invitation.collaborator_company_name,
+            collaborator_user_id: null,
+            message: invitation.message,
+            status: invitation.status,
+            parent_quote_id: invitation.parent_quote_id,
+            owner_company_id: invitation.owner_company_id,
+            owner_user_id: invitation.owner_user_id,
+            project_name: invitation.project_name || 'Untitled Project',
+            inviter_name: invitation.inviter_name || 'Unknown',
+            inviter_company_name: invitation.inviter_company_name || 'Unknown Company'
+          });
+          inviteLoaded = true;
+        } else {
+          console.log('[CollaboratorAccept] RPC failed:', error);
+        }
+      } catch (err) {
+        console.log('[CollaboratorAccept] RPC not available:', err);
+      }
+    }
+
+    // Method 3: Try direct fetch (works if user is authenticated)
+    if (!inviteLoaded) {
+      try {
+        console.log('[CollaboratorAccept] Trying direct fetch...');
         const { data: directData, error: directError } = await supabase
           .from('proposal_collaborations')
           .select(`
@@ -95,33 +147,39 @@ export default function CollaboratorAcceptPage() {
           .eq('id', id)
           .single();
 
-        if (directError || !directData) {
-          throw directError || new Error('Direct fetch failed');
+        if (!directError && directData) {
+          console.log('[CollaboratorAccept] Direct fetch success:', directData);
+          setInvite({
+            id: directData.id,
+            collaborator_email: directData.collaborator_email,
+            collaborator_name: directData.collaborator_name || '',
+            collaborator_company_name: directData.collaborator_company_name || '',
+            collaborator_user_id: directData.collaborator_user_id,
+            message: directData.message || '',
+            status: directData.status,
+            parent_quote_id: directData.parent_quote_id,
+            owner_company_id: directData.owner_company_id,
+            owner_user_id: directData.owner_user_id,
+            project_name: (directData.parent_quote as any)?.title || 'Untitled Project',
+            inviter_name: (directData.owner_profile as any)?.full_name || 'Unknown',
+            inviter_company_name: (directData.owner_company as any)?.name || 'Unknown Company'
+          });
+          inviteLoaded = true;
+        } else {
+          console.log('[CollaboratorAccept] Direct fetch failed:', directError);
         }
-
-        // Map direct data to interface
-        setInvite({
-          id: directData.id,
-          collaborator_email: directData.collaborator_email,
-          collaborator_name: directData.collaborator_name || '',
-          collaborator_company_name: directData.collaborator_company_name || '',
-          collaborator_user_id: directData.collaborator_user_id,
-          message: directData.message || '',
-          status: directData.status,
-          parent_quote_id: directData.parent_quote_id,
-          owner_company_id: directData.owner_company_id,
-          owner_user_id: directData.owner_user_id,
-          project_name: (directData.parent_quote as any)?.title || 'Untitled Project',
-          inviter_name: (directData.owner_profile as any)?.full_name || 'Unknown',
-          inviter_company_name: (directData.owner_company as any)?.name || 'Unknown Company'
-        });
-      } catch (fallbackErr) {
-        console.error('Error loading invitation details (fallback):', fallbackErr);
-        setError('Invitation not found or has expired');
+      } catch (err) {
+        console.log('[CollaboratorAccept] Direct fetch error:', err);
       }
-    } finally {
-      setLoading(false);
     }
+
+    // If nothing worked, show error
+    if (!inviteLoaded) {
+      console.error('[CollaboratorAccept] All methods failed for invitation:', id);
+      setError('Unable to load invitation. This may be because you need to log in first, or the invitation link is invalid.');
+    }
+
+    setLoading(false);
   }
 
   async function handleAccept() {
@@ -187,12 +245,60 @@ export default function CollaboratorAcceptPage() {
   }
 
   if (error) {
+    // Check if user is not logged in - offer to redirect to login
+    const isAuthError = error.includes('log in') || error.includes('Unable to load');
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#f8faf9] to-[#e8f0ed] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-neutral-900 mb-2">Oops!</h1>
-          <p className="text-neutral-600">{error}</p>
+          <p className="text-neutral-600 mb-4">{error}</p>
+          
+          {/* Always show retry button */}
+          <button
+            onClick={() => {
+              setError('');
+              setLoading(true);
+              loadInvitation();
+            }}
+            className="mb-4 px-6 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3a5a54] transition-colors"
+          >
+            Try Again
+          </button>
+          
+          {isAuthError && id && (
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-sm text-neutral-500">
+                If you have an account, please log in to view this invitation.
+              </p>
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    collaborator: 'true',
+                    collaboration_id: id,
+                    return_to: `/collaborate/${id}`
+                  });
+                  navigate(`/login?${params.toString()}`);
+                }}
+                className="px-6 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors"
+              >
+                Log In to View
+              </button>
+              <p className="text-xs text-neutral-400">
+                New user? Click "Accept & Continue" after logging in to create your account.
+              </p>
+            </div>
+          )}
+          
+          {!isAuthError && (
+            <button
+              onClick={() => navigate('/login')}
+              className="mt-4 px-6 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors"
+            >
+              Go to Login
+            </button>
+          )}
         </div>
       </div>
     );

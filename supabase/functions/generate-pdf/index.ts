@@ -1,5 +1,7 @@
 // Self-contained generate-pdf function with Browserless integration
+// Version 3.1 - Binary PDF response (force fresh deployment)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { encodeBase64 } from "https://deno.land/std@0.208.0/encoding/base64.ts";
 
 const BROWSERLESS_API_KEY = Deno.env.get('BROWSERLESS_API_KEY');
 
@@ -86,8 +88,9 @@ async function generatePdfWithBrowserless(htmlContent: string): Promise<Uint8Arr
   const buffer = await response.arrayBuffer();
   const uint8Array = new Uint8Array(buffer);
 
-  // Verify PDF validity
-  const header = String.fromCharCode(...uint8Array.slice(0, 4));
+  // Verify PDF validity (avoid spread operator)
+  const headerBytes = uint8Array.slice(0, 4);
+  const header = String.fromCharCode(headerBytes[0], headerBytes[1], headerBytes[2], headerBytes[3]);
   if (header !== '%PDF') {
     throw new Error('Response is not a valid PDF');
   }
@@ -185,17 +188,23 @@ Deno.serve(async (req) => {
     }
 
     if (returnType === 'pdf') {
+      console.log('[generate-pdf] Step 1: Starting PDF generation with Browserless...');
       const pdfBytes = await generatePdfWithBrowserless(html);
-      const base64Pdf = btoa(String.fromCharCode(...pdfBytes));
+      
+      console.log('[generate-pdf] Step 2: PDF generated, size:', pdfBytes.length, 'bytes');
+      console.log('[generate-pdf] Step 3: Returning PDF as binary response...');
 
+      // Return PDF directly as binary data (no base64 encoding needed!)
       return new Response(
-        JSON.stringify({
-          success: true,
-          pdf: base64Pdf,
-          size: pdfBytes.length
-        }),
+        pdfBytes,
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          status: 200,
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="proposal.pdf"',
+            'Content-Length': pdfBytes.length.toString()
+          }
         }
       );
     } else {
@@ -206,13 +215,17 @@ Deno.serve(async (req) => {
     }
 
   } catch (error: any) {
-    console.error('[generate-pdf] Error:', error);
+    console.error('[generate-pdf] Error:', error?.message || error);
+    // Safely serialize error without circular references
+    const errorMessage = typeof error === 'string' ? error : (error?.message || 'Internal server error');
+    const errorStack = typeof error?.stack === 'string' ? error.stack.substring(0, 500) : undefined;
+    
     return new Response(
       JSON.stringify({
         error: {
           code: 'INTERNAL_ERROR',
-          message: error.message || 'Internal server error',
-          details: error.stack
+          message: errorMessage,
+          details: errorStack
         }
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
