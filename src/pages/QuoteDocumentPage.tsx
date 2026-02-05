@@ -608,6 +608,7 @@ export default function QuoteDocumentPage() {
               setCoverBgUrl(foundQuote.cover_background_url || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80');
               setVolumeNumber(foundQuote.cover_volume_number || 'Volume I');
               setScopeOfWork(foundQuote.scope_of_work || '');
+              setLetterContent(foundQuote.letter_content || '');
               setCurrentStep(5); // Go to preview for signing
 
               // Load line items from edge function response
@@ -686,6 +687,7 @@ export default function QuoteDocumentPage() {
           setCoverBgUrl(foundQuote.cover_background_url || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80');
           setVolumeNumber(foundQuote.cover_volume_number || 'Volume I');
           setScopeOfWork(foundQuote.scope_of_work || '');
+          setLetterContent(foundQuote.letter_content || '');
 
           // Load retainer settings
           setRetainerEnabled(foundQuote.retainer_enabled || false);
@@ -1483,6 +1485,7 @@ export default function QuoteDocumentPage() {
           cover_background_url: coverBgUrl,
           cover_volume_number: volumeNumber,
           scope_of_work: scopeOfWork || undefined,
+          letter_content: letterContent || undefined,
           status: 'draft',
           retainer_enabled: retainerEnabled,
           retainer_type: retainerType,
@@ -1503,6 +1506,7 @@ export default function QuoteDocumentPage() {
           cover_background_url: coverBgUrl,
           cover_volume_number: volumeNumber,
           scope_of_work: scopeOfWork || undefined,
+          letter_content: letterContent || undefined,
           retainer_enabled: retainerEnabled,
           retainer_type: retainerType,
           retainer_percentage: retainerType === 'percentage' ? retainerPercentage : undefined,
@@ -1608,6 +1612,7 @@ export default function QuoteDocumentPage() {
           cover_background_url: coverBgUrl,
           cover_volume_number: volumeNumber,
           scope_of_work: scopeOfWork || undefined,
+          letter_content: letterContent || undefined,
           status: 'pending_collaborators',
           collaborators_invited: pendingCollaborators.length,
           collaborators_responded: 0,
@@ -1630,6 +1635,7 @@ export default function QuoteDocumentPage() {
           cover_background_url: coverBgUrl,
           cover_volume_number: volumeNumber,
           scope_of_work: scopeOfWork || undefined,
+          letter_content: letterContent || undefined,
           status: 'pending_collaborators',
           collaborators_invited: pendingCollaborators.length,
           collaborators_responded: 0,
