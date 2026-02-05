@@ -242,6 +242,7 @@ export interface Quote {
   cover_background_url?: string;
   cover_volume_number?: string;
   scope_of_work?: string;
+  letter_content?: string;
   created_at?: string;
   view_count?: number;
   last_viewed_at?: string;
