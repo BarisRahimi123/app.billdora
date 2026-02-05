@@ -1086,7 +1086,7 @@ export const api = {
         return { success: false, error: 'At least 2 invoices are required for consolidation' };
       }
 
-      // Fetch all invoices to consolidate
+      // Fetch all invoices to consolidate (fresh data to avoid race conditions)
       const { data: invoices, error: fetchError } = await supabase
         .from('invoices')
         .select('*, client:clients(*), project:projects(*)')
@@ -1103,12 +1103,25 @@ export const api = {
         return { success: false, error: 'All invoices must be from the same client' };
       }
 
-      // Validate no invoices are already consolidated or paid
-      const invalidInvoices = invoices.filter(inv => 
-        inv.status === 'paid' || inv.consolidated_into
-      );
-      if (invalidInvoices.length > 0) {
-        return { success: false, error: 'Cannot consolidate paid or already consolidated invoices' };
+      // Validate only draft invoices can be consolidated (not sent, paid, or consolidated)
+      const nonDraftInvoices = invoices.filter(inv => inv.status !== 'draft');
+      if (nonDraftInvoices.length > 0) {
+        const statuses = [...new Set(nonDraftInvoices.map(inv => inv.status))].join(', ');
+        return { success: false, error: `Only draft invoices can be consolidated. Found invoices with status: ${statuses}` };
+      }
+
+      // Check if any invoice is already consolidated into another invoice
+      const alreadyConsolidated = invoices.filter(inv => inv.consolidated_into);
+      if (alreadyConsolidated.length > 0) {
+        const numbers = alreadyConsolidated.map(inv => inv.invoice_number).join(', ');
+        return { success: false, error: `These invoices are already consolidated: ${numbers}` };
+      }
+
+      // Prevent consolidating invoices that are themselves consolidated invoices (have consolidated_from)
+      const areConsolidatedInvoices = invoices.filter(inv => inv.consolidated_from && inv.consolidated_from.length > 0);
+      if (areConsolidatedInvoices.length > 0) {
+        const numbers = areConsolidatedInvoices.map(inv => inv.invoice_number).join(', ');
+        return { success: false, error: `Cannot re-consolidate consolidated invoices: ${numbers}. Please select original invoices only.` };
       }
 
       // Calculate totals
@@ -1148,17 +1161,17 @@ export const api = {
 
       // Copy line items to consolidated invoice with project context
       if (allLineItems && allLineItems.length > 0) {
-        const newLineItems = allLineItems.map(item => {
+        const newLineItems = allLineItems.map((item, index) => {
           const originalInvoice = invoices.find(inv => inv.id === item.invoice_id);
-          const projectName = originalInvoice?.project?.name || 'General';
+          const projectName = originalInvoice?.project?.name || originalInvoice?.invoice_number || 'General';
           return {
             invoice_id: consolidatedInvoice.id,
-            description: `[${projectName}] ${item.description}`,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            amount: item.amount,
-            taxable: item.taxable,
-            sort_order: item.sort_order
+            description: `[${projectName}] ${item.description || 'Line item'}`,
+            quantity: item.quantity || 1,
+            unit_price: item.unit_price || 0,
+            amount: item.amount || 0,
+            sort_order: item.sort_order || index,
+            unit: item.unit || null
           };
         });
 

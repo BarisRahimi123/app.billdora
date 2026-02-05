@@ -101,8 +101,9 @@ export default function InvoicingPage() {
   }, [selectedInvoices, showToast]);
 
   const [consolidating, setConsolidating] = useState(false);
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false);
 
-  // Check if selected invoices can be consolidated (same client, not paid/consolidated)
+  // Check if selected invoices can be consolidated (same client, ONLY draft invoices, not already consolidated)
   const canConsolidate = useMemo(() => {
     if (selectedInvoices.size < 2) return { allowed: false, reason: 'Select at least 2 invoices' };
     
@@ -112,24 +113,44 @@ export default function InvoicingPage() {
     const clientIds = [...new Set(selected.map(inv => inv.client_id))];
     if (clientIds.length > 1) return { allowed: false, reason: 'Invoices must be from the same client' };
     
-    // Check none are paid or already consolidated
-    const invalidInvoices = selected.filter(inv => 
-      inv.status === 'paid' || inv.status === 'consolidated' || inv.consolidated_into
-    );
-    if (invalidInvoices.length > 0) return { allowed: false, reason: 'Cannot consolidate paid or already consolidated invoices' };
+    // Check all are draft status (not sent, paid, or consolidated)
+    const nonDraftInvoices = selected.filter(inv => inv.status !== 'draft');
+    if (nonDraftInvoices.length > 0) {
+      return { allowed: false, reason: 'Only draft invoices can be consolidated' };
+    }
+    
+    // Check none are already consolidated into another invoice
+    const alreadyConsolidated = selected.filter(inv => inv.consolidated_into);
+    if (alreadyConsolidated.length > 0) {
+      return { allowed: false, reason: 'Some invoices are already consolidated into another invoice' };
+    }
+    
+    // Prevent re-consolidating consolidated invoices (invoices that have consolidated_from)
+    const areConsolidatedInvoices = selected.filter(inv => inv.consolidated_from && inv.consolidated_from.length > 0);
+    if (areConsolidatedInvoices.length > 0) {
+      return { allowed: false, reason: 'Cannot re-consolidate consolidated invoices. Select original invoices only.' };
+    }
     
     return { allowed: true, reason: '' };
   }, [selectedInvoices, invoices]);
 
-  const handleConsolidate = useCallback(async () => {
+  // Get consolidation details for the modal
+  const consolidationDetails = useMemo(() => {
+    const selected = invoices.filter(inv => selectedInvoices.has(inv.id));
+    const clientName = selected[0]?.client?.name || 'Unknown Client';
+    const totalAmount = selected.reduce((sum, inv) => sum + (inv.total || 0), 0);
+    return { selected, clientName, totalAmount };
+  }, [selectedInvoices, invoices]);
+
+  const handleConsolidateClick = useCallback(() => {
+    if (!canConsolidate.allowed) return;
+    setShowConsolidateModal(true);
+  }, [canConsolidate.allowed]);
+
+  const handleConsolidateConfirm = useCallback(async () => {
     if (!canConsolidate.allowed || !profile?.company_id) return;
     
-    const selectedList = invoices.filter(inv => selectedInvoices.has(inv.id));
-    const clientName = selectedList[0]?.client?.name || 'this client';
-    const totalAmount = selectedList.reduce((sum, inv) => sum + (inv.total || 0), 0);
-    
-    if (!confirm(`Consolidate ${selectedInvoices.size} invoices for ${clientName} into one invoice totaling ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalAmount)}?`)) return;
-    
+    setShowConsolidateModal(false);
     setConsolidating(true);
     try {
       const result = await api.consolidateInvoices(Array.from(selectedInvoices), profile.company_id);
@@ -150,7 +171,7 @@ export default function InvoicingPage() {
       showToast('Failed to consolidate invoices', 'error');
     }
     setConsolidating(false);
-  }, [selectedInvoices, canConsolidate, invoices, profile?.company_id, showToast]);
+  }, [selectedInvoices, canConsolidate, profile?.company_id, showToast]);
 
   // Check for navigation state to open a specific invoice
   useEffect(() => {
@@ -814,7 +835,7 @@ export default function InvoicingPage() {
                     <div className="flex items-center gap-1">
                       {selectedInvoices.size >= 2 && (
                         <button
-                          onClick={handleConsolidate}
+                          onClick={handleConsolidateClick}
                           disabled={consolidating || !canConsolidate.allowed}
                           className={`p-1 rounded ${canConsolidate.allowed ? 'text-[#476E66] hover:bg-[#476E66]/10' : 'text-neutral-300 cursor-not-allowed'}`}
                           title={canConsolidate.allowed ? `Consolidate ${selectedInvoices.size} invoices` : canConsolidate.reason}
@@ -977,39 +998,73 @@ export default function InvoicingPage() {
               const clientTotal = clientInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
               return (
                 <div key={clientName} className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
-                  <button
-                    onClick={() => toggleClientExpanded(clientName)}
-                    className="w-full flex items-center justify-between px-6 py-4 bg-neutral-50 hover:bg-neutral-100 transition-colors"
-                  >
+                  <div className="w-full flex items-center justify-between px-6 py-4 bg-neutral-50 hover:bg-neutral-100 transition-colors">
                     <div className="flex items-center gap-3">
-                      {expandedClients.has(clientName) ? <ChevronDown className="w-5 h-5 text-neutral-500" /> : <ChevronRight className="w-5 h-5 text-neutral-500" />}
-                      <span className="font-semibold text-neutral-900">{clientName}</span>
-                      <span className="text-sm text-neutral-500">({clientInvoices.length} invoice{clientInvoices.length !== 1 ? 's' : ''})</span>
+                      {expandedClients.has(clientName) && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={clientInvoices.filter(inv => inv.status === 'draft').every(inv => selectedInvoices.has(inv.id)) && clientInvoices.filter(inv => inv.status === 'draft').length > 0}
+                            onChange={() => {
+                              const draftInvoices = clientInvoices.filter(inv => inv.status === 'draft');
+                              const allSelected = draftInvoices.every(inv => selectedInvoices.has(inv.id));
+                              const newSelected = new Set(selectedInvoices);
+                              if (allSelected) {
+                                draftInvoices.forEach(inv => newSelected.delete(inv.id));
+                              } else {
+                                draftInvoices.forEach(inv => newSelected.add(inv.id));
+                              }
+                              setSelectedInvoices(newSelected);
+                            }}
+                            className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66] cursor-pointer"
+                            title="Select all draft invoices for this client"
+                          />
+                        </div>
+                      )}
+                      <button onClick={() => toggleClientExpanded(clientName)} className="flex items-center gap-3">
+                        {expandedClients.has(clientName) ? <ChevronDown className="w-5 h-5 text-neutral-500" /> : <ChevronRight className="w-5 h-5 text-neutral-500" />}
+                        <span className="font-semibold text-neutral-900">{clientName}</span>
+                        <span className="text-sm text-neutral-500">({clientInvoices.length} invoice{clientInvoices.length !== 1 ? 's' : ''})</span>
+                      </button>
                     </div>
                     <span className="font-semibold text-neutral-900">{formatCurrency(clientTotal)}</span>
-                  </button>
+                  </div>
                   {expandedClients.has(clientName) && (
                     <div className="divide-y divide-neutral-100">
                       {clientInvoices.map(invoice => (
                         <div
                           key={invoice.id}
-                          onClick={() => setViewingInvoice(invoice)}
-                          className="flex items-center gap-4 px-6 py-4 hover:bg-neutral-50 cursor-pointer"
+                          className={`flex items-center gap-4 px-6 py-4 hover:bg-neutral-50 cursor-pointer ${selectedInvoices.has(invoice.id) ? 'bg-[#476E66]/5' : ''}`}
                         >
-                          <div className="flex-1">
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedInvoices.has(invoice.id)}
+                              onChange={() => toggleInvoiceSelection(invoice.id)}
+                              className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66] cursor-pointer"
+                            />
+                          </div>
+                          <div className="flex-1" onClick={() => setViewingInvoice(invoice)}>
                             <p className="font-medium text-neutral-900">{invoice.invoice_number}</p>
                             <p className="text-sm text-neutral-500">
                               {invoice.project?.name || 'No project'} • {new Date(invoice.created_at || '').toLocaleDateString()}
                             </p>
                           </div>
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
-                            {invoice.status || 'draft'}
-                          </span>
-                          <span className="font-medium text-neutral-900 w-28 text-right">{formatCurrency(invoice.total)}</span>
-                          <span className="text-sm text-neutral-500 w-24">
+                          <div className="flex items-center gap-2" onClick={() => setViewingInvoice(invoice)}>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                              {invoice.status || 'draft'}
+                            </span>
+                            {invoice.consolidated_from && invoice.consolidated_from.length > 0 && (
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded text-xs" title={`Combined from ${invoice.consolidated_from.length} invoices`}>
+                                <Layers className="w-3 h-3" /> {invoice.consolidated_from.length}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-medium text-neutral-900 w-28 text-right" onClick={() => setViewingInvoice(invoice)}>{formatCurrency(invoice.total)}</span>
+                          <span className="text-sm text-neutral-500 w-24" onClick={() => setViewingInvoice(invoice)}>
                             {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : '-'}
                           </span>
-                          <ChevronRight className="w-4 h-4 text-neutral-400" />
+                          <ChevronRight className="w-4 h-4 text-neutral-400" onClick={() => setViewingInvoice(invoice)} />
                         </div>
                       ))}
                     </div>
@@ -1031,7 +1086,7 @@ export default function InvoicingPage() {
           <div className="w-px h-5 bg-neutral-700" />
           {selectedInvoices.size >= 2 && (
             <button
-              onClick={handleConsolidate}
+              onClick={handleConsolidateClick}
               disabled={consolidating || !canConsolidate.allowed}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 canConsolidate.allowed 
@@ -1066,6 +1121,73 @@ export default function InvoicingPage() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Consolidate Confirmation Modal */}
+      {showConsolidateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#476E66]/10 flex items-center justify-center">
+                <Layers className="w-5 h-5 text-[#476E66]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-neutral-900">Consolidate Invoices</h3>
+                <p className="text-sm text-neutral-500">Combine {selectedInvoices.size} invoices into one</p>
+              </div>
+            </div>
+            
+            <div className="bg-neutral-50 rounded-xl p-4 mb-4">
+              <div className="text-sm text-neutral-600 mb-2">Client</div>
+              <div className="font-medium text-neutral-900 mb-3">{consolidationDetails.clientName}</div>
+              
+              <div className="text-sm text-neutral-600 mb-2">Invoices to consolidate</div>
+              <div className="space-y-1 max-h-32 overflow-y-auto mb-3">
+                {consolidationDetails.selected.map(inv => (
+                  <div key={inv.id} className="flex justify-between text-sm">
+                    <span className="text-neutral-700">{inv.invoice_number}</span>
+                    <span className="text-neutral-900 font-medium">{formatCurrency(inv.total)}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="border-t border-neutral-200 pt-3 flex justify-between">
+                <span className="font-medium text-neutral-700">Total Amount</span>
+                <span className="font-semibold text-neutral-900">{formatCurrency(consolidationDetails.totalAmount)}</span>
+              </div>
+            </div>
+            
+            <p className="text-sm text-neutral-500 mb-4">
+              The original invoices will be marked as "consolidated" and a new draft invoice will be created with all line items combined.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConsolidateModal(false)}
+                className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-lg text-neutral-700 font-medium hover:bg-neutral-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConsolidateConfirm}
+                disabled={consolidating}
+                className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg font-medium hover:bg-[#3d5f58] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {consolidating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Consolidating...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    Consolidate
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

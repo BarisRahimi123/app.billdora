@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Lock, Check, MessageSquare, Clock, FileText, Printer, Pen, X } from 'lucide-react';
+import { formatCurrency, formatDate, paginateText } from '../lib/utils';
 
 interface Quote {
   id: string;
@@ -82,14 +83,14 @@ export default function ProposalPortalPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [tokenId, setTokenId] = useState('');
   const [existingResponse, setExistingResponse] = useState<any>(null);
-  
+
   // Response state
   const [responseType, setResponseType] = useState<'accept' | 'changes' | 'discuss' | 'later' | null>(null);
   const [signerName, setSignerName] = useState('');
   const [signerTitle, setSignerTitle] = useState('');
   const [comments, setComments] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Click-to-Sign consent
   const [consentChecked, setConsentChecked] = useState(false);
   const [showOptionalSignature, setShowOptionalSignature] = useState(false);
@@ -112,13 +113,13 @@ export default function ProposalPortalPage() {
         headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
       const data = await res.json();
-      
+
       if (data.error) {
         setError(data.error);
         setStep('error');
         return;
       }
-      
+
       if (data.valid && data.requiresCode) {
         setStep('code');
         setTimeout(() => codeInputRefs[0].current?.focus(), 100);
@@ -138,14 +139,14 @@ export default function ProposalPortalPage() {
         headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
       });
       const data = await res.json();
-      
+
       if (data.error) {
         setError(data.error);
         setAccessCode(['', '', '', '']);
         codeInputRefs[0].current?.focus();
         return;
       }
-      
+
       if (data.verified) {
         setQuote(data.quote);
         setLineItems(data.lineItems || []);
@@ -174,14 +175,14 @@ export default function ProposalPortalPage() {
             console.warn('Failed to track proposal view:', e);
           }
         }
-        
+
         // Pre-fill signer name
         if (data.client?.primary_contact_name) {
           setSignerName(data.client.primary_contact_name);
         } else if (data.client?.name) {
           setSignerName(data.client.name);
         }
-        
+
         if (data.existingResponse?.status === 'accepted') {
           setStep('complete');
         } else {
@@ -195,7 +196,7 @@ export default function ProposalPortalPage() {
 
   function handleCodeInput(index: number, value: string) {
     if (!/^\d*$/.test(value)) return;
-    
+
     const newCode = [...accessCode];
     newCode[index] = value.slice(-1);
     setAccessCode(newCode);
@@ -238,11 +239,11 @@ export default function ProposalPortalPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
     const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-    
+
     ctx.beginPath();
     ctx.moveTo(x, y);
   }
@@ -253,11 +254,11 @@ export default function ProposalPortalPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
     const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-    
+
     ctx.lineTo(x, y);
     ctx.stroke();
   }
@@ -277,13 +278,13 @@ export default function ProposalPortalPage() {
 
   async function submitResponse() {
     if (!responseType) return;
-    
+
     // For acceptance, require consent checkbox
     if (responseType === 'accept' && !consentChecked) {
       setError('Please check the consent box to proceed');
       return;
     }
-    
+
     setSubmitting(true);
     try {
       // Capture optional hand-drawn signature if provided
@@ -307,7 +308,7 @@ export default function ProposalPortalPage() {
         platform: navigator.platform,
         language: navigator.language,
         screenResolution: `${window.screen.width}x${window.screen.height}`,
-        consentText: responseType === 'accept' 
+        consentText: responseType === 'accept'
           ? `I, ${signerName}, have reviewed and agree to the terms of Proposal #${quote?.quote_number} for ${formatCurrency(total)}. I authorize ${company?.company_name} to begin work as outlined in this proposal.`
           : null,
         consentGiven: responseType === 'accept' ? consentChecked : null,
@@ -323,7 +324,7 @@ export default function ProposalPortalPage() {
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/proposal-response`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
         },
@@ -348,7 +349,7 @@ export default function ProposalPortalPage() {
           try {
             const paymentRes = await fetch(`${SUPABASE_URL}/functions/v1/stripe-retainer-checkout`, {
               method: 'POST',
-              headers: { 
+              headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
               },
@@ -398,35 +399,52 @@ export default function ProposalPortalPage() {
   const taxRate = quote?.tax_rate || 0;
   const taxDue = subtotal * (taxRate / 100);
   const total = subtotal + taxDue;
-  
-  const formatCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
-  const formatDate = (date: string | undefined) => {
-    if (!date) return '';
-    return new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  };
+
+
 
   // Timeline calculation helper
   function getComputedStartOffsets(items: LineItem[]): Map<string, number> {
     const offsets = new Map<string, number>();
-    let currentDay = 0;
-    
-    items.forEach((item, idx) => {
-      if (idx === 0 || item.start_type === 'parallel') {
-        offsets.set(item.id, item.start_offset || 0);
-      } else if (item.start_type === 'sequential') {
-        const depId = item.depends_on || items[idx - 1]?.id;
-        const depOffset = offsets.get(depId) || 0;
-        const depItem = items.find(i => i.id === depId);
-        const depDays = depItem?.estimated_days || 0;
-        offsets.set(item.id, depOffset + depDays);
-      } else if (item.start_type === 'overlap') {
-        const depId = item.depends_on || items[idx - 1]?.id;
-        const depOffset = offsets.get(depId) || 0;
-        offsets.set(item.id, depOffset + (item.overlap_days || 0));
+    const itemMap = new Map(items.map(i => [i.id, i]));
+
+    // Detect cycles: build dependency graph and check for circular refs
+    const hasCycle = (startId: string, visited: Set<string>): boolean => {
+      if (visited.has(startId)) return true;
+      const item = itemMap.get(startId);
+      if (!item || !item.depends_on || item.start_type === 'parallel') return false;
+      visited.add(startId);
+      return hasCycle(item.depends_on, visited);
+    };
+
+    // Calculate start for each item (with cycle protection)
+    const getStart = (itemId: string, visited: Set<string>): number => {
+      if (visited.has(itemId)) return 0; // Cycle detected, return 0
+      visited.add(itemId);
+
+      const item = itemMap.get(itemId);
+      if (!item) return 0;
+
+      if (item.start_type === 'parallel' || !item.depends_on) {
+        return item.start_offset || 0;
       }
-      currentDay = Math.max(currentDay, (offsets.get(item.id) || 0) + item.estimated_days);
-    });
-    
+
+      const dep = itemMap.get(item.depends_on);
+      if (!dep) return 0;
+
+      const depStart = getStart(dep.id, visited);
+
+      if (item.start_type === 'sequential') {
+        return depStart + dep.estimated_days;
+      } else if (item.start_type === 'overlap') {
+        return depStart + Math.floor(item.overlap_days || 0);
+      }
+      return 0;
+    };
+
+    for (const item of items) {
+      offsets.set(item.id, getStart(item.id, new Set()));
+    }
+
     return offsets;
   }
 
@@ -507,7 +525,7 @@ export default function ProposalPortalPage() {
   if (step === 'complete') {
     const isAccepted = responseType === 'accept' || existingResponse?.status === 'accepted';
     const auditData = existingResponse?.audit_trail;
-    
+
     return (
       <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
@@ -519,7 +537,7 @@ export default function ProposalPortalPage() {
               {isAccepted ? 'Proposal Signed & Accepted!' : 'Response Submitted'}
             </h1>
             <p className="text-neutral-600">
-              {isAccepted 
+              {isAccepted
                 ? 'Your signature has been recorded. A confirmation email will be sent shortly.'
                 : 'Your feedback has been sent. The team will review and get back to you soon.'}
             </p>
@@ -593,7 +611,7 @@ export default function ProposalPortalPage() {
               </button>
             </div>
           )}
-          
+
           {company && (
             <p className="text-sm text-neutral-500 mt-6 text-center">
               Questions? Contact {company.company_name} at {company.phone}
@@ -605,6 +623,25 @@ export default function ProposalPortalPage() {
   }
 
   // Main proposal view - NEW REFINED TEMPLATE v2.1 (Feb 5 2026)
+
+  // Pre-calculate page counts for accurate numbering
+  const hasScope = !!quote?.scope_of_work;
+  const hasTimeline = lineItems.some(item => item.estimated_days > 0);
+  const rawScopePages = hasScope ? paginateText(quote?.scope_of_work || '') : [];
+  // If no scope but timeline exists, we have at least 1 page
+  if (rawScopePages.length === 0 && hasTimeline) rawScopePages.push('');
+
+  // Check timeline overflow
+  let timelineOverflows = false;
+  if (hasTimeline && rawScopePages.length > 0) {
+    const lastPageContent = rawScopePages[rawScopePages.length - 1];
+    const pageScore = lastPageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0);
+    // If score >= 2000, timeline moves to next page
+    if (pageScore >= 2000) timelineOverflows = true;
+  }
+
+  const totalScopePages = rawScopePages.length + (timelineOverflows ? 1 : 0);
+
   return (
     <div className="min-h-screen bg-neutral-200 print:bg-white" data-version="2.1">
       {/* Floating Header - Hidden when printing */}
@@ -669,7 +706,7 @@ export default function ProposalPortalPage() {
                       <p className="text-white/70 text-sm">{company?.website}</p>
                     </div>
                   </div>
-                  
+
                   {/* Client Info */}
                   <div className="mb-auto">
                     <p className="text-white/60 text-sm uppercase tracking-wider mb-2">Prepared For</p>
@@ -679,13 +716,13 @@ export default function ProposalPortalPage() {
                     )}
                     <p className="text-white/60 mt-4">{formatDate(quote?.created_at)}</p>
                   </div>
-                  
+
                   {/* Center - Project Title */}
                   <div className="text-center py-16">
                     <h1 className="text-5xl font-bold tracking-tight">{quote?.title || 'PROJECT PROPOSAL'}</h1>
                     <p className="text-lg text-white/70 mt-4">Proposal #{quote?.quote_number}</p>
                   </div>
-                  
+
                   {/* Bottom - Company Info */}
                   <div className="mt-auto pt-8 border-t border-white/20">
                     <div className="flex items-center justify-between">
@@ -771,246 +808,380 @@ export default function ProposalPortalPage() {
             </div>
           </div>
 
-          {/* PAGE 3: Scope of Work & Timeline */}
-          {(quote?.scope_of_work || lineItems.some(item => item.estimated_days > 0)) && (
-            <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
-              <div className="p-12 pb-20">
-                <h2 className="text-2xl font-bold text-neutral-900 mb-8">Scope of Work & Project Timeline</h2>
+          {/* PAGE 3: Scope & Timeline Sheets - Auto Paginated */}
+          {(() => {
+            const hasScope = !!quote?.scope_of_work;
+            const hasTimeline = lineItems.some(item => item.estimated_days > 0);
 
-                {/* Scope of Work */}
-                {quote?.scope_of_work && (
-                  <div className="mb-8">
-                    <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Scope of Work</h3>
-                    <div className="text-neutral-700 whitespace-pre-line leading-relaxed border border-neutral-200 rounded-lg p-4">
-                      {quote.scope_of_work}
+            if (!hasScope && !hasTimeline) return null;
+
+            const scopeContent = quote?.scope_of_work || '';
+            const scopePages = hasScope ? paginateText(scopeContent) : [];
+            // If no scope but we have timeline, treat as 1 empty scope page to render timeline
+            if (scopePages.length === 0 && hasTimeline) scopePages.push('');
+
+            return scopePages.map((pageContent, idx) => {
+              const isLastPage = idx === scopePages.length - 1;
+
+              // improved check for remaining space on page
+              const pageScore = pageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0);
+              const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
+
+              return (
+                <div key={`scope-${idx}`} className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+                  <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+                    {/* Header */}
+                    <div className="flex items-center gap-4 mb-8 flex-shrink-0">
+                      <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">
+                        {idx === 0 ? 'Scope & Execution' : 'Scope & Execution (Cont.)'}
+                      </h2>
+                      <div className="h-px bg-neutral-200 flex-1"></div>
                     </div>
-                  </div>
-                )}
 
-                {/* Project Timeline */}
-                {lineItems.some(item => item.estimated_days > 0) && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Project Timeline</h3>
-                    <div className="border border-neutral-200 rounded-lg p-4">
-                      {(() => {
-                        const validItems = lineItems.filter(item => item.estimated_days > 0);
-                        const computedOffsets = getComputedStartOffsets(validItems);
-                        const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
-                        const totalDays = maxEnd || 1;
+                    <div className="flex-1 overflow-hidden relative flex flex-col">
+                      {/* FADE OUT for overflow if calculation fails slightly */}
+                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
 
-                        return (
-                          <div className="space-y-4">
-                            {validItems.map((item, idx) => {
-                              const startDay = computedOffsets.get(item.id) || 0;
-                              const widthPercent = (item.estimated_days / totalDays) * 100;
-                              const leftPercent = (startDay / totalDays) * 100;
-                              const actualStartDay = startDay + 1;
-                              const isCollaboratorTask = item.description.startsWith('[');
-                              
+                      {/* Scope Content Chunk */}
+                      {pageContent && (
+                        <div className="mb-8">
+                          {idx === 0 && <h3 className="text-lg font-semibold text-neutral-900 mb-4">Project Scope</h3>}
+                          <div className="text-neutral-700 whitespace-pre-wrap leading-relaxed text-sm">
+                            {pageContent}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Timeline (if fitting on this page) */}
+                      {renderTimelineHere && (
+                        <div className="pt-8 border-t border-neutral-100 mt-auto">
+                          <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
+                          <div className="bg-white p-6 border border-neutral-100">
+                            {(() => {
+                              const validItems = lineItems.filter(item => item.description.trim());
+                              const computedOffsets = getComputedStartOffsets(validItems);
+                              const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
+                              const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
+                              const timelineRange = maxEnd - minStart;
+                              const totalDays = maxEnd || 1;
+                              const dayMarkers = [minStart + 1];
+                              const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
+                              for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
+                              if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
+
                               return (
-                                <div key={item.id}>
-                                  {/* Task name */}
-                                  <div className="mb-1.5 flex items-center gap-2">
-                                    <span className="text-xs text-neutral-900 font-medium">{item.description}</span>
-                                    <span className="text-[9px] text-neutral-400 font-medium">
-                                      Day {actualStartDay} • {item.estimated_days}d
-                                    </span>
-                                  </div>
-                                  {/* Timeline bar */}
-                                  <div className="h-6 bg-neutral-100 rounded-full relative">
-                                    <div
-                                      className={`absolute h-full rounded-full flex items-center justify-center text-white text-[10px] font-medium ${isCollaboratorTask ? 'bg-amber-500' : 'bg-[#476E66]'}`}
-                                      style={{
-                                        left: `${leftPercent}%`,
-                                        width: `${Math.max(widthPercent, 8)}%`
-                                      }}
-                                    >
-                                      {item.estimated_days}d
+                                <div className="space-y-6">
+                                  {/* Header with Day Markers */}
+                                  <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
+                                    <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
+                                    <div className="flex-1 relative h-4">
+                                      {dayMarkers.map((day, idx) => {
+                                        const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
+                                        return (
+                                          <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
+                                            <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
+                                  </div>
+
+                                  {/* Timeline bars */}
+                                  <div className="space-y-3">
+                                    {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
+                                      const start = computedOffsets.get(item.id) || 0;
+                                      const left = ((start - minStart) / timelineRange) * 100;
+                                      const width = (item.estimated_days / timelineRange) * 100;
+                                      return (
+                                        <div key={item.id} className="flex items-center gap-4">
+                                          <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
+                                          <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
+                                            <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
+                                    <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
+                                    <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
                                   </div>
                                 </div>
                               );
-                            })}
-                            <div className="pt-4 border-t border-neutral-200 text-sm text-neutral-600">
-                              <span className="font-medium">Total Project Duration:</span> {totalDays} days
-                            </div>
+                            })()}
                           </div>
-                        );
-                      })()}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Footer */}
+                    <div className="mt-auto pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider flex-shrink-0">
+                      <div className="flex gap-4">
+                        <span>{company?.company_name}</span>
+                        <span>|</span>
+                        <span>{company?.website}</span>
+                      </div>
+                      <div className="flex gap-4">
+                        <span>Proposal #{quote?.quote_number}</span>
+                        <span>•</span>
+                        <span>Page {idx + 2}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }).concat(
+              // If we have a timeline but it didn't fit, render it on its own page
+              (hasTimeline && (scopePages.length === 0 || scopePages[scopePages.length - 1].split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0) >= 2000)) ? [(
+                <div key="timeline-only" className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+                  <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+                    <div className="flex items-center gap-4 mb-8 flex-shrink-0">
+                      <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Project Schedule</h2>
+                      <div className="h-px bg-neutral-200 flex-1"></div>
+                    </div>
+
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
+                      <div className="bg-white p-6 border border-neutral-100">
+                        {(() => {
+                          const validItems = lineItems.filter(item => item.description.trim());
+                          const computedOffsets = getComputedStartOffsets(validItems);
+                          const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
+                          const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
+                          const timelineRange = maxEnd - minStart;
+                          const totalDays = maxEnd || 1;
+                          const dayMarkers = [minStart + 1];
+                          const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
+                          for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
+                          if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
+
+                          return (
+                            <div className="space-y-6">
+                              <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
+                                <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
+                                <div className="flex-1 relative h-4">
+                                  {dayMarkers.map((day, idx) => {
+                                    const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
+                                    return (
+                                      <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
+                                        <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div className="space-y-3">
+                                {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
+                                  const start = computedOffsets.get(item.id) || 0;
+                                  const left = ((start - minStart) / timelineRange) * 100;
+                                  const width = (item.estimated_days / timelineRange) * 100;
+                                  return (
+                                    <div key={item.id} className="flex items-center gap-4">
+                                      <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
+                                      <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
+                                        <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
+                                <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
+                                <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    <div className="mt-auto pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider">
+                      <div className="flex gap-4">
+                        <span>{company?.company_name}</span>
+                        <span>|</span>
+                        <span>{company?.website}</span>
+                      </div>
+                      <div className="flex gap-4">
+                        <span>Proposal #{quote?.quote_number}</span>
+                        <span>•</span>
+                        <span>Page {scopePages.length + 2}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )] : []
+            )
+          })()}
+
+          {/* PAGE 4: Investment Breakdown */}
+          <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+            <div className="p-10 md:p-12 flex-1 flex flex-col h-full overflow-hidden">
+              <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Investment Breakdown</h2>
+                <div className="h-px bg-neutral-200 flex-1"></div>
+              </div>
+
+              <div className="mb-4 flex-1 overflow-hidden">
+                <table className="w-full text-sm" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr className="border-b-2 border-neutral-900">
+                      <th className="text-left py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '60%' }}>Service / Deliverable</th>
+                      <th className="text-center py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '15%' }}>Qty</th>
+                      <th className="text-right py-2 font-bold text-neutral-900 uppercase tracking-wider text-xs" style={{ width: '25%' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {lineItems.filter(i => i.description.trim()).map(item => (
+                      <tr key={item.id}>
+                        <td className="py-2 pr-4" style={{ verticalAlign: 'top' }}>
+                          <p className="font-semibold text-neutral-900 text-sm" style={{ marginBottom: '1px' }}>{item.description}</p>
+                          <p className="text-neutral-500 text-xs" style={{ margin: 0 }}>{formatCurrency(item.unit_price)} / {item.unit}</p>
+                        </td>
+                        <td className="py-2 text-center text-neutral-600 text-sm" style={{ verticalAlign: 'top' }}>{item.quantity}</td>
+                        <td className="py-2 text-right font-medium text-neutral-900 text-sm" style={{ verticalAlign: 'top' }}>{formatCurrency(item.unit_price * item.quantity)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="flex justify-end border-t-2 border-neutral-900 pt-4 mt-4">
+                  <div className="w-56 space-y-2">
+                    <div className="flex justify-between text-neutral-500 text-sm">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                    {taxRate > 0 && (
+                      <div className="flex justify-between text-neutral-500 text-sm">
+                        <span>Tax ({taxRate}%)</span>
+                        <span>{formatCurrency(taxDue)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-baseline pt-2 border-t border-neutral-200">
+                      <span className="font-bold text-neutral-900 text-sm">Total Investment</span>
+                      <span className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Retainer Inline */}
+                {quote?.retainer_enabled && (
+                  <div className="mt-4 bg-neutral-50 border border-neutral-200 p-3 flex items-center justify-between rounded-none border-l-4 border-l-neutral-900">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className="font-bold text-neutral-900 text-sm">Retainer Required</p>
+                        <p className="text-xs text-neutral-500">Due upon acceptance</p>
+                      </div>
+                    </div>
+                    <span className="font-bold text-neutral-900">
+                      {formatCurrency(quote.retainer_type === 'percentage' ? (subtotal * (quote.retainer_percentage || 0) / 100) : (quote.retainer_amount || 0))}
+                    </span>
                   </div>
                 )}
               </div>
-              {/* Page Footer */}
-              <div className="absolute bottom-0 left-0 right-0 px-12 py-4 border-t border-neutral-100 flex justify-between text-xs text-neutral-400">
-                <span>{company?.company_name}</span>
-                <span>Page 2</span>
+
+              {/* Footer */}
+              <div className="mt-auto pt-4 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider flex-shrink-0">
+                <div className="flex gap-4">
+                  <span>{company?.company_name}</span>
+                  <span>|</span>
+                  <span>{company?.website}</span>
+                </div>
+                <div className="flex gap-4">
+                  <span>Proposal #{quote?.quote_number}</span>
+                  <span>•</span>
+                  <span>Page {totalScopePages + 2}</span>
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* PAGE 4: Quote Details */}
+          {/* PAGE 5: Terms & Acceptance */}
           <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
-            <div className="pb-20">
-              {/* Header */}
-              <div className="p-8 border-b border-neutral-200">
-                <div className="flex justify-between">
-                  <div className="flex gap-6">
-                    {company?.logo_url ? (
-                      <img src={company.logo_url} alt={company.company_name} className="w-16 h-16 object-contain rounded-xl bg-neutral-100" />
-                    ) : (
-                      <div className="w-16 h-16 bg-neutral-100 rounded-xl flex items-center justify-center text-2xl font-bold text-neutral-700">
-                        {company?.company_name?.charAt(0) || 'C'}
-                      </div>
-                    )}
-                    <div>
-                      <h2 className="text-2xl font-bold text-neutral-900">{company?.company_name}</h2>
-                      <p className="text-neutral-600">{company?.address}</p>
-                      <p className="text-neutral-600">{company?.city}, {company?.state} {company?.zip}</p>
-                      <p className="text-neutral-500 text-sm mt-1">{company?.website} | {company?.phone}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-sm">
-                      <table className="text-left">
-                        <tbody>
-                          <tr><td className="pr-4 py-1 text-neutral-500">DATE:</td><td className="font-medium text-neutral-900">{formatDate(quote?.created_at)}</td></tr>
-                          <tr><td className="pr-4 py-1 text-neutral-500">QUOTE #:</td><td className="font-medium text-neutral-900">{quote?.quote_number}</td></tr>
-                          <tr><td className="pr-4 py-1 text-neutral-500">VALID UNTIL:</td><td className="font-medium text-neutral-900">{quote?.valid_until ? formatDate(quote.valid_until) : '-'}</td></tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
+            <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+              <div className="flex items-center gap-4 mb-8">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Terms & Acceptance</h2>
+                <div className="h-px bg-neutral-200 flex-1"></div>
               </div>
 
-              {/* Customer */}
-              <div className="px-8 py-4">
-                <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Customer</h3>
-                <div className="border border-neutral-200 rounded-lg p-5">
-                  <div className="space-y-1">
-                    <p className="font-semibold text-neutral-900">{client?.name}</p>
-                    {client?.primary_contact_name && client.primary_contact_name !== client.name && (
-                      <p className="text-neutral-600 text-sm">{client.primary_contact_name}</p>
-                    )}
-                    {(client?.primary_contact_email || client?.email) && (
-                      <p className="text-neutral-500 text-sm">{client.primary_contact_email || client.email}</p>
-                    )}
-                    {(client?.primary_contact_phone || client?.phone) && (
-                      <p className="text-neutral-500 text-sm">{client.primary_contact_phone || client.phone}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Line Items */}
-              <div className="px-8 py-4">
-                <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Line Items</h3>
-                <div className="border border-neutral-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-neutral-50 border-b border-neutral-200">
-                        <th className="text-left px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider">Description</th>
-                        <th className="text-right px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Unit Price</th>
-                        <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-16">Unit</th>
-                        <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-12">Qty</th>
-                        <th className="text-right px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {lineItems.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-5 py-3 text-neutral-900">{item.description}</td>
-                          <td className="px-4 py-3 text-right text-neutral-900">{formatCurrency(item.unit_price)}</td>
-                          <td className="px-4 py-3 text-center text-neutral-500 text-xs">{item.unit}</td>
-                          <td className="px-4 py-3 text-center text-neutral-900">{item.quantity}</td>
-                          <td className="px-5 py-3 text-right font-medium text-neutral-900">{formatCurrency(item.unit_price * item.quantity)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Totals */}
-              <div className="px-8 py-4 flex justify-end">
-                <div className="w-72 space-y-2 text-sm">
-                  <div className="flex justify-between py-1"><span className="text-neutral-600">Subtotal:</span><span className="font-medium">{formatCurrency(subtotal)}</span></div>
-                  {taxRate > 0 && <div className="flex justify-between py-1"><span className="text-neutral-600">Tax ({taxRate}%):</span><span>{formatCurrency(taxDue)}</span></div>}
-                  <div className="flex justify-between py-2 border-t-2 border-neutral-900 mt-2">
-                    <span className="text-lg font-bold">TOTAL:</span>
-                    <span className="text-lg font-bold">{formatCurrency(total)}</span>
-                  </div>
-                  {quote?.retainer_enabled && (
-                    <div className="flex justify-between py-2 bg-amber-50 border border-amber-200 rounded-lg px-3 mt-2">
-                      <span className="text-amber-800 font-medium">Deposit Due:</span>
-                      <span className="text-amber-900 font-bold">
-                        {formatCurrency(quote.retainer_type === 'percentage' 
-                          ? subtotal * (quote.retainer_percentage || 0) / 100
-                          : quote.retainer_amount || 0
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Terms */}
               {quote?.terms && (
-                <div className="px-8 py-4">
-                  <h3 className="font-bold text-neutral-900 mb-2">TERMS AND CONDITIONS</h3>
-                  <div className="text-sm text-neutral-700 whitespace-pre-line">{quote.terms}</div>
+                <div className="mb-12 flex-1">
+                  <div className="text-neutral-600 text-xs leading-relaxed text-justify columns-1 md:columns-2 gap-8">
+                    {quote.terms}
+                  </div>
                 </div>
               )}
 
-              {/* Signature Section */}
-              <div className="px-8 py-6 border-t border-neutral-200 mt-4">
-                <h3 className="font-bold text-neutral-900 mb-4">Customer Acceptance:</h3>
-                <div className="grid grid-cols-2 gap-8">
-                  <div>
+              <div className="mt-auto pt-16">
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
+                <p className="text-sm text-neutral-600 mb-12 max-w-2xl">
+                  By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {company?.company_name} to proceed with the scope of work defined within.
+                </p>
+
+                <div className="grid grid-cols-2 gap-x-16 gap-y-12">
+                  {/* Signature Area */}
+                  <div className="relative group">
                     {existingResponse?.status === 'accepted' ? (
                       <>
-                        <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
-                          <span className="text-2xl font-serif italic text-emerald-700">{existingResponse.signer_name || 'Signed'}</span>
+                        <div className="absolute bottom-2 left-0 text-emerald-700 font-serif text-3xl italic select-none">
+                          {existingResponse.signer_name || 'Signed'}
                         </div>
-                        <p className="text-sm text-emerald-600">Signature ✓</p>
+                        <div className="border-b-2 border-emerald-600 h-12 w-full"></div>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-2">Digital Signature</p>
                       </>
                     ) : (
                       <>
-                        <div className="border-b-2 border-neutral-900 pb-1 mb-2"><span className="text-2xl font-serif">X</span><span className="ml-4 text-neutral-400">___________________________</span></div>
-                        <p className="text-sm text-neutral-500">Signature</p>
+                        <div className="absolute bottom-2 left-0 text-neutral-900 font-serif text-3xl opacity-10 select-none">X</div>
+                        <div className="border-b border-neutral-400 h-12 w-full"></div>
+                        <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-2">Signature</p>
                       </>
                     )}
                   </div>
+
+                  {/* Print Name */}
                   <div>
-                    {existingResponse?.status === 'accepted' ? (
-                      <>
-                        <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
-                          <span className="text-neutral-800">{existingResponse.signer_name || client?.name}</span>
-                        </div>
-                        <p className="text-sm text-emerald-600">Print Name ✓</p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="border-b-2 border-neutral-900 pb-1 mb-2 h-8"></div>
-                        <p className="text-sm text-neutral-500">Print Name</p>
-                      </>
-                    )}
+                    <div className="border-b border-neutral-400 h-12 w-full flex items-end pb-1">
+                      <span className="font-medium text-neutral-900">
+                        {existingResponse?.status === 'accepted' ? existingResponse.signer_name : ''}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-2">Printed Name</p>
+                  </div>
+
+                  {/* Title */}
+                  <div>
+                    <div className="border-b border-neutral-400 h-8 w-full flex items-end pb-1">
+                      {/* We don't have signer title in existing response display logic in old code, but we can assume empty if not stored */}
+                    </div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-2">Title</p>
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <div className="border-b border-neutral-400 h-8 w-full flex items-end pb-1">
+                      {existingResponse?.status === 'accepted' && existingResponse.responded_at && (
+                        <span className="font-medium text-neutral-900">
+                          {new Date(existingResponse.responded_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-2">Date</p>
                   </div>
                 </div>
-                {existingResponse?.status === 'accepted' && existingResponse.responded_at && (
-                  <div className="mt-4 pt-4 border-t border-emerald-200 flex items-center gap-2 text-emerald-700">
-                    <Check className="w-5 h-5" />
-                    <span className="font-medium">Digitally Signed on </span>
-                    <span>{new Date(existingResponse.responded_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                )}
               </div>
-            </div>
-            {/* Page Footer */}
-            <div className="absolute bottom-0 left-0 right-0 px-12 py-4 border-t border-neutral-100 flex justify-between text-xs text-neutral-400">
-              <span>{company?.company_name}</span>
-              <span>Page {quote?.scope_of_work || lineItems.some(i => i.estimated_days > 0) ? '3' : '2'}</span>
+
+              {/* Footer */}
+              <div className="mt-16 pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider">
+                <div className="flex gap-4">
+                  <span>{company?.company_name}</span>
+                  <span>|</span>
+                  <span>{company?.website}</span>
+                </div>
+                <div className="flex gap-4">
+                  <span>Proposal #{quote?.quote_number}</span>
+                  <span>•</span>
+                  <span>Page {totalScopePages + 3}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1137,7 +1308,7 @@ export default function ProposalPortalPage() {
                         <div>
                           <p className="font-semibold text-amber-900">Deposit Due Upon Signing</p>
                           <p className="text-2xl font-bold text-amber-800 mt-1">
-                            {formatCurrency(quote.retainer_type === 'percentage' 
+                            {formatCurrency(quote.retainer_type === 'percentage'
                               ? subtotal * (quote.retainer_percentage || 0) / 100
                               : quote.retainer_amount || 0
                             )}
@@ -1188,10 +1359,10 @@ export default function ProposalPortalPage() {
                           I agree to the terms of this proposal
                         </p>
                         <p className="text-neutral-600 leading-relaxed">
-                          By checking this box, I, <span className="font-semibold">{signerName || '[Your Name]'}</span>, 
-                          confirm that I have reviewed and agree to the terms of Proposal #{quote?.quote_number} 
-                          for <span className="font-semibold">{formatCurrency(total)}</span>. 
-                          I authorize <span className="font-semibold">{company?.company_name}</span> to 
+                          By checking this box, I, <span className="font-semibold">{signerName || '[Your Name]'}</span>,
+                          confirm that I have reviewed and agree to the terms of Proposal #{quote?.quote_number}
+                          for <span className="font-semibold">{formatCurrency(total)}</span>.
+                          I authorize <span className="font-semibold">{company?.company_name}</span> to
                           begin work as outlined in this proposal.
                         </p>
                       </div>
@@ -1208,7 +1379,7 @@ export default function ProposalPortalPage() {
                       <Pen className="w-4 h-4" />
                       {showOptionalSignature ? 'Hide' : 'Add'} hand-drawn signature (optional)
                     </button>
-                    
+
                     {showOptionalSignature && (
                       <div className="mt-3">
                         <p className="text-xs text-neutral-500 mb-2">Draw your signature below (optional - the checkbox above is the legal signature)</p>
@@ -1270,8 +1441,8 @@ export default function ProposalPortalPage() {
 
                   {/* Legal Notice */}
                   <p className="text-[10px] text-neutral-400 text-center leading-relaxed">
-                    By clicking "Sign & Accept Proposal", you agree that your electronic signature is the legal equivalent 
-                    of your manual signature on this proposal. This agreement is legally binding under the 
+                    By clicking "Sign & Accept Proposal", you agree that your electronic signature is the legal equivalent
+                    of your manual signature on this proposal. This agreement is legally binding under the
                     Electronic Signatures in Global and National Commerce Act (ESIGN) and the Uniform Electronic Transactions Act (UETA).
                   </p>
                 </div>
@@ -1279,9 +1450,9 @@ export default function ProposalPortalPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-1">
-                      {responseType === 'changes' ? 'What changes would you like?' : 
-                       responseType === 'discuss' ? 'What would you like to discuss?' :
-                       'Any comments? (Optional)'}
+                      {responseType === 'changes' ? 'What changes would you like?' :
+                        responseType === 'discuss' ? 'What would you like to discuss?' :
+                          'Any comments? (Optional)'}
                     </label>
                     <textarea
                       value={comments}
@@ -1289,8 +1460,8 @@ export default function ProposalPortalPage() {
                       rows={4}
                       className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none"
                       placeholder={responseType === 'changes' ? 'Please describe the changes you need...' :
-                                   responseType === 'discuss' ? 'What questions or concerns do you have?' :
-                                   'Any additional comments...'}
+                        responseType === 'discuss' ? 'What questions or concerns do you have?' :
+                          'Any additional comments...'}
                     />
                   </div>
                   <div className="flex gap-3 pt-4">
