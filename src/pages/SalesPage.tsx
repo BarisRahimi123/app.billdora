@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell, BarChart2, FilePlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -117,12 +117,62 @@ export default function SalesPage() {
     localStorage.setItem('quotesExpandedClients', JSON.stringify([...newExpanded]));
   }, [expandedClients]);
 
+  // Client View Mode & Analysis
+  const [clientsViewMode, setClientsViewMode] = useState<'list' | 'chart'>('list');
+  const [chartTimeframe, setChartTimeframe] = useState<'month' | 'year'>('year');
+
+  const clientRevenueData = useMemo(() => {
+    if (activeTab !== 'clients') return [];
+
+    return clients.map(client => {
+      // Filter accepted/approved quotes
+      const clientQuotes = quotes.filter(q =>
+        q.client_id === client.id &&
+        (q.status === 'accepted' || q.status === 'approved')
+      );
+
+      const now = new Date();
+
+      // Calculate revenue based on timeframe
+      const revenue = clientQuotes.reduce((sum, q) => {
+        const quoteDate = new Date(q.created_at || ''); // Ideally use signed_at/updated_at
+        const isThisYear = quoteDate.getFullYear() === now.getFullYear();
+        const isThisMonth = isThisYear && quoteDate.getMonth() === now.getMonth();
+
+        if (chartTimeframe === 'year' && isThisYear) return sum + (q.total_amount || 0);
+        if (chartTimeframe === 'month' && isThisMonth) return sum + (q.total_amount || 0);
+        return sum;
+      }, 0);
+
+      // Get top projects for display in large bars
+      const topProjects = clientQuotes
+        .filter(q => {
+          const quoteDate = new Date(q.created_at || '');
+          const isThisYear = quoteDate.getFullYear() === now.getFullYear();
+          const isThisMonth = isThisYear && quoteDate.getMonth() === now.getMonth();
+          return chartTimeframe === 'year' ? isThisYear : isThisMonth;
+        })
+        .sort((a, b) => (b.total_amount || 0) - (a.total_amount || 0))
+        .slice(0, 5)
+        .map(q => q.title);
+
+      return {
+        ...client,
+        revenue,
+        topProjects,
+        projectCount: clientQuotes.length
+      };
+    })
+      .filter(c => c.revenue > 0) // Only show clients with revenue in chart
+      .sort((a, b) => b.revenue - a.revenue); // Sort by revenue desc
+  }, [clients, quotes, activeTab, chartTimeframe]);
+
   // Handle URL parameters for deep linking (e.g., from notification clicks)
   useEffect(() => {
     const tab = searchParams.get('tab');
     const subtab = searchParams.get('subtab');
     const collab = searchParams.get('collab');
-    
+
     // Set main tab from URL
     if (tab === 'proposals') {
       setActiveTab('proposals');
@@ -131,7 +181,7 @@ export default function SalesPage() {
     } else if (tab === 'leads') {
       setActiveTab('leads');
     }
-    
+
     // Set proposals subtab from URL
     if (subtab === 'collaborations') {
       setProposalsSubTab('collaborations');
@@ -144,14 +194,14 @@ export default function SalesPage() {
     } else if (subtab === 'templates') {
       setProposalsSubTab('templates');
     }
-    
+
     // Set collaborations sub-subtab from URL
     if (collab === 'invited') {
       setCollaborationsSubTab('invited');
     } else if (collab === 'my-projects') {
       setCollaborationsSubTab('my-projects');
     }
-    
+
     // Clear URL params after applying them (keep URL clean)
     if (tab || subtab || collab) {
       setSearchParams({});
@@ -676,6 +726,27 @@ export default function SalesPage() {
           <Download className="w-4 h-4" />
           <span className="hidden xl:inline">Export</span>
         </button>
+
+        {/* Clients View Toggles */}
+        {activeTab === 'clients' && (
+          <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg flex-shrink-0">
+            <button
+              onClick={() => setClientsViewMode('list')}
+              className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setClientsViewMode('chart')}
+              className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'chart' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+              title="Revenue Chart"
+            >
+              <BarChart2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {activeTab === 'leads' && (
           <>
             {/* View mode toggle for leads */}
@@ -1055,62 +1126,209 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Clients Section - Inline editing */}
+      {/* Clients Section */}
       {activeTab === 'clients' && (
-        <div className="flex gap-4">
-          {/* Client List - Hidden on mobile when client selected */}
-          <div className={`bg-white rounded-lg overflow-hidden ${selectedClient || isAddingNewClient
-            ? 'hidden lg:block lg:w-72 lg:flex-shrink-0'
-            : 'flex-1'
-            }`} style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
-              {filteredClients.map((client) => (
-                <div
-                  key={client.id}
-                  onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
-                  className={`flex items-center gap-2 px-3 py-2 border-b border-neutral-100 cursor-pointer transition-colors ${selectedClient?.id === client.id ? 'bg-neutral-100' : 'hover:bg-neutral-50'
-                    }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#476E66]/20 flex items-center justify-center text-neutral-600 font-medium text-xs flex-shrink-0">
-                    {client.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-neutral-900 text-sm truncate">{client.name}</p>
-                    <p className="text-xs text-neutral-500 truncate">{client.email || client.display_name || '-'}</p>
-                  </div>
-                  {!selectedClient && !isAddingNewClient && (
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${getStatusColor(client.lifecycle_stage)}`}>
-                      {client.lifecycle_stage || 'active'}
-                    </span>
-                  )}
+        <div className="space-y-6">
+
+          {clientsViewMode === 'chart' ? (
+            /* SKYLINE CHART VIEW */
+            <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] border border-white/50 p-8 min-h-[600px] flex flex-col relative overflow-hidden transition-all duration-500 hover:shadow-[0_30px_60px_-12px_rgba(0,0,0,0.15)]">
+              {/* Background Glow */}
+              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-b from-[#476E66]/5 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+              <div className="flex justify-between items-end mb-12 relative z-10">
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Revenue Skyline</h2>
+                  <p className="text-neutral-500 mt-1 font-medium tracking-wide text-sm">Client portfolio value analysis</p>
                 </div>
-              ))}
-              {filteredClients.length === 0 && (
-                <div className="text-center py-8 text-neutral-500 text-xs">No clients found</div>
+                <div className="flex bg-neutral-100/80 backdrop-blur-md p-1 rounded-lg">
+                  <button
+                    onClick={() => setChartTimeframe('month')}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all duration-300 ${chartTimeframe === 'month' ? 'bg-white text-neutral-900 shadow-sm scale-105' : 'text-neutral-500 hover:text-neutral-900'}`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setChartTimeframe('year')}
+                    className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all duration-300 ${chartTimeframe === 'year' ? 'bg-white text-neutral-900 shadow-sm scale-105' : 'text-neutral-500 hover:text-neutral-900'}`}
+                  >
+                    Yearly
+                  </button>
+                </div>
+              </div>
+
+              {clientRevenueData.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-neutral-300 relative z-10">
+                  <BarChart2 className="w-16 h-16 mb-6 opacity-20" />
+                  <p className="font-medium">No revenue data for this period</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-x-auto pb-4 scrollbar-hide">
+                  <div className="h-full min-w-max flex items-end gap-4 px-4 pt-12">
+                    {(() => {
+                      // Sort by revenue
+                      const sortedData = [...clientRevenueData].sort((a, b) => b.revenue - a.revenue);
+                      const maxRevenue = Math.max(...sortedData.map(c => c.revenue));
+
+                      return sortedData.map((client, index) => {
+                        const rank = index + 1;
+                        const heightPercentage = Math.max((client.revenue / maxRevenue) * 100, 15); // Min height 15%
+                        const isLarge = heightPercentage > 40;
+                        const isTop3 = rank <= 3;
+                        return (
+                          <div key={client.id} className="w-40 flex flex-col items-center group perspective-1000 relative">
+                            {/* Floating Tooltip Value */}
+                            <div className="mb-4 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 px-3 py-1.5 bg-neutral-900 text-white text-xs font-bold rounded-lg shadow-xl">
+                              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(client.revenue)}
+                            </div>
+
+                            {/* The Monolith (Bar) */}
+                            <div
+                              className="w-full relative transition-all duration-500 ease-out flex flex-col group-hover:scale-[1.02] group-hover:-translate-y-1 origin-bottom"
+                              style={{ height: `${heightPercentage}%`, minHeight: '60px' }}
+                            >
+                              {/* Rank Badge */}
+                              {/* Minimalistic Rank - Top Corner */}
+                              <div className="absolute top-0 right-0 p-2 z-20">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm shadow-sm border border-white/10 ${isTop3 ? 'bg-white/90 text-neutral-900' : 'bg-black/20 text-white/90'}`}>
+                                  #{rank}
+                                </span>
+                              </div>
+                              {/* Main Structure - Update: Neutral / Concrete Gray */}
+                              <div className="absolute inset-0 bg-gradient-to-b from-neutral-400 to-neutral-500 rounded-2xl shadow-lg group-hover:shadow-2xl group-hover:shadow-neutral-500/20 transition-shadow duration-500"></div>
+
+                              {/* Glass Reflection Effect */}
+                              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-50 rounded-2xl pointer-events-none"></div>
+                              {/* Windows / Content Overlay */}
+                              {isLarge ? (
+                                <div className="relative z-10 p-3 space-y-2 opacity-100 transition-opacity duration-300">
+                                  <div className="bg-white/10 backdrop-blur-md rounded-lg p-2.5 border border-white/10 shadow-inner">
+                                    <div className="text-[9px] text-white/70 uppercase tracking-widest font-bold mb-1.5">Top Projects</div>
+                                    <div className="space-y-1.5">
+                                      {client.topProjects.slice(0, 3).map((proj, idx) => (
+                                        <div key={idx} className="flex items-center gap-1.5">
+                                          <div className="w-1 h-1 rounded-full bg-emerald-300 shadow-[0_0_4px_rgba(110,231,183,0.8)]"></div>
+                                          <div className="text-[10px] text-white font-medium truncate leading-tight">{proj}</div>
+                                        </div>
+                                      ))}
+                                      {(client.projectCount > 3 || client.topProjects.length > 3) && (
+                                        <div className="text-[9px] text-emerald-200/70 font-medium pl-2.5">+ {client.projectCount - Math.min(3, client.topProjects.length)} more</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-white/20 rounded-full"></div>
+                              )}
+                            </div>
+
+                            {/* Pedestal (Label) */}
+                            <div className="mt-4 text-center w-full group-hover:scale-105 transition-transform duration-300">
+                              <p className={`font-bold text-sm tracking-tight truncate px-1 ${isTop3 ? 'text-neutral-900' : 'text-neutral-600'}`} title={client.name}>
+                                {index + 1}. {client.name}
+                              </p>
+                              <p className="text-[11px] text-neutral-400 font-medium tracking-wide mt-0.5">
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact' }).format(client.revenue)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
+          ) : (
+            /* TRADITIONAL LIST VIEW */
+            <div className="flex gap-4">
+              {/* Client List - Hidden on mobile when client selected */}
+              <div className={`bg-white rounded-2xl overflow-hidden border border-neutral-100/50 ${selectedClient || isAddingNewClient
+                ? 'hidden lg:block lg:w-80 lg:flex-shrink-0'
+                : 'flex-1'
+                }`} style={{ boxShadow: '0 4px 20px -2px rgba(0,0,0,0.02)' }}>
+                <div className="max-h-[calc(100vh-320px)] overflow-y-auto p-2 space-y-1">
+                  {filteredClients.map((client) => (
+                    <div
+                      key={client.id}
+                      onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
+                      className={`group flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${selectedClient?.id === client.id
+                        ? 'bg-neutral-900 shadow-lg shadow-neutral-900/10'
+                        : 'hover:bg-neutral-50 hover:scale-[1.01]'
+                        }`}
+                    >
+                      {/* Avatar */}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${selectedClient?.id === client.id
+                        ? 'bg-white/20 text-white'
+                        : 'bg-neutral-100 text-neutral-500 group-hover:bg-white group-hover:shadow-sm group-hover:text-neutral-700'
+                        }`}>
+                        {client.name.charAt(0)}
+                      </div>
 
-          {/* Client Detail Panel - Full width on mobile */}
-          {(selectedClient || isAddingNewClient) && (
-            <div className="flex-1 bg-white rounded-lg p-3 lg:p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <InlineClientEditor
-                client={isAddingNewClient ? null : selectedClient}
-                companyId={profile?.company_id || ''}
-                onClose={() => { setSelectedClient(null); setIsAddingNewClient(false); }}
-                onSave={(savedClient) => {
-                  loadData();
-                  if (isAddingNewClient) {
-                    setIsAddingNewClient(false);
-                    setSelectedClient(savedClient);
-                  }
-                }}
-                onDelete={() => {
-                  loadData();
-                  setSelectedClient(null);
-                }}
-                isAdmin={isAdmin}
-              />
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <p className={`font-semibold text-sm truncate ${selectedClient?.id === client.id ? 'text-white' : 'text-neutral-900'}`}>
+                            {client.name}
+                          </p>
+                          {(!selectedClient && !isAddingNewClient) && (
+                            <div className="flex items-center gap-2">
+                              {/* Quick Actions - Visible on Hover */}
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 mr-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/quotes/new/document?client_id=${client.id}`);
+                                  }}
+                                  className="p-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors"
+                                  title="Create Proposal"
+                                >
+                                  <FilePlus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className={`w-1.5 h-1.5 rounded-full ${client.lifecycle_stage === 'lead' ? 'bg-blue-400' : 'bg-emerald-400'} shadow-[0_0_8px_rgba(52,211,153,0.4)]`}></div>
+                            </div>
+                          )}
+                        </div>
+                        <p className={`text-xs truncate ${selectedClient?.id === client.id ? 'text-white/60' : 'text-neutral-400'}`}>
+                          {client.email || client.display_name || 'No contact info'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredClients.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
+                      <div className="w-12 h-12 bg-neutral-50 rounded-full flex items-center justify-center mb-3">
+                        <Users className="w-5 h-5 opacity-20" />
+                      </div>
+                      <p className="text-xs font-medium">No clients found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Client Detail Panel - Full width on mobile */}
+              {(selectedClient || isAddingNewClient) && (
+                <div className="flex-1 bg-white rounded-lg p-3 lg:p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+                  <InlineClientEditor
+                    client={isAddingNewClient ? null : selectedClient}
+                    companyId={profile?.company_id || ''}
+                    onClose={() => { setSelectedClient(null); setIsAddingNewClient(false); }}
+                    onSave={(savedClient) => {
+                      loadData();
+                      if (isAddingNewClient) {
+                        setIsAddingNewClient(false);
+                        setSelectedClient(savedClient);
+                      }
+                    }}
+                    onDelete={() => {
+                      loadData();
+                      setSelectedClient(null);
+                    }}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1402,13 +1620,12 @@ export default function SalesPage() {
                           </div>
                           <div className="col-span-2"></div>
                           <div className="col-span-2">
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                              collab.status === 'pending' ? 'bg-blue-100 text-blue-700' :
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${collab.status === 'pending' ? 'bg-blue-100 text-blue-700' :
                               collab.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' :
-                              collab.status === 'submitted' ? 'bg-purple-100 text-purple-700' :
-                              collab.status === 'merged' ? 'bg-indigo-100 text-indigo-700' :
-                              'bg-neutral-100 text-neutral-600'
-                            }`}>
+                                collab.status === 'submitted' ? 'bg-purple-100 text-purple-700' :
+                                  collab.status === 'merged' ? 'bg-indigo-100 text-indigo-700' :
+                                    'bg-neutral-100 text-neutral-600'
+                              }`}>
                               {collab.status}
                             </span>
                           </div>
@@ -1584,13 +1801,12 @@ export default function SalesPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                              partner.relationship === 'mutual' 
-                                ? 'bg-emerald-50 text-emerald-700' 
-                                : partner.relationship === 'invited' 
-                                  ? 'bg-blue-50 text-blue-700' 
-                                  : 'bg-purple-50 text-purple-700'
-                            }`}>
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${partner.relationship === 'mutual'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : partner.relationship === 'invited'
+                                ? 'bg-blue-50 text-blue-700'
+                                : 'bg-purple-50 text-purple-700'
+                              }`}>
                               {partner.relationship === 'mutual' && <CheckCircle2 className="w-3.5 h-3.5" />}
                               {partner.relationship === 'mutual' ? 'Mutual Partner' : partner.relationship === 'invited' ? 'You Invited' : 'Invited You'}
                             </span>

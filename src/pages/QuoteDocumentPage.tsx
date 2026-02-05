@@ -45,6 +45,7 @@ export default function QuoteDocumentPage() {
 
   // Lead info from URL params (when creating proposal from lead)
   const leadId = searchParams.get('lead_id');
+  const clientIdParam = searchParams.get('client_id'); // Support pre-selecting client
   const leadName = searchParams.get('lead_name') || '';
   const leadEmail = searchParams.get('lead_email') || '';
   const leadCompany = searchParams.get('lead_company') || '';
@@ -436,6 +437,16 @@ export default function QuoteDocumentPage() {
         }
       }
 
+      // If creating from a client URL param, auto-select that client
+      if (isNewQuote && clientIdParam) {
+        const foundClient = clientsData.find(c => c.id === clientIdParam);
+        if (foundClient) {
+          setSelectedClientId(foundClient.id);
+          setClient(foundClient);
+          setRecipientType('client');
+        }
+      }
+
       // If creating from a collaboration, pre-fill the project name and load parent's timeline
       if (isNewQuote && collaborationId && projectTitleParam) {
         const decodedTitle = decodeURIComponent(projectTitleParam);
@@ -451,7 +462,7 @@ export default function QuoteDocumentPage() {
             .select('share_line_items, owner_user_id, owner_company_id')
             .eq('id', collaborationId)
             .single();
-          
+
           if (collabData?.share_line_items) {
             setParentSharePricing(true);
             console.log('[QuoteDocument] Owner shared pricing with collaborator');
@@ -464,7 +475,7 @@ export default function QuoteDocumentPage() {
               const existingLeadMatch = leadsData?.find(
                 (l: Lead) => l.company_name === collabData.owner_company_id
               );
-              
+
               if (existingLeadMatch) {
                 // Use existing lead
                 setSelectedLeadId(existingLeadMatch.id);
@@ -500,7 +511,7 @@ export default function QuoteDocumentPage() {
                 }
 
                 const companyName = ownerCompanySettings?.company_name || ownerCompanyData?.name || '';
-                
+
                 if (companyName || ownerProfile) {
                   // Create a pseudo-lead to display owner info
                   // Use company_name property to match what displayClientName expects
@@ -749,7 +760,7 @@ export default function QuoteDocumentPage() {
                 }
 
                 const companyName = ownerCompanySettings?.company_name || ownerCompanyData?.name || '';
-                
+
                 if (companyName || ownerProfile) {
                   const ownerAsLead: Lead = {
                     id: 'owner-' + collabRecord.owner_company_id,
@@ -927,7 +938,7 @@ export default function QuoteDocumentPage() {
                   // Load collaborator's line items from edge function response
                   const collabLineItems = collabQuoteData.lineItems || [];
                   console.log('[QuoteDocument] Collaborator line items count:', collabLineItems.length);
-                  
+
                   if (collabLineItems.length > 0) {
                     const mappedItems = collabLineItems.map((item: any) => ({
                       id: `collab-${item.id}`,
@@ -964,7 +975,7 @@ export default function QuoteDocumentPage() {
                 }
               } catch (collabFetchError) {
                 console.error('[QuoteDocument] Failed to fetch collaboration quote via edge function:', collabFetchError);
-                
+
                 // Fallback: try direct fetch (may fail due to RLS)
                 const { data: responseQuote } = await (await import('../lib/supabase')).supabase
                   .from('quotes')
@@ -975,7 +986,7 @@ export default function QuoteDocumentPage() {
                 if (responseQuote) {
                   setCollaboratorQuote(responseQuote);
                 }
-                
+
                 // Set collaborator info from collaboration record
                 setCollaboratorInfo({
                   name: collabData.collaborator_name || '',
@@ -1173,14 +1184,14 @@ export default function QuoteDocumentPage() {
     // IMPORTANT: We ONLY capture from Step 5 preview now
     // The export modal has old UI and should not be used for PDF
     const isOnStep5 = currentStep === 5;
-    
+
     // If NOT on step 5, navigate to step 5 first
     if (!isOnStep5) {
       console.log('[PDF] Not on Step 5 - navigating to Step 5 for PDF capture...');
       setCurrentStep(5);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-    
+
     setGeneratingPdf(true);
     try {
       showToast('Generating PDF...', 'info');
@@ -1197,7 +1208,7 @@ export default function QuoteDocumentPage() {
       // CAPTURE from Step 5 inline preview ONLY (has .export-page class)
       const exportPages = document.querySelectorAll('.export-page');
       const useRawHtml = exportPages.length > 0;
-      
+
       console.log(`[PDF] DOM CAPTURE: Found ${exportPages.length} export pages from Step 5 preview`);
 
       let requestBody;
@@ -1235,7 +1246,7 @@ export default function QuoteDocumentPage() {
         // Get all elements from both clone and original in the same order
         const cloneElements = rootElement.querySelectorAll('*');
         const originalElements = originalRoot.querySelectorAll('*');
-        
+
         // Process root element first
         const rootComputed = window.getComputedStyle(originalRoot as HTMLElement);
         let rootStyleString = '';
@@ -1248,25 +1259,25 @@ export default function QuoteDocumentPage() {
         if (rootStyleString) {
           rootElement.setAttribute('style', rootStyleString);
         }
-        
+
         // Process all children (limit to first 500 elements for safety)
         const maxElements = Math.min(cloneElements.length, originalElements.length, 500);
         for (let i = 0; i < maxElements; i++) {
           const cloneEl = cloneElements[i];
           const originalEl = originalElements[i];
-          
+
           if (!(cloneEl instanceof HTMLElement) || !(originalEl instanceof HTMLElement)) continue;
-          
+
           const computed = window.getComputedStyle(originalEl);
           let styleString = '';
-          
+
           importantProps.forEach(prop => {
             const value = computed.getPropertyValue(prop);
             if (value && value !== 'none' && value !== 'auto' && value !== 'initial' && value !== 'inherit') {
               styleString += `${prop}:${value} !important;`;
             }
           });
-          
+
           if (styleString) {
             cloneEl.setAttribute('style', styleString);
           }
@@ -1345,12 +1356,12 @@ export default function QuoteDocumentPage() {
       // ========== SIMPLE BROWSER PRINT-TO-PDF (No Browserless) ==========
       // This opens a new window with the EXACT modern UI and triggers print dialog
       console.log('[PDF] Opening browser print dialog with modern UI...');
-      
+
       const printWindow = window.open('', '_blank', 'width=900,height=700');
       if (!printWindow) {
         throw new Error('Could not open print window. Please allow popups.');
       }
-      
+
       const printHTML = `
 <!DOCTYPE html>
 <html>
@@ -1429,15 +1440,15 @@ export default function QuoteDocumentPage() {
 
       printWindow.document.write(printHTML);
       printWindow.document.close();
-      
+
       // Auto-trigger print after a short delay to let content render
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
       }, 1000);
-      
+
       showToast('Print dialog opened! Choose "Save as PDF" to download', 'success');
-      
+
     } catch (error: any) {
       console.error('PDF generation failed:', error);
       showToast(`Error: ${error.message}`, 'error');
@@ -2063,10 +2074,10 @@ export default function QuoteDocumentPage() {
                           <input
                             type="text"
                             value={projectName || documentTitle}
-                            onChange={(e) => { 
-                              setProjectName(e.target.value); 
+                            onChange={(e) => {
+                              setProjectName(e.target.value);
                               setDocumentTitle(e.target.value); // Keep in sync for database save
-                              setHasUnsavedChanges(true); 
+                              setHasUnsavedChanges(true);
                             }}
                             placeholder="Project Name"
                             className="text-4xl md:text-5xl font-bold tracking-tight bg-transparent border-b-2 border-white/50 text-center outline-none"
@@ -2439,9 +2450,9 @@ export default function QuoteDocumentPage() {
               <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 flex items-center justify-between">
                 <div className="text-xs text-neutral-500">
                   <Info className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5 text-neutral-400" />
-                  {collaboratorLineItems.length > 0 
+                  {collaboratorLineItems.length > 0
                     ? 'Merged items will be added to your project scope.'
-                    : collaboratorQuote?.scope_of_work 
+                    : collaboratorQuote?.scope_of_work
                       ? 'Scope of work will be merged into your proposal.'
                       : 'No items or scope to merge from this collaborator.'}
                 </div>
@@ -2453,7 +2464,7 @@ export default function QuoteDocumentPage() {
                     // Check if there's anything to merge
                     const hasItemsToMerge = selectedCollabItems.size > 0;
                     const hasScopeToMerge = showCollaboratorInfo && collaboratorQuote?.scope_of_work;
-                    
+
                     if (!hasItemsToMerge && !hasScopeToMerge) {
                       showToast?.('Nothing to merge - collaborator has no line items or scope of work', 'warning');
                       setMergingItems(false);
@@ -2580,9 +2591,9 @@ export default function QuoteDocumentPage() {
                       const collaboratorName = collaboratorInfo?.company || collaboratorInfo?.name || 'Collaborator';
                       const itemCount = itemsToAdd.length;
                       const scopeMerged = showCollaboratorInfo && collaboratorQuote?.scope_of_work;
-                      const message = itemCount > 0 
+                      const message = itemCount > 0
                         ? `✓ ${collaboratorName}'s ${itemCount} item${itemCount !== 1 ? 's' : ''} merged! Review and send to client.`
-                        : scopeMerged 
+                        : scopeMerged
                           ? `✓ ${collaboratorName}'s scope of work merged! Review and send to client.`
                           : `✓ Collaboration with ${collaboratorName} marked as complete.`;
                       showToast?.(message, 'success');
@@ -2608,10 +2619,9 @@ export default function QuoteDocumentPage() {
                     }
                   }}
                   disabled={mergingItems || (selectedCollabItems.size === 0 && !(showCollaboratorInfo && collaboratorQuote?.scope_of_work))}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
-                    !mergingItems && (selectedCollabItems.size > 0 || (showCollaboratorInfo && collaboratorQuote?.scope_of_work))
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/30'
-                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${!mergingItems && (selectedCollabItems.size > 0 || (showCollaboratorInfo && collaboratorQuote?.scope_of_work))
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/30'
+                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                     }`}
                 >
                   {mergingItems ? (
@@ -2719,59 +2729,59 @@ export default function QuoteDocumentPage() {
                       </div>
                     </div>
                   ) : (
-                      <div className={`flex gap-8 transition-colors duration-300 rounded-lg ${!selectedClientId && !selectedLeadId && isNewQuote ? 'bg-amber-50/60 -mx-3 px-3 py-2' : ''}`}>
-                        <div className="flex-1">
-                          <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Client</label>
-                          <div className="relative group">
-                            <select
-                              value={selectedClientId}
-                              onChange={(e) => {
-                                setSelectedClientId(e.target.value);
-                                if (e.target.value) {
-                                  const foundClient = clients.find(c => c.id === e.target.value);
-                                  if (foundClient) setClient(foundClient);
-                                  setSelectedLeadId(''); setSelectedLead(null); setRecipientType('client');
-                                }
-                                setHasUnsavedChanges(true);
-                              }}
-                              disabled={recipientType === 'lead'}
-                              className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
-                            >
-                              <option value="">Select Client</option>
-                              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
-                              <ChevronRight className="w-4 h-4 rotate-90" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex-1">
-                          <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Lead (Optional)</label>
-                          <div className="relative group">
-                            <select
-                              value={selectedLeadId}
-                              onChange={(e) => {
-                                setSelectedLeadId(e.target.value);
-                                if (e.target.value) {
-                                  const foundLead = leads.find(l => l.id === e.target.value);
-                                  if (foundLead) setSelectedLead(foundLead);
-                                  setSelectedClientId(''); setClient(null); setRecipientType('lead');
-                                }
-                                setHasUnsavedChanges(true);
-                              }}
-                              disabled={recipientType === 'client'}
-                              className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
-                            >
-                              <option value="">Select Lead</option>
-                              {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                            </select>
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
-                              <ChevronRight className="w-4 h-4 rotate-90" />
-                            </div>
+                    <div className={`flex gap-8 transition-colors duration-300 rounded-lg ${!selectedClientId && !selectedLeadId && isNewQuote ? 'bg-amber-50/60 -mx-3 px-3 py-2' : ''}`}>
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Client</label>
+                        <div className="relative group">
+                          <select
+                            value={selectedClientId}
+                            onChange={(e) => {
+                              setSelectedClientId(e.target.value);
+                              if (e.target.value) {
+                                const foundClient = clients.find(c => c.id === e.target.value);
+                                if (foundClient) setClient(foundClient);
+                                setSelectedLeadId(''); setSelectedLead(null); setRecipientType('client');
+                              }
+                              setHasUnsavedChanges(true);
+                            }}
+                            disabled={recipientType === 'lead'}
+                            className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
+                          >
+                            <option value="">Select Client</option>
+                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                            <ChevronRight className="w-4 h-4 rotate-90" />
                           </div>
                         </div>
                       </div>
+
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Lead (Optional)</label>
+                        <div className="relative group">
+                          <select
+                            value={selectedLeadId}
+                            onChange={(e) => {
+                              setSelectedLeadId(e.target.value);
+                              if (e.target.value) {
+                                const foundLead = leads.find(l => l.id === e.target.value);
+                                if (foundLead) setSelectedLead(foundLead);
+                                setSelectedClientId(''); setClient(null); setRecipientType('lead');
+                              }
+                              setHasUnsavedChanges(true);
+                            }}
+                            disabled={recipientType === 'client'}
+                            className="w-full appearance-none bg-transparent text-lg font-medium text-neutral-900 outline-none py-2 border-b border-neutral-200 focus:border-neutral-900 transition-colors cursor-pointer"
+                          >
+                            <option value="">Select Lead</option>
+                            {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                          </select>
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                            <ChevronRight className="w-4 h-4 rotate-90" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -2951,7 +2961,7 @@ export default function QuoteDocumentPage() {
                                           <option value={`overlap:${dep.id}`}>With {depIdx + 1}. {dep.description.substring(0, 15)}...</option>
                                         </React.Fragment>
                                       ))}
-                                  </optgroup>
+                                    </optgroup>
                                   </select>
                                 </div>
                               </div>
