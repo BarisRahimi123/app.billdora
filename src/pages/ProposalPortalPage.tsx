@@ -604,9 +604,9 @@ export default function ProposalPortalPage() {
     );
   }
 
-  // Main proposal view - NEW REFINED TEMPLATE
+  // Main proposal view - NEW REFINED TEMPLATE v2.1 (Feb 5 2026)
   return (
-    <div className="min-h-screen bg-neutral-200 print:bg-white">
+    <div className="min-h-screen bg-neutral-200 print:bg-white" data-version="2.1">
       {/* Floating Header - Hidden when printing */}
       <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-b z-50 print:hidden">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
