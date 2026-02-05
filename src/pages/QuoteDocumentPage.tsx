@@ -462,7 +462,7 @@ export default function QuoteDocumentPage() {
             try {
               // First check if owner is already in collaborator's leads
               const existingLeadMatch = leadsData?.find(
-                (l: Lead) => l.company === collabData.owner_company_id
+                (l: Lead) => l.company_name === collabData.owner_company_id
               );
               
               if (existingLeadMatch) {
@@ -504,17 +504,17 @@ export default function QuoteDocumentPage() {
                 if (companyName || ownerProfile) {
                   // Create a pseudo-lead to display owner info
                   // Use company_name property to match what displayClientName expects
-                  const ownerAsLead = {
+                  const ownerAsLead: Lead = {
                     id: 'owner-' + collabData.owner_company_id,
+                    company_id: collabData.owner_company_id,
                     name: ownerProfile?.full_name || companyName || 'Project Owner',
                     company_name: companyName,
                     email: ownerProfile?.email || ownerCompanySettings?.email || '',
-                    company: companyName,
                     phone: ownerCompanySettings?.phone || '',
-                    status: 'qualified' as const,
+                    status: 'qualified',
                     created_at: new Date().toISOString()
                   };
-                  setSelectedLead(ownerAsLead as Lead);
+                  setSelectedLead(ownerAsLead);
                   setRecipientType('lead');
                   console.log('[QuoteDocument] Pre-filled owner as recipient:', ownerAsLead.company_name || ownerAsLead.name);
                 }
@@ -749,17 +749,17 @@ export default function QuoteDocumentPage() {
                 const companyName = ownerCompanySettings?.company_name || ownerCompanyData?.name || '';
                 
                 if (companyName || ownerProfile) {
-                  const ownerAsLead = {
+                  const ownerAsLead: Lead = {
                     id: 'owner-' + collabRecord.owner_company_id,
+                    company_id: collabRecord.owner_company_id,
                     name: ownerProfile?.full_name || companyName || 'Project Owner',
                     company_name: companyName,
                     email: ownerProfile?.email || ownerCompanySettings?.email || '',
-                    company: companyName,
                     phone: ownerCompanySettings?.phone || '',
-                    status: 'qualified' as const,
+                    status: 'qualified',
                     created_at: new Date().toISOString()
                   };
-                  setSelectedLead(ownerAsLead as Lead);
+                  setSelectedLead(ownerAsLead);
                   setRecipientType('lead');
                   console.log('[QuoteDocument] Loaded owner as recipient:', ownerAsLead.company_name || ownerAsLead.name);
                 }
