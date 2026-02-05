@@ -854,68 +854,62 @@ export default function ProposalPortalPage() {
 
                       {/* Timeline (if fitting on this page) */}
                       {renderTimelineHere && (
-                        <div className="pt-8 border-t border-neutral-100 mt-auto">
-                          <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
-                          <div className="bg-white p-6 border border-neutral-100">
-                            {(() => {
-                              const validItems = lineItems.filter(item => item.description.trim());
-                              const computedOffsets = getComputedStartOffsets(validItems);
-                              const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
-                              const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
-                              const timelineRange = maxEnd - minStart;
-                              const totalDays = maxEnd || 1;
-                              const dayMarkers = [minStart + 1];
-                              const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
-                              for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
-                              if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
+                        <div className="pt-8 mt-auto">
+                          <h3 className="text-lg font-semibold text-neutral-900 mb-6">Estimated Timeline</h3>
+                          {(() => {
+                            const validItems = lineItems.filter(item => item.description.trim());
+                            const computedOffsets = getComputedStartOffsets(validItems);
+                            const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
+                            const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
+                            const timelineRange = maxEnd - minStart;
+                            const totalDays = maxEnd || 1;
+                            const dayMarkers = [minStart + 1];
+                            const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
+                            for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
+                            if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
 
-                              return (
-                                <div className="space-y-6">
-                                  {/* Header with Day Markers */}
-                                  <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                    <div className="flex-1 relative h-4">
-                                      {dayMarkers.map((day, idx) => {
-                                        const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
-                                        return (
-                                          <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
-                                            <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  {/* Timeline bars */}
-                                  <div className="space-y-4">
-                                    {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
-                                      const start = computedOffsets.get(item.id) || 0;
-                                      const left = ((start - minStart) / timelineRange) * 100;
-                                      const width = (item.estimated_days / timelineRange) * 100;
-                                      return (
-                                        <div key={item.id} className="mb-2">
-                                          <div className="mb-1.5 flex items-center gap-2">
-                                            <span className="text-xs text-neutral-900 font-medium">{item.description}</span>
-                                            <span className="text-[9px] text-neutral-400 font-medium">
-                                              {item.estimated_days}d
-                                            </span>
-                                          </div>
-                                          <div className="h-4 bg-neutral-100 rounded-full relative overflow-visible">
-                                            <div className={`absolute h-full rounded-full flex items-center justify-center text-white text-[9px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}>
-                                              {width > 5 && `${item.estimated_days}d`}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                  <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
-                                    <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
-                                    <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+                            return (
+                              <div className="space-y-4">
+                                {/* Header with Day Markers */}
+                                <div className="flex items-center text-[10px] text-neutral-400 mb-2">
+                                  <div className="w-48 text-xs font-medium text-neutral-500 uppercase tracking-wider">Phase</div>
+                                  <div className="flex-1 relative h-4 flex items-center">
+                                    <span className="text-neutral-400">Start</span>
+                                    <div className="flex-1 mx-4 h-px bg-neutral-200"></div>
+                                    <span className="text-neutral-400">W{Math.ceil(maxEnd / 7)}</span>
                                   </div>
                                 </div>
-                              );
-                            })()}
-                          </div>
+
+                                {/* Timeline bars */}
+                                <div className="space-y-3">
+                                  {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
+                                    const start = computedOffsets.get(item.id) || 0;
+                                    const left = ((start - minStart) / timelineRange) * 100;
+                                    const width = (item.estimated_days / timelineRange) * 100;
+                                    return (
+                                      <div key={item.id} className="flex items-center gap-4">
+                                        <div className="w-48 flex-shrink-0">
+                                          <span className="text-sm text-neutral-900 truncate block">{item.description}</span>
+                                        </div>
+                                        <div className="flex-1 h-6 bg-neutral-50 rounded relative">
+                                          <div 
+                                            className={`absolute h-full rounded flex items-center justify-end pr-2 text-white text-[10px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} 
+                                            style={{ left: `${left}%`, width: `${Math.max(width, 3)}%` }}
+                                          >
+                                            {width > 8 && `${item.estimated_days}d`}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex justify-between items-center pt-4 mt-2">
+                                  <span className="text-xs text-neutral-400">Visualization excludes non-working days</span>
+                                  <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -947,64 +941,57 @@ export default function ProposalPortalPage() {
                     </div>
 
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
-                      <div className="bg-white p-6 border border-neutral-100">
-                        {(() => {
-                          const validItems = lineItems.filter(item => item.description.trim());
-                          const computedOffsets = getComputedStartOffsets(validItems);
-                          const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
-                          const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
-                          const timelineRange = maxEnd - minStart;
-                          const totalDays = maxEnd || 1;
-                          const dayMarkers = [minStart + 1];
-                          const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
-                          for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
-                          if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
+                      <h3 className="text-lg font-semibold text-neutral-900 mb-6">Estimated Timeline</h3>
+                      {(() => {
+                        const validItems = lineItems.filter(item => item.description.trim());
+                        const computedOffsets = getComputedStartOffsets(validItems);
+                        const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
+                        const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
+                        const timelineRange = maxEnd - minStart;
+                        const totalDays = maxEnd || 1;
 
-                          return (
-                            <div className="space-y-6">
-                              <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                <div className="flex-1 relative h-4">
-                                  {dayMarkers.map((day, idx) => {
-                                    const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
-                                    return (
-                                      <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
-                                        <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              <div className="space-y-4">
-                                {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
-                                  const start = computedOffsets.get(item.id) || 0;
-                                  const left = ((start - minStart) / timelineRange) * 100;
-                                  const width = (item.estimated_days / timelineRange) * 100;
-                                  return (
-                                    <div key={item.id} className="mb-2">
-                                      <div className="mb-1.5 flex items-center gap-2">
-                                        <span className="text-xs text-neutral-900 font-medium">{item.description}</span>
-                                        <span className="text-[9px] text-neutral-400 font-medium">
-                                          {item.estimated_days}d
-                                        </span>
-                                      </div>
-                                      <div className="h-4 bg-neutral-100 rounded-full relative overflow-visible">
-                                        <div className={`absolute h-full rounded-full flex items-center justify-center text-white text-[9px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}>
-                                          {width > 5 && `${item.estimated_days}d`}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                              <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
-                                <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
-                                <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+                        return (
+                          <div className="space-y-4">
+                            {/* Header with Day Markers */}
+                            <div className="flex items-center text-[10px] text-neutral-400 mb-2">
+                              <div className="w-48 text-xs font-medium text-neutral-500 uppercase tracking-wider">Phase</div>
+                              <div className="flex-1 relative h-4 flex items-center">
+                                <span className="text-neutral-400">Start</span>
+                                <div className="flex-1 mx-4 h-px bg-neutral-200"></div>
+                                <span className="text-neutral-400">W{Math.ceil(maxEnd / 7)}</span>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </div>
+
+                            {/* Timeline bars */}
+                            <div className="space-y-3">
+                              {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
+                                const start = computedOffsets.get(item.id) || 0;
+                                const left = ((start - minStart) / timelineRange) * 100;
+                                const width = (item.estimated_days / timelineRange) * 100;
+                                return (
+                                  <div key={item.id} className="flex items-center gap-4">
+                                    <div className="w-48 flex-shrink-0">
+                                      <span className="text-sm text-neutral-900 truncate block">{item.description}</span>
+                                    </div>
+                                    <div className="flex-1 h-6 bg-neutral-50 rounded relative">
+                                      <div 
+                                        className={`absolute h-full rounded flex items-center justify-end pr-2 text-white text-[10px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} 
+                                        style={{ left: `${left}%`, width: `${Math.max(width, 3)}%` }}
+                                      >
+                                        {width > 8 && `${item.estimated_days}d`}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="flex justify-between items-center pt-4 mt-2">
+                              <span className="text-xs text-neutral-400">Visualization excludes non-working days</span>
+                              <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="mt-auto pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider">
