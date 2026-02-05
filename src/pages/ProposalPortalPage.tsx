@@ -873,7 +873,6 @@ export default function ProposalPortalPage() {
                                 <div className="space-y-6">
                                   {/* Header with Day Markers */}
                                   <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                    <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
                                     <div className="flex-1 relative h-4">
                                       {dayMarkers.map((day, idx) => {
                                         const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
@@ -887,16 +886,23 @@ export default function ProposalPortalPage() {
                                   </div>
 
                                   {/* Timeline bars */}
-                                  <div className="space-y-3">
+                                  <div className="space-y-4">
                                     {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
                                       const start = computedOffsets.get(item.id) || 0;
                                       const left = ((start - minStart) / timelineRange) * 100;
                                       const width = (item.estimated_days / timelineRange) * 100;
                                       return (
-                                        <div key={item.id} className="flex items-center gap-4">
-                                          <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
-                                          <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
-                                            <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
+                                        <div key={item.id} className="mb-2">
+                                          <div className="mb-1.5 flex items-center gap-2">
+                                            <span className="text-xs text-neutral-900 font-medium">{item.description}</span>
+                                            <span className="text-[9px] text-neutral-400 font-medium">
+                                              {item.estimated_days}d
+                                            </span>
+                                          </div>
+                                          <div className="h-4 bg-neutral-100 rounded-full relative overflow-visible">
+                                            <div className={`absolute h-full rounded-full flex items-center justify-center text-white text-[9px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}>
+                                              {width > 5 && `${item.estimated_days}d`}
+                                            </div>
                                           </div>
                                         </div>
                                       );
@@ -958,7 +964,6 @@ export default function ProposalPortalPage() {
                           return (
                             <div className="space-y-6">
                               <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
                                 <div className="flex-1 relative h-4">
                                   {dayMarkers.map((day, idx) => {
                                     const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
@@ -970,16 +975,23 @@ export default function ProposalPortalPage() {
                                   })}
                                 </div>
                               </div>
-                              <div className="space-y-3">
+                              <div className="space-y-4">
                                 {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
                                   const start = computedOffsets.get(item.id) || 0;
                                   const left = ((start - minStart) / timelineRange) * 100;
                                   const width = (item.estimated_days / timelineRange) * 100;
                                   return (
-                                    <div key={item.id} className="flex items-center gap-4">
-                                      <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
-                                      <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
-                                        <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
+                                    <div key={item.id} className="mb-2">
+                                      <div className="mb-1.5 flex items-center gap-2">
+                                        <span className="text-xs text-neutral-900 font-medium">{item.description}</span>
+                                        <span className="text-[9px] text-neutral-400 font-medium">
+                                          {item.estimated_days}d
+                                        </span>
+                                      </div>
+                                      <div className="h-4 bg-neutral-100 rounded-full relative overflow-visible">
+                                        <div className={`absolute h-full rounded-full flex items-center justify-center text-white text-[9px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}>
+                                          {width > 5 && `${item.estimated_days}d`}
+                                        </div>
                                       </div>
                                     </div>
                                   );
