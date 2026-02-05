@@ -5,7 +5,7 @@ import { useFeatureGating } from '../hooks/useFeatureGating';
 import { api, Invoice, Client, Project, reminderHistoryApi, ReminderHistory, recurringInvoicesApi, RecurringInvoice, notificationsApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notificationService';
-import { Plus, Search, Filter, Download, MoreHorizontal, DollarSign, FileText, Clock, X, Check, Send, Printer, Copy, Mail, CreditCard, Eye, ChevronLeft, RefreshCw, Camera, Save, Trash2, Edit2, ArrowUpRight, List, LayoutGrid, ChevronDown, ChevronRight, Bell, Calendar, CheckCircle, AlertCircle, Repeat, History, User } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, DollarSign, FileText, Clock, X, Check, Send, Printer, Copy, Mail, CreditCard, Eye, ChevronLeft, RefreshCw, Camera, Save, Trash2, Edit2, ArrowUpRight, List, LayoutGrid, ChevronDown, ChevronRight, Bell, Calendar, CheckCircle, AlertCircle, Repeat, History, User, Layers } from 'lucide-react';
 import PaymentModal from '../components/PaymentModal';
 import MakePaymentModal from '../components/MakePaymentModal';
 import { useToast } from '../components/Toast';
@@ -99,6 +99,58 @@ export default function InvoicingPage() {
     }
     setDeleting(false);
   }, [selectedInvoices, showToast]);
+
+  const [consolidating, setConsolidating] = useState(false);
+
+  // Check if selected invoices can be consolidated (same client, not paid/consolidated)
+  const canConsolidate = useMemo(() => {
+    if (selectedInvoices.size < 2) return { allowed: false, reason: 'Select at least 2 invoices' };
+    
+    const selected = invoices.filter(inv => selectedInvoices.has(inv.id));
+    
+    // Check all from same client
+    const clientIds = [...new Set(selected.map(inv => inv.client_id))];
+    if (clientIds.length > 1) return { allowed: false, reason: 'Invoices must be from the same client' };
+    
+    // Check none are paid or already consolidated
+    const invalidInvoices = selected.filter(inv => 
+      inv.status === 'paid' || inv.status === 'consolidated' || inv.consolidated_into
+    );
+    if (invalidInvoices.length > 0) return { allowed: false, reason: 'Cannot consolidate paid or already consolidated invoices' };
+    
+    return { allowed: true, reason: '' };
+  }, [selectedInvoices, invoices]);
+
+  const handleConsolidate = useCallback(async () => {
+    if (!canConsolidate.allowed || !profile?.company_id) return;
+    
+    const selectedList = invoices.filter(inv => selectedInvoices.has(inv.id));
+    const clientName = selectedList[0]?.client?.name || 'this client';
+    const totalAmount = selectedList.reduce((sum, inv) => sum + (inv.total || 0), 0);
+    
+    if (!confirm(`Consolidate ${selectedInvoices.size} invoices for ${clientName} into one invoice totaling ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalAmount)}?`)) return;
+    
+    setConsolidating(true);
+    try {
+      const result = await api.consolidateInvoices(Array.from(selectedInvoices), profile.company_id);
+      
+      if (result.success) {
+        showToast(`Successfully consolidated ${selectedInvoices.size} invoices into ${result.consolidatedInvoice?.invoice_number}`, 'success');
+        loadData();
+        setSelectedInvoices(new Set());
+        // Open the new consolidated invoice
+        if (result.consolidatedInvoice) {
+          setViewingInvoice(result.consolidatedInvoice);
+        }
+      } else {
+        showToast(result.error || 'Failed to consolidate invoices', 'error');
+      }
+    } catch (err) {
+      console.error('Failed to consolidate invoices:', err);
+      showToast('Failed to consolidate invoices', 'error');
+    }
+    setConsolidating(false);
+  }, [selectedInvoices, canConsolidate, invoices, profile?.company_id, showToast]);
 
   // Check for navigation state to open a specific invoice
   useEffect(() => {
@@ -247,6 +299,7 @@ export default function InvoicingPage() {
       case 'sent': return 'bg-amber-50 text-amber-600';
       case 'paid': return 'bg-[#476E66]/10 text-[#476E66]';
       case 'overdue': return 'bg-red-50 text-red-600';
+      case 'consolidated': return 'bg-purple-50 text-purple-600';
       default: return 'bg-neutral-100 text-neutral-700';
     }
   };
@@ -712,6 +765,7 @@ export default function InvoicingPage() {
           <option value="sent">Sent</option>
           <option value="paid">Paid</option>
           <option value="overdue">Overdue</option>
+          <option value="consolidated">Consolidated</option>
         </select>
         <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg">
           <button
@@ -755,16 +809,28 @@ export default function InvoicingPage() {
                 {activeTab !== 'aging' && <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden md:table-cell">Status</th>}
                 <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden lg:table-cell">Views</th>
                 <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden md:table-cell">Due Date</th>
-                <th className="w-8">
+                <th className="w-20">
                   {selectedInvoices.size > 0 && (
-                    <button
-                      onClick={handleBatchDelete}
-                      disabled={deleting}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      title={`Delete ${selectedInvoices.size} selected`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {selectedInvoices.size >= 2 && (
+                        <button
+                          onClick={handleConsolidate}
+                          disabled={consolidating || !canConsolidate.allowed}
+                          className={`p-1 rounded ${canConsolidate.allowed ? 'text-[#476E66] hover:bg-[#476E66]/10' : 'text-neutral-300 cursor-not-allowed'}`}
+                          title={canConsolidate.allowed ? `Consolidate ${selectedInvoices.size} invoices` : canConsolidate.reason}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={handleBatchDelete}
+                        disabled={deleting}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        title={`Delete ${selectedInvoices.size} selected`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
                 </th>
               </tr>
@@ -820,6 +886,11 @@ export default function InvoicingPage() {
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
                           {invoice.status || 'draft'}
                         </span>
+                        {invoice.consolidated_from && invoice.consolidated_from.length > 0 && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded text-xs" title={`Combined from ${invoice.consolidated_from.length} invoices`}>
+                            <Layers className="w-3 h-3" /> {invoice.consolidated_from.length}
+                          </span>
+                        )}
                         {recurringInvoices.some(r => r.template_invoice_id === invoice.id && r.is_active) && (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-xs">
                             <Repeat className="w-3 h-3" /> Recurring
@@ -950,6 +1021,51 @@ export default function InvoicingPage() {
           {filteredInvoices.length === 0 && (
             <div className="text-center py-12 text-neutral-500 bg-white rounded-2xl border border-neutral-100">No invoices found</div>
           )}
+        </div>
+      )}
+
+      {/* Floating Action Bar when invoices selected */}
+      {selectedInvoices.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-neutral-900 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-4 z-50">
+          <span className="text-sm font-medium">{selectedInvoices.size} invoice{selectedInvoices.size > 1 ? 's' : ''} selected</span>
+          <div className="w-px h-5 bg-neutral-700" />
+          {selectedInvoices.size >= 2 && (
+            <button
+              onClick={handleConsolidate}
+              disabled={consolidating || !canConsolidate.allowed}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                canConsolidate.allowed 
+                  ? 'bg-[#476E66] hover:bg-[#3d5f58] text-white' 
+                  : 'bg-neutral-700 text-neutral-400 cursor-not-allowed'
+              }`}
+              title={canConsolidate.allowed ? 'Combine into single invoice' : canConsolidate.reason}
+            >
+              {consolidating ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Layers className="w-4 h-4" />
+              )}
+              Consolidate
+            </button>
+          )}
+          <button
+            onClick={handleBatchDelete}
+            disabled={deleting}
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-full text-sm font-medium transition-colors"
+          >
+            {deleting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            Delete
+          </button>
+          <button
+            onClick={() => setSelectedInvoices(new Set())}
+            className="p-1.5 hover:bg-neutral-700 rounded-full transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

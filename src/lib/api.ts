@@ -219,6 +219,9 @@ export interface Invoice {
   public_view_token?: string;
   view_count?: number;
   last_viewed_at?: string;
+  // Consolidation fields
+  consolidated_into?: string; // ID of the consolidated invoice this was merged into
+  consolidated_from?: string[]; // Array of invoice IDs that were merged into this invoice
   client?: Client;
   project?: Project;
 }
@@ -1074,6 +1077,113 @@ export const api = {
     } catch (err) {
       console.error('Unexpected error deleting invoices:', err);
       return { success: false, error: err as Error, step: 'unknown' };
+    }
+  },
+
+  async consolidateInvoices(invoiceIds: string[], companyId: string): Promise<{ success: boolean; consolidatedInvoice?: Invoice; error?: string }> {
+    try {
+      if (invoiceIds.length < 2) {
+        return { success: false, error: 'At least 2 invoices are required for consolidation' };
+      }
+
+      // Fetch all invoices to consolidate
+      const { data: invoices, error: fetchError } = await supabase
+        .from('invoices')
+        .select('*, client:clients(*), project:projects(*)')
+        .in('id', invoiceIds);
+
+      if (fetchError) throw fetchError;
+      if (!invoices || invoices.length !== invoiceIds.length) {
+        return { success: false, error: 'Some invoices could not be found' };
+      }
+
+      // Validate all invoices are from the same client
+      const clientIds = [...new Set(invoices.map(inv => inv.client_id))];
+      if (clientIds.length > 1) {
+        return { success: false, error: 'All invoices must be from the same client' };
+      }
+
+      // Validate no invoices are already consolidated or paid
+      const invalidInvoices = invoices.filter(inv => 
+        inv.status === 'paid' || inv.consolidated_into
+      );
+      if (invalidInvoices.length > 0) {
+        return { success: false, error: 'Cannot consolidate paid or already consolidated invoices' };
+      }
+
+      // Calculate totals
+      const subtotal = invoices.reduce((sum, inv) => sum + (inv.subtotal || 0), 0);
+      const taxAmount = invoices.reduce((sum, inv) => sum + (inv.tax_amount || 0), 0);
+      const total = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+      // Generate consolidated invoice number
+      const invoiceNumber = `CONS-${Date.now().toString().slice(-6)}`;
+
+      // Create consolidated invoice
+      const { data: consolidatedInvoice, error: createError } = await supabase
+        .from('invoices')
+        .insert({
+          company_id: companyId,
+          client_id: clientIds[0],
+          invoice_number: invoiceNumber,
+          status: 'draft',
+          subtotal,
+          tax_amount: taxAmount,
+          total,
+          consolidated_from: invoiceIds,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+
+      // Fetch line items from all original invoices
+      const { data: allLineItems, error: lineItemsError } = await supabase
+        .from('invoice_line_items')
+        .select('*')
+        .in('invoice_id', invoiceIds);
+
+      if (lineItemsError) throw lineItemsError;
+
+      // Copy line items to consolidated invoice with project context
+      if (allLineItems && allLineItems.length > 0) {
+        const newLineItems = allLineItems.map(item => {
+          const originalInvoice = invoices.find(inv => inv.id === item.invoice_id);
+          const projectName = originalInvoice?.project?.name || 'General';
+          return {
+            invoice_id: consolidatedInvoice.id,
+            description: `[${projectName}] ${item.description}`,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            amount: item.amount,
+            taxable: item.taxable,
+            sort_order: item.sort_order
+          };
+        });
+
+        const { error: insertLineItemsError } = await supabase
+          .from('invoice_line_items')
+          .insert(newLineItems);
+
+        if (insertLineItemsError) throw insertLineItemsError;
+      }
+
+      // Mark original invoices as consolidated
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ 
+          consolidated_into: consolidatedInvoice.id,
+          status: 'consolidated'
+        })
+        .in('id', invoiceIds);
+
+      if (updateError) throw updateError;
+
+      return { success: true, consolidatedInvoice };
+    } catch (err: any) {
+      console.error('Failed to consolidate invoices:', err);
+      return { success: false, error: err.message || 'Failed to consolidate invoices' };
     }
   },
 
