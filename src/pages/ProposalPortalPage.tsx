@@ -643,7 +643,7 @@ export default function ProposalPortalPage() {
   const totalScopePages = rawScopePages.length + (timelineOverflows ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-neutral-200 print:bg-white" data-version="2.1">
+    <div className="min-h-screen bg-neutral-200 print:bg-white" data-version="3.0-feb5">
       {/* Floating Header - Hidden when printing */}
       <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-b z-50 print:hidden">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
