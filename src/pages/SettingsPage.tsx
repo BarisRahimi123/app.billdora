@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [showMobileNav, setShowMobileNav] = useState(false);
 
   // Company Info State
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
@@ -57,25 +58,60 @@ export default function SettingsPage() {
 
   const { canView, isAdmin } = usePermissions();
 
-  const allTabs = [
-    { id: 'profile', label: 'My Profile', icon: User, adminOnly: false },
-    { id: 'subscription', label: 'Subscription', icon: CreditCard, adminOnly: false },
-    { id: 'company', label: 'Company Info', icon: Building2, adminOnly: true },
-    { id: 'users', label: 'User Management', icon: Users, adminOnly: true },
-    { id: 'services', label: 'Products & Services', icon: Package, adminOnly: true },
-    { id: 'codes-fields', label: 'Catalog & Fields', icon: Tag, adminOnly: true },
-    { id: 'collaborators', label: 'Collaborator Categories', icon: Users, adminOnly: true },
-    { id: 'staff', label: 'Staff', icon: Users, adminOnly: true },
-    { id: 'templates', label: 'Templates', icon: FileText, adminOnly: true },
-    { id: 'import-export', label: 'Import / Export', icon: FolderUp, adminOnly: true },
-    { id: 'notifications', label: 'Notifications', icon: Bell, adminOnly: false },
-    { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
-    { id: 'security', label: 'Security', icon: Shield, adminOnly: false },
-    { id: 'invoicing', label: 'Invoicing', icon: Receipt, adminOnly: true },
+  // Grouped tabs for better organization
+  const tabGroups = [
+    {
+      id: 'account',
+      label: 'Account',
+      tabs: [
+        { id: 'profile', label: 'My Profile', icon: User, adminOnly: false },
+        { id: 'subscription', label: 'Subscription', icon: CreditCard, adminOnly: false },
+        { id: 'security', label: 'Security', icon: Shield, adminOnly: false },
+        { id: 'notifications', label: 'Notifications', icon: Bell, adminOnly: false },
+      ]
+    },
+    {
+      id: 'organization',
+      label: 'Organization',
+      tabs: [
+        { id: 'company', label: 'Company Info', icon: Building2, adminOnly: true },
+        { id: 'users', label: 'User Management', icon: Users, adminOnly: true },
+        { id: 'staff', label: 'Staff', icon: Users, adminOnly: true },
+        { id: 'collaborators', label: 'Collaborators', icon: Users, adminOnly: true },
+      ]
+    },
+    {
+      id: 'configuration',
+      label: 'Configuration',
+      tabs: [
+        { id: 'services', label: 'Products & Services', icon: Package, adminOnly: true },
+        { id: 'codes-fields', label: 'Catalog & Fields', icon: Tag, adminOnly: true },
+        { id: 'templates', label: 'Templates', icon: FileText, adminOnly: true },
+        { id: 'invoicing', label: 'Invoicing', icon: Receipt, adminOnly: true },
+      ]
+    },
+    {
+      id: 'data',
+      label: 'Data & Integrations',
+      tabs: [
+        { id: 'import-export', label: 'Import / Export', icon: FolderUp, adminOnly: true },
+        { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
+      ]
+    }
   ];
 
-  // Filter tabs based on user permissions - staff can see profile, notifications, security
-  const tabs = allTabs.filter(tab => !tab.adminOnly || isAdmin || canView('settings'));
+  // Filter tabs based on user permissions
+  const filteredGroups = tabGroups.map(group => ({
+    ...group,
+    tabs: group.tabs.filter(tab => !tab.adminOnly || isAdmin || canView('settings'))
+  })).filter(group => group.tabs.length > 0);
+
+  // Flat list of all visible tabs for compatibility
+  const tabs = filteredGroups.flatMap(g => g.tabs);
+
+  // Find which group the active tab belongs to
+  const activeGroup = filteredGroups.find(g => g.tabs.some(t => t.id === activeTab));
+  const activeTabData = tabs.find(t => t.id === activeTab);
 
   useEffect(() => {
     let mounted = true;
@@ -256,35 +292,93 @@ export default function SettingsPage() {
   const [showMoreTabs, setShowMoreTabs] = useState(false);
 
   // Split tabs: first 6 visible, rest in dropdown (on mobile)
-  const visibleTabCount = 6;
-  const visibleTabs = tabs.slice(0, visibleTabCount);
-  const moreTabs = tabs.slice(visibleTabCount);
-  const activeTabInMore = moreTabs.some(t => t.id === activeTab);
-
   return (
-    <div className="space-y-3">
+    <div className="min-h-screen">
       {/* Page Header */}
       <div className="flex flex-col gap-1 pb-4">
         <h1 className="text-lg sm:text-2xl font-bold text-neutral-900 uppercase tracking-tight">Settings</h1>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-neutral-200">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-sm transition-colors whitespace-nowrap ${activeTab === tab.id
-                ? 'bg-neutral-900 text-white'
-                : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
-                }`}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="pt-6">
+      <div className="flex gap-6">
+        {/* Sidebar Navigation - Desktop */}
+        <div className="hidden lg:block w-56 flex-shrink-0">
+          <nav className="sticky top-4 space-y-4">
+            {filteredGroups.map((group) => (
+              <div key={group.id}>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 px-3 mb-1.5">
+                  {group.label}
+                </h3>
+                <div className="space-y-0.5">
+                  {group.tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-neutral-900 text-white'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                      }`}
+                    >
+                      <tab.icon className="w-4 h-4" />
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </div>
+
+        {/* Mobile Navigation - Dropdown */}
+        <div className="lg:hidden w-full mb-4">
+          <button
+            onClick={() => setShowMobileNav(!showMobileNav)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white border border-neutral-200 rounded-lg"
+          >
+            <div className="flex items-center gap-2">
+              {activeTabData && <activeTabData.icon className="w-4 h-4 text-neutral-600" />}
+              <span className="font-medium text-neutral-900">{activeTabData?.label || 'Select'}</span>
+              {activeGroup && (
+                <span className="text-xs text-neutral-400">({activeGroup.label})</span>
+              )}
+            </div>
+            <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform ${showMobileNav ? 'rotate-90' : ''}`} />
+          </button>
+          
+          {showMobileNav && (
+            <div className="mt-2 bg-white border border-neutral-200 rounded-lg shadow-lg overflow-hidden">
+              {filteredGroups.map((group, groupIdx) => (
+                <div key={group.id} className={groupIdx > 0 ? 'border-t border-neutral-100' : ''}>
+                  <div className="px-4 py-2 bg-neutral-50">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                      {group.label}
+                    </span>
+                  </div>
+                  {group.tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setShowMobileNav(false);
+                      }}
+                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
+                        activeTab === tab.id
+                          ? 'bg-neutral-900 text-white'
+                          : 'text-neutral-700 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <tab.icon className="w-4 h-4" />
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Tab Content */}
+        <div className="flex-1 min-w-0">
 
         {/* Content */}
         <div className="w-full">
