@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Clock, CheckSquare, DollarSign, TrendingUp, Plus, FileText, FolderPlus, Timer, ChevronDown, X, CheckCircle, XCircle, BarChart3, TreePine, Camera, Target, Settings2, ArrowUpRight, ArrowDownRight, Wallet, Briefcase } from 'lucide-react';
+import { Clock, CheckSquare, DollarSign, TrendingUp, Plus, FileText, FolderPlus, Timer, ChevronDown, X, CheckCircle, XCircle, BarChart3, TreePine, Camera, Target, Settings2, ArrowUpRight, ArrowDownRight, Wallet, Briefcase, Send, FileCheck, Users, Trophy, Building2 } from 'lucide-react';
 import BusinessHealthTree from '../components/BusinessHealthTree';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -46,6 +46,21 @@ interface AgingData {
   amount: number;
 }
 
+interface SalesStats {
+  proposalsSent: number;
+  proposalsAccepted: number;
+  proposalsPending: number;
+  pipelineValue: number;
+  winRate: number;
+}
+
+interface TopClient {
+  id: string;
+  name: string;
+  totalRevenue: number;
+  invoiceCount: number;
+}
+
 export default function DashboardPage() {
   const { user, profile, loading: authLoading } = useAuth();
   const { canViewFinancials } = usePermissions();
@@ -66,6 +81,8 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [agingData, setAgingData] = useState<AgingData[]>([]);
+  const [salesStats, setSalesStats] = useState<SalesStats>({ proposalsSent: 0, proposalsAccepted: 0, proposalsPending: 0, pipelineValue: 0, winRate: 0 });
+  const [topClients, setTopClients] = useState<TopClient[]>([]);
   const quickAddRef = useRef<HTMLDivElement>(null);
   const [subscriptionNotice, setSubscriptionNotice] = useState<{ type: 'success' | 'canceled'; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'health'>('overview');
@@ -157,7 +174,7 @@ export default function DashboardPage() {
       console.log('[Dashboard] Starting data fetch for company:', profile.company_id);
       setLoading(true);
       
-      const [statsData, projectsData, timeEntries, invoicesData, quotesData, allTimeEntries, companyExpenses, companyProfiles] = await Promise.all([
+      const [statsData, projectsData, timeEntries, invoicesData, quotesData, allTimeEntries, companyExpenses, companyProfiles, clientsData] = await Promise.all([
         api.getDashboardStats(profile.company_id, user.id),
         api.getProjects(profile.company_id),
         api.getTimeEntries(profile.company_id, user.id),
@@ -166,6 +183,7 @@ export default function DashboardPage() {
         api.getTimeEntries(profile.company_id),
         companyExpensesApi.getExpenses(profile.company_id),
         api.getCompanyProfiles(profile.company_id),
+        api.getClients(profile.company_id),
       ]);
       
       const activeProjects = projectsData.filter(p => p.status === 'active' || p.status === 'in_progress').length;
@@ -273,6 +291,47 @@ export default function DashboardPage() {
       
       setActualProfit(totalRevenue - annualOverhead);
       setTotalExpenses(annualOverhead);
+
+      // Calculate Sales Stats
+      const proposalsSent = quotesData.filter(q => q.status === 'sent').length;
+      const proposalsAccepted = quotesData.filter(q => q.status === 'accepted' || q.status === 'converted').length;
+      const proposalsPending = quotesData.filter(q => q.status === 'sent' || q.status === 'draft').length;
+      const pipelineValue = quotesData
+        .filter(q => q.status === 'sent' || q.status === 'draft')
+        .reduce((sum, q) => sum + Number(q.total || 0), 0);
+      
+      setSalesStats({
+        proposalsSent: quotesData.filter(q => ['sent', 'accepted', 'converted', 'declined'].includes(q.status || '')).length,
+        proposalsAccepted,
+        proposalsPending,
+        pipelineValue,
+        winRate: winRatePct,
+      });
+
+      // Calculate Top Clients by Revenue
+      const clientRevenueMap = new Map<string, { revenue: number; invoiceCount: number }>();
+      invoicesData.filter(i => i.status === 'paid' && i.client_id).forEach(inv => {
+        const existing = clientRevenueMap.get(inv.client_id!) || { revenue: 0, invoiceCount: 0 };
+        clientRevenueMap.set(inv.client_id!, {
+          revenue: existing.revenue + Number(inv.total || 0),
+          invoiceCount: existing.invoiceCount + 1,
+        });
+      });
+
+      const topClientsList: TopClient[] = Array.from(clientRevenueMap.entries())
+        .map(([clientId, data]) => {
+          const client = clientsData.find(c => c.id === clientId);
+          return {
+            id: clientId,
+            name: client?.display_name || client?.name || 'Unknown Client',
+            totalRevenue: data.revenue,
+            invoiceCount: data.invoiceCount,
+          };
+        })
+        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+        .slice(0, 3);
+      
+      setTopClients(topClientsList);
       
       setError(null);
       console.log('[Dashboard] Data loaded successfully');
@@ -651,6 +710,79 @@ export default function DashboardPage() {
                     <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</span>
                     <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">drafts</span>
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sales Pipeline & Top Clients Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 sm:gap-4">
+            {/* Sales Pipeline */}
+            <div 
+              onClick={() => navigate('/sales')}
+              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
+              style={{ boxShadow: 'var(--shadow-card)' }}
+            >
+              <div className="flex items-center justify-between mb-2 sm:mb-4">
+                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900">Sales Pipeline</h2>
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+                <div className="text-center sm:text-left p-2 sm:p-3 bg-purple-50 rounded-lg sm:rounded-xl">
+                  <p className="text-sm sm:text-xl font-bold text-purple-700">{salesStats.proposalsSent}</p>
+                  <p className="text-[8px] sm:text-xs text-purple-600">Sent</p>
+                </div>
+                <div className="text-center sm:text-left p-2 sm:p-3 bg-emerald-50 rounded-lg sm:rounded-xl">
+                  <p className="text-sm sm:text-xl font-bold text-emerald-700">{salesStats.proposalsAccepted}</p>
+                  <p className="text-[8px] sm:text-xs text-emerald-600">Won</p>
+                </div>
+                <div className="text-center sm:text-left p-2 sm:p-3 bg-blue-50 rounded-lg sm:rounded-xl">
+                  <p className="text-sm sm:text-xl font-bold text-blue-700">{salesStats.winRate}%</p>
+                  <p className="text-[8px] sm:text-xs text-blue-600">Win Rate</p>
+                </div>
+                <div className="text-center sm:text-left p-2 sm:p-3 bg-amber-50 rounded-lg sm:rounded-xl">
+                  <p className="text-sm sm:text-xl font-bold text-amber-700 truncate">{formatCurrency(salesStats.pipelineValue)}</p>
+                  <p className="text-[8px] sm:text-xs text-amber-600">Pipeline</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Clients */}
+            <div 
+              onClick={() => navigate('/sales?tab=clients')}
+              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
+              style={{ boxShadow: 'var(--shadow-card)' }}
+            >
+              <div className="flex items-center justify-between mb-2 sm:mb-4">
+                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900">Top Clients</h2>
+                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+              </div>
+              {topClients.length === 0 ? (
+                <div className="text-center py-4 sm:py-6">
+                  <Building2 className="w-6 h-6 sm:w-8 sm:h-8 text-neutral-300 mx-auto mb-2" />
+                  <p className="text-[9px] sm:text-xs text-neutral-400">No client revenue yet</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 sm:space-y-2">
+                  {topClients.map((client, index) => (
+                    <div 
+                      key={client.id} 
+                      className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-neutral-50 rounded-lg sm:rounded-xl"
+                    >
+                      <div className={`w-5 h-5 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] sm:text-sm font-bold ${
+                        index === 0 ? 'bg-amber-100 text-amber-700' :
+                        index === 1 ? 'bg-neutral-200 text-neutral-600' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] sm:text-sm font-medium text-neutral-900 truncate">{client.name}</p>
+                        <p className="text-[8px] sm:text-xs text-neutral-500">{client.invoiceCount} invoice{client.invoiceCount !== 1 ? 's' : ''}</p>
+                      </div>
+                      <p className="text-[10px] sm:text-sm font-semibold text-emerald-600 flex-shrink-0">{formatCurrency(client.totalRevenue)}</p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
