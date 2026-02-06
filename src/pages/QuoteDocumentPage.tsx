@@ -287,6 +287,10 @@ export default function QuoteDocumentPage() {
   const [showSaveAsTemplateModal, setShowSaveAsTemplateModal] = useState(false);
   const [sentAccessCode, setSentAccessCode] = useState('');
   const [showEmailPreview, setShowEmailPreview] = useState(false);
+  // CC Email for send modal
+  const [showCcInput, setShowCcInput] = useState(false);
+  const [ccEmail, setCcEmail] = useState('');
+  const [ccName, setCcName] = useState('');
 
   // Generate email preview HTML
   const getEmailPreviewHtml = () => {
@@ -1807,6 +1811,10 @@ export default function QuoteDocumentPage() {
 
     if (!quote || !recipientEmail) return;
 
+    // Determine CC recipient - custom CC takes priority over billing contact
+    const finalCcEmail = ccEmail.trim() || (recipientType === 'client' ? (client?.billing_contact_email || null) : null);
+    const finalCcName = ccEmail.trim() ? (ccName.trim() || 'CC Recipient') : (recipientType === 'client' ? (client?.billing_contact_name || null) : null);
+
     setSendingProposal(true);
     try {
       // Use production URL for email links (not Capacitor's internal URL)
@@ -1823,8 +1831,8 @@ export default function QuoteDocumentPage() {
           companyId: profile?.company_id,
           clientEmail: recipientEmail,
           clientName: recipientName,
-          billingContactEmail: recipientType === 'client' ? (client?.billing_contact_email || null) : null,
-          billingContactName: recipientType === 'client' ? (client?.billing_contact_name || null) : null,
+          billingContactEmail: finalCcEmail,
+          billingContactName: finalCcName,
           projectName: projectName || documentTitle,
           companyName: companyInfo.name,
           senderName: profile?.full_name || companyInfo.name,
@@ -6189,13 +6197,61 @@ Our team is dedicated to delivering high-quality results that meet your specific
                         </div>
                         <p className="font-medium text-neutral-900">{displayClientName}</p>
                         <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : client?.email}</p>
-                        {recipientType === 'client' && client?.billing_contact_email && (
+                        {/* Show billing contact CC if exists and no custom CC */}
+                        {recipientType === 'client' && client?.billing_contact_email && !ccEmail.trim() && !showCcInput && (
                           <div className="mt-2 pt-2 border-t border-neutral-200">
                             <p className="text-xs text-neutral-400">CC: Billing Contact</p>
                             <p className="text-sm text-neutral-600">{client.billing_contact_name || 'Billing'} - {client.billing_contact_email}</p>
                           </div>
                         )}
                       </div>
+
+                      {/* CC Input Section */}
+                      <div className="border border-neutral-200 rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setShowCcInput(!showCcInput)}
+                          className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-neutral-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-neutral-700">CC Someone Else</span>
+                            <span className="text-xs text-neutral-400">(Optional)</span>
+                          </div>
+                          <svg className={`w-4 h-4 text-neutral-400 transition-transform ${showCcInput ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {showCcInput && (
+                          <div className="px-4 pb-4 pt-1 space-y-3 border-t border-neutral-100 bg-neutral-50/50">
+                            <div>
+                              <label className="block text-xs font-medium text-neutral-500 mb-1">CC Email</label>
+                              <input
+                                type="email"
+                                value={ccEmail}
+                                onChange={(e) => setCcEmail(e.target.value)}
+                                placeholder="additional@email.com"
+                                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-neutral-500 mb-1">CC Name (Optional)</label>
+                              <input
+                                type="text"
+                                value={ccName}
+                                onChange={(e) => setCcName(e.target.value)}
+                                placeholder="John Doe"
+                                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
+                              />
+                            </div>
+                            {ccEmail.trim() && (
+                              <p className="text-xs text-[#476E66]">
+                                This person will also receive the proposal email with the access code.
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="bg-neutral-50 rounded-xl p-4">
                         <p className="text-sm text-neutral-500 mb-1">Proposal</p>
                         <p className="font-medium text-neutral-900">{projectName || documentTitle}</p>
@@ -6208,7 +6264,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                     <div className="p-6 bg-neutral-50 space-y-3">
                       <div className="flex gap-3">
                         <button
-                          onClick={() => setShowSendModal(false)}
+                          onClick={() => { setShowSendModal(false); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
                           className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
                         >
                           Cancel
@@ -6261,7 +6317,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                   </div>
                   <div className="p-6 bg-neutral-50 space-y-3">
                     <button
-                      onClick={() => { setShowSendModal(false); setSentAccessCode(''); setShowEmailPreview(false); }}
+                      onClick={() => { setShowSendModal(false); setSentAccessCode(''); setShowEmailPreview(false); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
                       className="w-full px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors"
                     >
                       Done
