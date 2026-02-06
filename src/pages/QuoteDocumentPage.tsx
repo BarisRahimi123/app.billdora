@@ -2620,8 +2620,8 @@ export default function QuoteDocumentPage() {
                   }}
                   disabled={mergingItems || (selectedCollabItems.size === 0 && !(showCollaboratorInfo && collaboratorQuote?.scope_of_work))}
                   className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${!mergingItems && (selectedCollabItems.size > 0 || (showCollaboratorInfo && collaboratorQuote?.scope_of_work))
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/30'
-                      : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/30'
+                    : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                     }`}
                 >
                   {mergingItems ? (
@@ -5389,50 +5389,91 @@ Example:
                 {showSections.cover && (
                   <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
                     <div className="relative h-full">
+                      {/* Background Image & Overlay */}
                       <div
                         className="absolute inset-0 bg-cover bg-center"
                         style={{ backgroundImage: `url(${coverBgUrl})` }}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
+                        <div className="absolute inset-0 bg-gradient-to-tr from-zinc-900/90 via-zinc-900/40 to-black/60" />
                       </div>
-                      <div className="relative z-10 h-full flex flex-col text-white p-12">
-                        <div className="flex justify-between items-start mb-8">
+
+                      {/* Content Container */}
+                      <div className="relative z-10 h-full flex flex-col text-white p-14">
+
+                        {/* TOP HEADER */}
+                        <div className="flex justify-between items-start">
                           <div>
                             {companyInfo.logo ? (
-                              <img src={companyInfo.logo} alt={companyInfo.name} className="w-16 h-16 object-contain rounded-lg bg-white/10 mb-2" />
+                              <img src={companyInfo.logo} alt={companyInfo.name} className="h-16 w-auto object-contain brightness-0 invert" />
                             ) : (
-                              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center text-2xl font-bold mb-2">
-                                {companyInfo.name?.charAt(0) || 'C'}
+                              <div className="text-7xl font-light tracking-tighter leading-none opacity-90">
+                                P
                               </div>
                             )}
-                            <p className="text-white/70 text-sm">{companyInfo.website}</p>
+                          </div>
+
+                          <div className="text-sm font-medium tracking-wider opacity-80 pt-2">
+                            {formatDate(quote?.created_at || new Date().toISOString())}
                           </div>
                         </div>
-                        <div className="mb-auto">
-                          <p className="text-white/60 text-sm uppercase tracking-wider mb-2">Prepared For</p>
-                          <h3 className="text-2xl font-semibold mb-1">{displayClientName}</h3>
-                          {displayLeadName && displayLeadName !== displayClientName && (
-                            <p className="text-white/80">{displayLeadName}</p>
-                          )}
-                          <p className="text-white/60 mt-4">{formatDate(quote?.created_at)}</p>
+
+                        {/* MAIN CONTENT AREA */}
+                        <div className="flex-1 flex flex-col justify-center pl-2">
+
+                          {/* Client Name Section */}
+                          <div className="mb-10">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-0.5 h-3 bg-white/50"></div>
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-medium">PREPARED FOR</p>
+                            </div>
+                            <h2 className="text-5xl font-thin tracking-wide text-white opacity-95">
+                              {displayClientName || 'Valued Client'}
+                            </h2>
+                          </div>
+
+                          {/* Decorative Divider */}
+                          <div className="w-24 h-px bg-white/20 mb-10"></div>
+
+                          {/* Project Title Section */}
+                          <div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-0.5 h-3 bg-white/50"></div>
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-medium">PROJECT</p>
+                            </div>
+                            <h1 className="text-7xl font-bold text-white mb-4 leading-none tracking-tight">
+                              {projectName || documentTitle || 'Project Proposal'}
+                            </h1>
+                            <p className="text-2xl font-light text-white/80">
+                              Professional Services Proposal
+                            </p>
+                          </div>
+
                         </div>
-                        <div className="text-center py-16">
-                          <h1 className="text-5xl font-bold tracking-tight">{projectName || documentTitle || 'PROJECT NAME'}</h1>
-                          <p className="text-lg text-white/70 mt-4">Proposal #{quote?.quote_number || 'New'}</p>
-                        </div>
-                        <div className="mt-auto pt-8 border-t border-white/20">
-                          <div className="flex items-center justify-between">
+
+                        {/* BOTTOM FOOTER */}
+                        <div className="mt-auto">
+                          {/* Divider Line */}
+                          <div className="w-full h-px bg-white/10 mb-8"></div>
+
+                          <div className="flex justify-between items-end">
+                            {/* Total Investment */}
                             <div>
-                              <p className="text-xl font-semibold">{companyInfo.name}</p>
-                              <p className="text-white/60 text-sm">{companyInfo.address}</p>
-                              <p className="text-white/60 text-sm">{companyInfo.city}, {companyInfo.state} {companyInfo.zip}</p>
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 mb-2">TOTAL INVESTMENT</p>
+                              <p className="text-5xl font-thin text-white tracking-tight">
+                                {formatCurrency(total)}
+                              </p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-white/60 text-sm">{companyInfo.phone}</p>
-                              <p className="text-white/60 text-sm">{companyInfo.website}</p>
+
+                            {/* Reference Number */}
+                            <div className="text-right pb-1">
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-white/50 mb-2">PROPOSAL REFERENCE</p>
+                              <p className="text-xl font-medium text-white/90 tracking-widest">
+                                {quote?.quote_number || 'New'}
+                              </p>
                             </div>
                           </div>
                         </div>
+
                       </div>
                     </div>
                   </div>
@@ -5441,63 +5482,96 @@ Example:
                 {/* Letter Page */}
                 {showSections.letter && (
                   <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
-                    <div className="p-12 pb-20">
-                      {/* Letterhead */}
-                      <div className="flex justify-between items-start mb-12">
-                        <div className="flex gap-4">
+                    <div className="p-16">
+
+                      {/* HEADER - Logo Left, Company Info Right */}
+                      <div className="flex justify-between items-start mb-16">
+                        {/* Logo Box */}
+                        <div>
                           {companyInfo.logo ? (
-                            <img src={companyInfo.logo} alt={companyInfo.name} className="w-14 h-14 object-contain rounded-lg bg-neutral-100" />
+                            <img src={companyInfo.logo} alt={companyInfo.name} className="w-20 h-20 object-contain" />
                           ) : (
-                            <div className="w-14 h-14 bg-neutral-100 rounded-lg flex items-center justify-center text-xl font-bold text-neutral-700">
-                              {companyInfo.name?.charAt(0) || 'C'}
+                            <div className="w-20 h-20 bg-neutral-900 flex items-center justify-center">
+                              <span className="text-3xl font-bold text-white tracking-tighter">
+                                {companyInfo.name?.charAt(0) || 'C'}
+                              </span>
                             </div>
                           )}
-                          <div>
-                            <h2 className="text-xl font-bold text-neutral-900">{companyInfo.name}</h2>
-                            <p className="text-sm text-neutral-600">{companyInfo.address}</p>
-                            <p className="text-sm text-neutral-600">{companyInfo.city}, {companyInfo.state} {companyInfo.zip}</p>
-                            <p className="text-sm text-neutral-500">{companyInfo.phone} | {companyInfo.website}</p>
+                        </div>
+
+                        {/* Company Contact Info - Right Aligned */}
+                        <div className="text-right">
+                          <h3 className="text-sm font-bold text-neutral-900 mb-1">{companyInfo.name}</h3>
+                          <div className="text-xs text-neutral-500 space-y-1">
+                            <p>{companyInfo.address}</p>
+                            <p>{companyInfo.city}, {companyInfo.state} {companyInfo.zip}</p>
+                            <p>{companyInfo.website?.replace(/^https?:\/\//, '')}</p>
                           </div>
                         </div>
-                        <div className="text-right text-sm text-neutral-500">
-                          <p>{formatDate(quote?.created_at)}</p>
-                        </div>
                       </div>
 
-                      {/* Recipient */}
-                      <div className="mb-8">
-                        <p className="font-semibold text-neutral-900">{displayClientName}</p>
-                        {client?.display_name && client.display_name !== client.name && (
-                          <p className="text-neutral-600">{client.display_name}</p>
-                        )}
-                        {client?.email && <p className="text-neutral-500 text-sm">{client.email}</p>}
-                      </div>
-
-                      {/* Subject */}
-                      <div className="mb-8">
-                        <p className="text-neutral-900">
-                          <span className="font-semibold">Subject:</span> {documentTitle || projectName || 'Project Proposal'}
+                      {/* Date */}
+                      <div className="mb-12">
+                        <p className="text-sm text-neutral-500">
+                          {formatDate(quote?.created_at || new Date().toISOString())}
                         </p>
                       </div>
 
-                      {/* Letter Body */}
-                      <div className="mb-8">
-                        <p className="text-neutral-900 mb-6">Dear {displayContactName?.trim().split(' ')[0] || 'Valued Client'},</p>
-                        <div className="text-neutral-700 whitespace-pre-line leading-relaxed">
-                          {letterContent || `Thank you for the potential opportunity to work together on the ${documentTitle || projectName || 'project'}. I have attached the proposal for your consideration which includes a thorough Scope of Work, deliverable schedule, and Fee.\n\nPlease review and let me know if you have any questions or comments. If you are ready for us to start working on the project, please sign the proposal sheet.`}
+                      {/* Title Section */}
+                      <div className="mb-12 border-b border-neutral-100 pb-12">
+                        <h1 className="text-2xl font-bold text-neutral-900 mb-2">
+                          Project Proposal: {projectName || documentTitle}
+                        </h1>
+                        <p className="text-lg text-neutral-500 font-light">
+                          Prepared for {displayClientName}
+                        </p>
+                      </div>
+
+                      {/* Main Letter Body */}
+                      <div className="mb-16">
+                        <p className="font-semibold text-neutral-900 mb-6">
+                          Dear {displayContactName?.trim().split(' ')[0] || 'Client'},
+                        </p>
+
+                        <div className="text-neutral-600 font-light leading-relaxed whitespace-pre-line text-lg">
+                          {letterContent || `Thank you for the opportunity to work together on this project. We have prepared this proposal to outline our scope of work, timeline, and fee structure.
+
+Our team is dedicated to delivering high-quality results that meet your specific needs.`}
                         </div>
                       </div>
 
-                      {/* Closing */}
-                      <div className="mt-16">
-                        <p className="text-neutral-900 mb-8">Sincerely,</p>
-                        <div className="mt-12">
-                          <p className="font-semibold text-neutral-900">{profile?.full_name || companyInfo.name}</p>
-                          <p className="text-sm text-neutral-600">{companyInfo.name}</p>
+                      {/* Closing Signature */}
+                      <div>
+                        <p className="text-neutral-900 mb-6">Sincerely,</p>
+
+                        <div className="mt-8">
+                          <p className="text-xl font-medium text-neutral-900 mb-1">
+                            {profile?.full_name || 'Project Manager'}
+                          </p>
+                          <p className="font-bold text-sm text-neutral-900">
+                            {profile?.full_name || 'Project Manager'}
+                          </p>
+                          <p className="text-sm text-neutral-500">
+                            {companyInfo.name}
+                          </p>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Footer - Stick to bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 px-16 py-8 border-t border-neutral-100/50">
+                      <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
+                        <div className="flex items-center gap-4">
+                          <span>{companyInfo.name}</span>
+                          <span className="text-neutral-300">|</span>
+                          <span>{companyInfo.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                        </div>
+                        <div>
+                          PROPOSAL #{quote?.quote_number || 'NEW'}
                         </div>
                       </div>
                     </div>
-                    <PageFooter pageNum={visiblePages.indexOf('letter') + 1} />
                   </div>
                 )}
 
@@ -5710,50 +5784,62 @@ Example:
                           </div>
 
                           {/* Signature */}
-                          <div className="px-8 py-6 border-t border-neutral-200 mt-4">
-                            <h3 className="font-bold text-neutral-900 mb-4">Customer Acceptance:</h3>
-                            <div className="grid grid-cols-2 gap-8">
-                              <div>
+                          {/* Signature Layout */}
+                          <div className="px-8 py-16 border-t border-neutral-100 mt-8">
+                            <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
+                            <p className="text-sm text-neutral-600 mb-12 max-w-2xl font-light">
+                              By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {companyInfo.name} to proceed with the scope of work defined within.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-x-20 gap-y-16">
+
+                              {/* Signature */}
+                              <div className="relative group">
                                 {mergeCollaboration?.owner_signed_at ? (
                                   <>
-                                    <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
-                                      <span className="text-2xl font-serif italic text-emerald-700">{mergeCollaboration.owner_profile?.full_name || 'Signed'}</span>
+                                    <div className="absolute bottom-3 left-0 text-emerald-800 font-serif text-3xl italic select-none">
+                                      {mergeCollaboration.owner_profile?.full_name || 'Signed'}
                                     </div>
-                                    <p className="text-sm text-emerald-600">Signature ✓</p>
+                                    <div className="border-b border-neutral-300 h-10 w-full"></div>
                                   </>
                                 ) : (
                                   <>
-                                    <div className="border-b-2 border-neutral-900 pb-1 mb-2"><span className="text-2xl font-serif">X</span><span className="ml-4 text-neutral-400">___________________________</span></div>
-                                    <p className="text-sm text-neutral-500">Signature</p>
+                                    <div className="absolute bottom-3 left-0 text-neutral-900 font-serif text-4xl opacity-[0.08] select-none">X</div>
+                                    <div className="border-b border-neutral-300 h-10 w-full"></div>
                                   </>
                                 )}
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Signature</p>
                               </div>
+
+                              {/* Printed Name */}
                               <div>
-                                {mergeCollaboration?.owner_signed_at ? (
-                                  <>
-                                    <div className="border-b-2 border-emerald-600 pb-1 mb-2 h-10 flex items-end">
-                                      <span className="text-neutral-800">{mergeCollaboration.owner_profile?.full_name || 'Project Owner'}</span>
-                                    </div>
-                                    <p className="text-sm text-emerald-600">Print Name ✓</p>
-                                  </>
-                                ) : (
-                                  <>
-                                    <div className="border-b-2 border-neutral-900 pb-1 mb-2 h-8"></div>
-                                    <p className="text-sm text-neutral-500">Print Name</p>
-                                  </>
-                                )}
+                                <div className="border-b border-neutral-300 h-10 w-full flex items-end pb-1">
+                                  <span className="font-medium text-neutral-900 text-sm">
+                                    {mergeCollaboration?.owner_profile?.full_name || ''}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Printed Name</p>
                               </div>
+
+                              {/* Title */}
+                              <div>
+                                <div className="border-b border-neutral-300 h-8 w-full"></div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Title</p>
+                              </div>
+
+                              {/* Date */}
+                              <div>
+                                <div className="border-b border-neutral-300 h-8 w-full flex items-end pb-1">
+                                  {mergeCollaboration?.owner_signed_at && (
+                                    <span className="font-medium text-neutral-900 text-sm">
+                                      {new Date(mergeCollaboration.owner_signed_at).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Date</p>
+                              </div>
+
                             </div>
-                            {/* Date signed */}
-                            {mergeCollaboration?.owner_signed_at && (
-                              <div className="mt-4 pt-4 border-t border-emerald-200 flex items-center gap-2 text-emerald-700">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span className="font-medium">Digitally Signed on </span>
-                                <span>{new Date(mergeCollaboration.owner_signed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                              </div>
-                            )}
                           </div>
                         </>
                       )}
