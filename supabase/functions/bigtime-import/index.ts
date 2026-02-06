@@ -84,14 +84,16 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'validate') {
-      // Test connection by fetching firm info
+      // Test connection by fetching staff list (validates API token works)
       try {
-        const staffData = await bigTimeRequest('/session/staff');
+        const staffList = await bigTimeRequest('/Staff');
+        // If we get here without error, the API token is valid
+        const staffCount = Array.isArray(staffList) ? staffList.length : 0;
         return new Response(JSON.stringify({ 
           data: { 
             valid: true,
-            firm_name: staffData?.FirmNm || 'Unknown',
-            user_name: staffData?.Nm || 'Unknown'
+            staff_count: staffCount,
+            message: `Connected successfully. Found ${staffCount} staff members.`
           } 
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

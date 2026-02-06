@@ -309,11 +309,10 @@ export default function SettingsPage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${
-                        activeTab === tab.id
-                          ? 'bg-neutral-900 text-white'
-                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
-                      }`}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${activeTab === tab.id
+                        ? 'bg-neutral-900 text-white'
+                        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                        }`}
                     >
                       <tab.icon className="w-4 h-4" />
                       <span>{tab.label}</span>
@@ -340,7 +339,7 @@ export default function SettingsPage() {
             </div>
             <ChevronRight className={`w-4 h-4 text-neutral-400 transition-transform ${showMobileNav ? 'rotate-90' : ''}`} />
           </button>
-          
+
           {showMobileNav && (
             <div className="mt-2 bg-white border border-neutral-200 rounded-lg shadow-lg overflow-hidden">
               {filteredGroups.map((group, groupIdx) => (
@@ -357,11 +356,10 @@ export default function SettingsPage() {
                         setActiveTab(tab.id);
                         setShowMobileNav(false);
                       }}
-                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
-                        activeTab === tab.id
-                          ? 'bg-neutral-900 text-white'
-                          : 'text-neutral-700 hover:bg-neutral-50'
-                      }`}
+                      className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${activeTab === tab.id
+                        ? 'bg-neutral-900 text-white'
+                        : 'text-neutral-700 hover:bg-neutral-50'
+                        }`}
                     >
                       <tab.icon className="w-4 h-4" />
                       <span>{tab.label}</span>
@@ -376,366 +374,367 @@ export default function SettingsPage() {
         {/* Tab Content */}
         <div className="flex-1 min-w-0">
 
-        {/* Content */}
-        <div className="w-full">
-          {activeTab === 'profile' && (
-            <ProfileTab />
-          )}
+          {/* Content */}
+          <div className="w-full">
+            {activeTab === 'profile' && (
+              <ProfileTab />
+            )}
 
-          {activeTab === 'subscription' && (
-            <SubscriptionTab />
-          )}
+            {activeTab === 'subscription' && (
+              <SubscriptionTab />
+            )}
 
-          {activeTab === 'company' && (
-            <div>
-              <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-4">Company Information</h2>
+            {activeTab === 'company' && (
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-4">Company Information</h2>
 
-              {loading ? (
-                <div className="flex justify-center py-12">
-                  <div className="animate-spin w-6 h-6 border-2 border-neutral-600 border-t-transparent rounded-full" />
-                </div>
-              ) : (
-                <form onSubmit={handleSaveCompanySettings} className="space-y-6 max-w-3xl">
-                  {companyError && (
-                    <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium">
-                      {companyError}
-                    </div>
-                  )}
-                  {companySuccess && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs font-medium">
-                      Settings saved successfully!
-                    </div>
-                  )}
+                {loading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-6 h-6 border-2 border-neutral-600 border-t-transparent rounded-full" />
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveCompanySettings} className="space-y-6 max-w-3xl">
+                    {companyError && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium">
+                        {companyError}
+                      </div>
+                    )}
+                    {companySuccess && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs font-medium">
+                        Settings saved successfully!
+                      </div>
+                    )}
 
-                  {/* Branding Section */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Branding</h3>
-                    <div>
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Company Logo</label>
-                      <div className="flex items-center gap-4">
-                        <div
-                          className="w-20 h-20 rounded-lg border-2 border-dashed border-neutral-200 flex items-center justify-center overflow-hidden bg-neutral-50 cursor-pointer hover:border-[#476E66] transition-colors flex-shrink-0 group"
-                          onClick={() => logoInputRef.current?.click()}
-                        >
-                          {logoUrl ? (
-                            <img src={logoUrl} alt="Company logo" className="w-full h-full object-contain" />
-                          ) : (
-                            <Camera className="w-6 h-6 text-neutral-300 group-hover:text-[#476E66] transition-colors" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <input
-                            ref={logoInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleLogoUpload}
-                            className="hidden"
-                          />
-                          <button
-                            type="button"
+                    {/* Branding Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Branding</h3>
+                      <div>
+                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Company Logo</label>
+                        <div className="flex items-center gap-4">
+                          <div
+                            className="w-20 h-20 rounded-lg border-2 border-dashed border-neutral-200 flex items-center justify-center overflow-hidden bg-neutral-50 cursor-pointer hover:border-[#476E66] transition-colors flex-shrink-0 group"
                             onClick={() => logoInputRef.current?.click()}
-                            disabled={uploadingLogo}
-                            className="flex items-center gap-2 px-4 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                           >
-                            <Upload className="w-3.5 h-3.5" />
-                            {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
-                          </button>
-                          <p className="text-[10px] text-neutral-400 mt-2 font-medium uppercase tracking-wide">PNG, JPG up to 5MB</p>
+                            {logoUrl ? (
+                              <img src={logoUrl} alt="Company logo" className="w-full h-full object-contain" />
+                            ) : (
+                              <Camera className="w-6 h-6 text-neutral-300 group-hover:text-[#476E66] transition-colors" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleLogoUpload}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => logoInputRef.current?.click()}
+                              disabled={uploadingLogo}
+                              className="flex items-center gap-2 px-4 py-2 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50"
+                            >
+                              <Upload className="w-3.5 h-3.5" />
+                              {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                            </button>
+                            <p className="text-[10px] text-neutral-400 mt-2 font-medium uppercase tracking-wide">PNG, JPG up to 5MB</p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Contact Details Section */}
-                  <div className="space-y-4 pt-6 border-t border-neutral-100">
-                    <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Contact Details</h3>
+                    {/* Contact Details Section */}
+                    <div className="space-y-4 pt-6 border-t border-neutral-100">
+                      <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Contact Details</h3>
 
-                    <div>
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Company Name</label>
-                      <input
-                        type="text"
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
-                        placeholder="Your Company Name"
-                        className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Street Address</label>
-                      <input
-                        type="text"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="123 Business St"
-                        className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="col-span-2">
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">City</label>
+                      <div>
+                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Company Name</label>
                         <input
                           type="text"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="City"
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          placeholder="Your Company Name"
                           className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
                         />
                       </div>
+
                       <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">State</label>
+                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Street Address</label>
                         <input
                           type="text"
-                          value={state}
-                          onChange={(e) => setState(e.target.value)}
-                          placeholder="State"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="123 Business St"
                           className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
                         />
                       </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="col-span-2">
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">City</label>
+                          <input
+                            type="text"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="City"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">State</label>
+                          <input
+                            type="text"
+                            value={state}
+                            onChange={(e) => setState(e.target.value)}
+                            placeholder="State"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">ZIP</label>
+                          <input
+                            type="text"
+                            value={zip}
+                            onChange={(e) => setZip(e.target.value)}
+                            placeholder="ZIP"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Phone</label>
+                          <input
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            placeholder="(555) 123-4567"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Fax</label>
+                          <input
+                            type="tel"
+                            value={fax}
+                            onChange={(e) => setFax(e.target.value)}
+                            placeholder="(555) 123-4568"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Website</label>
+                          <input
+                            type="url"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder="https://yourcompany.com"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="info@yourcompany.com"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Defaults Section */}
+                    <div className="space-y-4 pt-6 border-t border-neutral-100">
+                      <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Defaults</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Default Tax Rate (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={defaultTaxRate}
+                            onChange={(e) => setDefaultTaxRate(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                          />
+                        </div>
+                      </div>
                       <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">ZIP</label>
-                        <input
-                          type="text"
-                          value={zip}
-                          onChange={(e) => setZip(e.target.value)}
-                          placeholder="ZIP"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
+                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Default Terms & Conditions</label>
+                        <textarea
+                          value={defaultTerms}
+                          onChange={(e) => setDefaultTerms(e.target.value)}
+                          placeholder="Enter default terms and conditions..."
+                          rows={4}
+                          className="w-full p-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none resize-none placeholder:text-neutral-400"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Phone</label>
-                        <input
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="(555) 123-4567"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Fax</label>
-                        <input
-                          type="tel"
-                          value={fax}
-                          onChange={(e) => setFax(e.target.value)}
-                          placeholder="(555) 123-4568"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                        />
-                      </div>
+                    <div className="pt-4">
+                      <button
+                        type="submit"
+                        disabled={savingCompany}
+                        className="h-10 px-5 bg-[#476E66] text-white text-sm font-medium rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
+                      >
+                        {savingCompany ? 'Saving...' : 'Save Changes'}
+                      </button>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Website</label>
-                        <input
-                          type="url"
-                          value={website}
-                          onChange={(e) => setWebsite(e.target.value)}
-                          placeholder="https://yourcompany.com"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Email</label>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="info@yourcompany.com"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Defaults Section */}
-                  <div className="space-y-4 pt-6 border-t border-neutral-100">
-                    <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Defaults</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Default Tax Rate (%)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={defaultTaxRate}
-                          onChange={(e) => setDefaultTaxRate(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full h-10 px-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none placeholder:text-neutral-400"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Default Terms & Conditions</label>
-                      <textarea
-                        value={defaultTerms}
-                        onChange={(e) => setDefaultTerms(e.target.value)}
-                        placeholder="Enter default terms and conditions..."
-                        rows={4}
-                        className="w-full p-3 rounded-lg border border-neutral-200 text-sm focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66] outline-none resize-none placeholder:text-neutral-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <button
-                      type="submit"
-                      disabled={savingCompany}
-                      className="h-10 px-5 bg-[#476E66] text-white text-sm font-medium rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
-                    >
-                      {savingCompany ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'users' && (
-            <UserManagementTab companyId={profile.company_id} currentUserId={profile?.id || ''} />
-          )}
-
-          {activeTab === 'services' && (
-            <div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-1">Products & Services</h2>
-                  <p className="text-neutral-500 text-xs">Manage your service catalog for quotes</p>
-                </div>
-                <button
-                  onClick={() => { setEditingService(null); setShowServiceModal(true); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors text-xs font-bold uppercase tracking-wider shadow-sm"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add Service</span>
-                </button>
+                  </form>
+                )}
               </div>
+            )}
 
-              {loading ? (
-                <div className="flex justify-center py-12">
-                  <div className="animate-spin w-6 h-6 border-2 border-neutral-600 border-t-transparent rounded-full" />
-                </div>
-              ) : services.length === 0 ? (
-                <div className="text-center py-12 border border-dashed border-neutral-200 rounded-lg bg-neutral-50/50">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-neutral-100">
-                    <Package className="w-5 h-5 text-neutral-400" />
+            {activeTab === 'users' && (
+              <UserManagementTab companyId={profile.company_id} currentUserId={profile?.id || ''} />
+            )}
+
+            {activeTab === 'services' && (
+              <div>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-1">Products & Services</h2>
+                    <p className="text-neutral-500 text-xs">Manage your service catalog for quotes</p>
                   </div>
-                  <h3 className="text-sm font-bold text-neutral-900 mb-1 uppercase tracking-wide">No services found</h3>
-                  <p className="text-neutral-500 text-xs mb-4 max-w-xs mx-auto">Get started by adding your first service to the catalog.</p>
                   <button
                     onClick={() => { setEditingService(null); setShowServiceModal(true); }}
-                    className="px-4 py-2 bg-white border border-neutral-200 text-neutral-900 text-xs font-bold uppercase tracking-wide rounded-lg hover:bg-neutral-50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors text-xs font-bold uppercase tracking-wider shadow-sm"
                   >
-                    Add Service
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Service</span>
                   </button>
                 </div>
-              ) : (
-                <div className="border border-neutral-200 rounded-lg overflow-hidden bg-white">
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[600px]">
-                      <thead className="bg-neutral-50 border-b border-neutral-200">
-                        <tr>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Name</th>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden sm:table-cell">Category</th>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden md:table-cell">Pricing</th>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden md:table-cell">Rate</th>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden lg:table-cell">Unit</th>
-                          <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Status</th>
-                          <th className="w-16"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100">
-                        {services.map((service) => (
-                          <tr key={service.id} className="hover:bg-neutral-50/50 transition-colors">
-                            <td className="px-4 py-3">
-                              <div>
-                                <p className="font-bold text-neutral-900 text-xs leading-tight mb-0.5">{service.name}</p>
-                                {service.description && (
-                                  <p className="text-[10px] text-neutral-500 truncate max-w-[200px]">{service.description}</p>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-neutral-600 text-xs font-medium hidden sm:table-cell">{service.category || '-'}</td>
-                            <td className="px-4 py-3 text-neutral-600 text-[11px] font-medium capitalize hidden md:table-cell">
-                              {PRICING_TYPES.find(p => p.value === service.pricing_type)?.label || service.pricing_type}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-neutral-900 text-xs hidden md:table-cell">{formatRate(service)}</td>
-                            <td className="px-4 py-3 text-neutral-600 text-[11px] hidden lg:table-cell">{service.unit_label || '-'}</td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide ${service.is_active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500 border border-neutral-200'
-                                }`}>
-                                {service.is_active !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => { setEditingService(service); setShowServiceModal(true); }}
-                                  className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-md transition-colors"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteService(service.id)}
-                                  className="p-1.5 text-neutral-400 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                {loading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin w-6 h-6 border-2 border-neutral-600 border-t-transparent rounded-full" />
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'invoicing' && (
-            <InvoicingSettingsTab companyId={profile.company_id} />
-          )}
-
-          {activeTab === 'codes-fields' && (
-            <CodesAndFieldsTab companyId={profile.company_id} />
-          )}
-
-          {activeTab === 'integrations' && (
-            <IntegrationsTab companyId={profile.company_id} />
-          )}
-
-          {activeTab === 'templates' && (
-            <EmailTemplatesTab companyId={profile.company_id} />
-          )}
-
-          {activeTab === 'collaborators' && (
-            <CollaboratorCategoriesTab companyId={profile.company_id} />
-          )}
-
-          {activeTab === 'notifications' && (
-            <NotificationsTab />
-          )}
-
-          {activeTab === 'import-export' && (
-            <ImportExportTab 
-              companyId={profile.company_id} 
-              showToast={showToast}
-            />
-          )}
-
-          {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && activeTab !== 'import-export' && (
-            <div className="bg-white rounded-sm p-12 border border-neutral-200 text-center">
-              <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Settings className="w-8 h-8 text-neutral-400" />
+                ) : services.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-neutral-200 rounded-lg bg-neutral-50/50">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm border border-neutral-100">
+                      <Package className="w-5 h-5 text-neutral-400" />
+                    </div>
+                    <h3 className="text-sm font-bold text-neutral-900 mb-1 uppercase tracking-wide">No services found</h3>
+                    <p className="text-neutral-500 text-xs mb-4 max-w-xs mx-auto">Get started by adding your first service to the catalog.</p>
+                    <button
+                      onClick={() => { setEditingService(null); setShowServiceModal(true); }}
+                      className="px-4 py-2 bg-white border border-neutral-200 text-neutral-900 text-xs font-bold uppercase tracking-wide rounded-lg hover:bg-neutral-50 transition-colors"
+                    >
+                      Add Service
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border border-neutral-200 rounded-lg overflow-hidden bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px]">
+                        <thead className="bg-neutral-50 border-b border-neutral-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Name</th>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden sm:table-cell">Category</th>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden md:table-cell">Pricing</th>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden md:table-cell">Rate</th>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden lg:table-cell">Unit</th>
+                            <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Status</th>
+                            <th className="w-16"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {services.map((service) => (
+                            <tr key={service.id} className="hover:bg-neutral-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="font-bold text-neutral-900 text-xs leading-tight mb-0.5">{service.name}</p>
+                                  {service.description && (
+                                    <p className="text-[10px] text-neutral-500 truncate max-w-[200px]">{service.description}</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-neutral-600 text-xs font-medium hidden sm:table-cell">{service.category || '-'}</td>
+                              <td className="px-4 py-3 text-neutral-600 text-[11px] font-medium capitalize hidden md:table-cell">
+                                {PRICING_TYPES.find(p => p.value === service.pricing_type)?.label || service.pricing_type}
+                              </td>
+                              <td className="px-4 py-3 font-mono text-neutral-900 text-xs hidden md:table-cell">{formatRate(service)}</td>
+                              <td className="px-4 py-3 text-neutral-600 text-[11px] hidden lg:table-cell">{service.unit_label || '-'}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide ${service.is_active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-500 border border-neutral-200'
+                                  }`}>
+                                  {service.is_active !== false ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => { setEditingService(service); setShowServiceModal(true); }}
+                                    className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-md transition-colors"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteService(service.id)}
+                                    className="p-1.5 text-neutral-400 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-              <h3 className="text-[13px] font-bold text-neutral-900 uppercase tracking-wide mb-2">{tabs.find(t => t.id === activeTab)?.label}</h3>
-              <p className="text-[11px] text-neutral-500 uppercase tracking-wide font-medium">This settings section is under development</p>
-            </div>
-          )}
+            )}
+
+            {activeTab === 'invoicing' && (
+              <InvoicingSettingsTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'codes-fields' && (
+              <CodesAndFieldsTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'integrations' && (
+              <IntegrationsTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'templates' && (
+              <EmailTemplatesTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'collaborators' && (
+              <CollaboratorCategoriesTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'notifications' && (
+              <NotificationsTab />
+            )}
+
+            {activeTab === 'import-export' && (
+              <ImportExportTab
+                companyId={profile.company_id}
+                showToast={showToast}
+              />
+            )}
+
+            {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && activeTab !== 'import-export' && (
+              <div className="bg-white rounded-sm p-12 border border-neutral-200 text-center">
+                <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Settings className="w-8 h-8 text-neutral-400" />
+                </div>
+                <h3 className="text-[13px] font-bold text-neutral-900 uppercase tracking-wide mb-2">{tabs.find(t => t.id === activeTab)?.label}</h3>
+                <p className="text-[11px] text-neutral-500 uppercase tracking-wide font-medium">This settings section is under development</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -752,12 +751,14 @@ export default function SettingsPage() {
   );
 }
 
-function ServiceModal({ service, companyId, onClose, onSave }: {
+interface ServiceModalProps {
   service: Service | null;
   companyId: string;
   onClose: () => void;
   onSave: () => void;
-}) {
+}
+
+function ServiceModal({ service, companyId, onClose, onSave }: ServiceModalProps) {
   const [name, setName] = useState(service?.name || '');
   const [description, setDescription] = useState(service?.description || '');
   const [category, setCategory] = useState(service?.category || 'Other');
@@ -4453,8 +4454,8 @@ function StatusCodesTab({ companyId }: { companyId: string }) {
             key={tab.id}
             onClick={() => { setActiveSubTab(tab.id); setSelectedItem(null); }}
             className={`pb-2 text-[11px] font-bold uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap ${activeSubTab === tab.id
-                ? 'border-neutral-900 text-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-600 hover:border-neutral-200'
+              ? 'border-neutral-900 text-neutral-900'
+              : 'border-transparent text-neutral-400 hover:text-neutral-600 hover:border-neutral-200'
               }`}
           >
             {tab.label}
@@ -6469,7 +6470,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
     api.getClients(companyId).then(data => {
       setClients(data.map(c => ({ id: c.id, name: c.name })));
     }).catch(console.error);
-    
+
     api.getProjects(companyId).then(data => {
       setProjects(data.map(p => ({ id: p.id, name: p.name })));
     }).catch(console.error);
@@ -6484,7 +6485,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       ['Mobile App Development', 'Acme Corporation', 'iOS and Android mobile application', 'active', '45000', '2026-03-01', '2026-08-31'],
       ['Brand Identity', 'TechStart Inc', 'Logo and brand guidelines', 'completed', '5000', '2025-11-01', '2025-12-15'],
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -6508,7 +6509,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       ['Mobile App Development', 'UI/UX Design', 'Design app screens and user flow', 'pending', '32', '2026-03-20'],
       ['Mobile App Development', 'iOS Development', 'Build iOS version with Swift', 'pending', '80', '2026-06-01'],
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -6529,7 +6530,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       ['Acme Corporation', 'Acme', 'contact@acme.com', '(555) 123-4567', '123 Main St', 'New York', 'NY', '10001', 'https://acme.com', 'John Smith', 'john@acme.com', '(555) 123-4568', 'Jane Doe', 'billing@acme.com'],
       ['TechStart Inc', 'TechStart', 'info@techstart.io', '(555) 987-6543', '456 Innovation Blvd', 'San Francisco', 'CA', '94102', 'https://techstart.io', 'Mike Johnson', 'mike@techstart.io', '(555) 987-6544', '', ''],
     ];
-    
+
     const csvContent = [
       headers.join(','),
       ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -6550,7 +6551,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       const result: string[] = [];
       let current = '';
       let inQuotes = false;
-      
+
       for (let i = 0; i < line.length; i++) {
         const char = line[i];
         if (char === '"') {
@@ -6578,7 +6579,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
     try {
       const text = await file.text();
       const rows = parseCSV(text);
-      
+
       if (rows.length < 2) {
         throw new Error('CSV file must have a header row and at least one data row');
       }
@@ -6619,9 +6620,9 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
           // Find client by name (case-insensitive)
           const clientName = indices.client_name !== -1 ? row[indices.client_name]?.trim() : '';
           let clientId: string | undefined;
-          
+
           if (clientName) {
-            const matchedClient = clients.find(c => 
+            const matchedClient = clients.find(c =>
               c.name.toLowerCase() === clientName.toLowerCase()
             );
             if (matchedClient) {
@@ -6647,7 +6648,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
             start_date: indices.start_date !== -1 ? row[indices.start_date]?.trim() : undefined,
             end_date: indices.end_date !== -1 ? row[indices.end_date]?.trim() : undefined,
           });
-          
+
           newProjects.push({ id: newProject.id, name: newProject.name });
 
           successCount++;
@@ -6657,12 +6658,12 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       }
 
       setImportResults({ success: successCount, errors });
-      
+
       // Add newly created projects to the local list (for task imports)
       if (newProjects.length > 0) {
         setProjects(prev => [...prev, ...newProjects]);
       }
-      
+
       if (successCount > 0) {
         showToast(`Successfully imported ${successCount} project${successCount !== 1 ? 's' : ''}`, 'success');
       }
@@ -6693,7 +6694,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
     try {
       const text = await file.text();
       const rows = parseCSV(text);
-      
+
       if (rows.length < 2) {
         throw new Error('CSV file must have a header row and at least one data row');
       }
@@ -6732,7 +6733,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
         try {
           const projectName = row[indices.project_name]?.trim();
           const taskName = row[indices.task_name]?.trim();
-          
+
           if (!projectName) {
             errors.push(`Row ${rowNum}: Missing project name`);
             continue;
@@ -6743,10 +6744,10 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
           }
 
           // Find project by name (case-insensitive)
-          const matchedProject = projectsMap.find(p => 
+          const matchedProject = projectsMap.find(p =>
             p.name.toLowerCase() === projectName.toLowerCase()
           );
-          
+
           if (!matchedProject) {
             errors.push(`Row ${rowNum}: Project "${projectName}" not found - task skipped`);
             continue;
@@ -6774,7 +6775,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       }
 
       setImportResults({ success: successCount, errors });
-      
+
       if (successCount > 0) {
         showToast(`Successfully imported ${successCount} task${successCount !== 1 ? 's' : ''}`, 'success');
       }
@@ -6804,7 +6805,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
     try {
       const text = await file.text();
       const rows = parseCSV(text);
-      
+
       if (rows.length < 2) {
         throw new Error('CSV file must have a header row and at least one data row');
       }
@@ -6882,7 +6883,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       }
 
       setImportResults({ success: successCount, errors });
-      
+
       if (successCount > 0) {
         showToast(`Successfully imported ${successCount} client${successCount !== 1 ? 's' : ''}`, 'success');
       }
