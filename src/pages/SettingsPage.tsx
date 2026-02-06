@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../components/Toast';
-import { Settings, Building2, Users, FileText, Bell, Link, Shield, Package, Plus, Edit2, Trash2, X, Upload, Camera, Mail, UserCheck, UserX, MoreVertical, Check, User, Receipt, MapPin, Calculator, FileType, Send, Tag, List, Activity, Target, GripVertical, ArrowLeft, LogOut, CreditCard, Loader2, AlertTriangle, Star, ChevronRight } from 'lucide-react';
+import { Settings, Building2, Users, FileText, Bell, Link, Shield, Package, Plus, Edit2, Trash2, X, Upload, Camera, Mail, UserCheck, UserX, MoreVertical, Check, User, Receipt, MapPin, Calculator, FileType, Send, Tag, List, Activity, Target, GripVertical, ArrowLeft, LogOut, CreditCard, Loader2, AlertTriangle, Star, ChevronRight, Download, FolderUp, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -50,6 +50,11 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Import/Export State
+  const [importingProjects, setImportingProjects] = useState(false);
+  const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
+  const projectsCsvInputRef = useRef<HTMLInputElement>(null);
+
   const { canView, isAdmin } = usePermissions();
 
   const allTabs = [
@@ -62,6 +67,7 @@ export default function SettingsPage() {
     { id: 'collaborators', label: 'Collaborator Categories', icon: Users, adminOnly: true },
     { id: 'staff', label: 'Staff', icon: Users, adminOnly: true },
     { id: 'templates', label: 'Templates', icon: FileText, adminOnly: true },
+    { id: 'import-export', label: 'Import / Export', icon: FolderUp, adminOnly: true },
     { id: 'notifications', label: 'Notifications', icon: Bell, adminOnly: false },
     { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
     { id: 'security', label: 'Security', icon: Shield, adminOnly: false },
@@ -624,7 +630,14 @@ export default function SettingsPage() {
             <NotificationsTab />
           )}
 
-          {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && (
+          {activeTab === 'import-export' && (
+            <ImportExportTab 
+              companyId={profile.company_id} 
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && activeTab !== 'import-export' && (
             <div className="bg-white rounded-sm p-12 border border-neutral-200 text-center">
               <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Settings className="w-8 h-8 text-neutral-400" />

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Lock, Check, MessageSquare, Clock, FileText, Printer, Pen, X } from 'lucide-react';
 import { formatCurrency, formatDate, paginateText } from '../lib/utils';
 
@@ -74,6 +76,8 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export default function ProposalPortalPage() {
   const { token } = useParams();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const [step, setStep] = useState<'loading' | 'code' | 'view' | 'respond' | 'complete' | 'error'>('loading');
   const [accessCode, setAccessCode] = useState(['', '', '', '']);
   const [error, setError] = useState('');
@@ -108,6 +112,77 @@ export default function ProposalPortalPage() {
   }, [token]);
 
   async function verifyToken() {
+    // PREVIEW MODE: Allow owners to view draft proposals
+    if (token === 'preview') {
+      const previewId = searchParams.get('id');
+      if (previewId && user) {
+        try {
+          // Fetch quote
+          const { data: quoteData, error: quoteError } = await supabase
+            .from('quotes')
+            .select('*')
+            .eq('id', previewId)
+            .single();
+
+          if (quoteError || !quoteData) throw new Error('Quote not found');
+
+          // Fetch line items
+          const { data: itemsData } = await supabase
+            .from('quote_line_items')
+            .select('*')
+            .eq('quote_id', previewId)
+            .order('sort_order', { ascending: true });
+
+          // Fetch client
+          let clientData = null;
+          if (quoteData.client_id) {
+            const { data: c } = await supabase
+              .from('clients')
+              .select('*')
+              .eq('id', quoteData.client_id)
+              .single();
+            clientData = c;
+          }
+
+          // Fetch company settings
+          let companyData = null;
+          if (quoteData.company_id) {
+            const { data: s } = await supabase
+              .from('company_settings')
+              .select('*')
+              .eq('company_id', quoteData.company_id)
+              .single();
+            if (s) {
+              companyData = {
+                company_id: s.company_id,
+                company_name: s.company_name,
+                logo_url: s.logo_url,
+                address: s.address,
+                city: s.city,
+                state: s.state,
+                zip: s.zip,
+                phone: s.phone,
+                website: s.website,
+                email: s.email
+              };
+            }
+          }
+
+          setQuote(quoteData);
+          setLineItems(itemsData?.map((i: any) => ({ ...i, estimated_days: i.estimated_days || 0, start_offset: i.start_offset || 0 })) || []);
+          setClient(clientData);
+          setCompany(companyData);
+          setStep('view');
+          return;
+        } catch (err) {
+          console.error(err);
+          setError('Failed to load preview');
+          setStep('error');
+          return;
+        }
+      }
+    }
+
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/proposal-response?token=${token}`, {
         headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
@@ -909,8 +984,47 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       {pageContent && (
                         <div className="mb-8">
                           {idx === 0 && <h3 className="text-lg font-semibold text-neutral-900 mb-4">Project Scope</h3>}
-                          <div className="text-neutral-700 whitespace-pre-wrap leading-relaxed text-sm">
-                            {pageContent}
+                          <div className="text-neutral-700">
+                            {pageContent.split('\n').map((line, lineIdx) => {
+                              const trimmed = line.trim();
+                              if (!trimmed) return <div key={lineIdx} className="h-4" />; // Empty line spacer
+
+                              // Header 1 (#)
+                              if (trimmed.startsWith('# ')) {
+                                return (
+                                  <h3 key={lineIdx} className="text-xl font-bold text-neutral-900 mt-6 mb-3 tracking-tight">
+                                    {trimmed.substring(2)}
+                                  </h3>
+                                );
+                              }
+
+                              // Header 2 (##)
+                              if (trimmed.startsWith('## ')) {
+                                return (
+                                  <h4 key={lineIdx} className="text-lg font-semibold text-neutral-800 mt-4 mb-2 tracking-tight">
+                                    {trimmed.substring(3)}
+                                  </h4>
+                                );
+                              }
+
+                              // Bullet List (•, -, *)
+                              if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                const content = trimmed.substring(2);
+                                return (
+                                  <div key={lineIdx} className="flex items-start gap-3 mb-2 ml-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-2 flex-shrink-0" />
+                                    <span className="leading-relaxed text-neutral-600 font-light text-base">{content}</span>
+                                  </div>
+                                );
+                              }
+
+                              // Regular Paragraph with Letter styling
+                              return (
+                                <p key={lineIdx} className="mb-2 leading-relaxed text-neutral-600 font-light text-base">
+                                  {line}
+                                </p>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature, Timer, Layout, Link, ArrowRight, User, CheckCircle2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature, Timer, Layout, Link, ArrowRight, User, CheckCircle2, Loader2, Heading1, Heading2, List } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, Quote, Client, ClientContact, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -8,6 +8,7 @@ import { NotificationService } from '../lib/notificationService';
 import SaveAsTemplateModal from '../components/SaveAsTemplateModal';
 import TemplatePickerModal from '../components/TemplatePickerModal';
 import { useToast } from '../components/Toast';
+import SimpleEditor from '../components/SimpleEditor';
 
 // ============================================
 // SIMPLE FIELD HINT STYLES
@@ -126,6 +127,7 @@ export default function QuoteDocumentPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const [scopeOfWork, setScopeOfWork] = useState('');
+  // scopeTextareaRef and insertFormat removed - handled by SimpleEditor
 
   const [taxRate, setTaxRate] = useState(8.25);
   const [otherCharges, setOtherCharges] = useState(0);
@@ -187,11 +189,15 @@ export default function QuoteDocumentPage() {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
 
   // Refresh data when entering collaborators tab to see latest statuses
+  // Refresh data when entering collaborators tab to see latest statuses
+  // DISABLED: Auto-refresh causes unsaved changes in Scope/Timeline to be lost when switching tabs
+  /*
   useEffect(() => {
     if (currentStep === 4 && quoteId) {
       loadData();
     }
   }, [currentStep, quoteId]);
+  */
 
 
   // Collaborator invitation state
@@ -3023,67 +3029,18 @@ export default function QuoteDocumentPage() {
                   <h3 className="text-lg font-semibold text-neutral-900">Scope of Work</h3>
                   <span className="text-xs font-medium text-neutral-400 uppercase tracking-widest">Deliverables</span>
                 </div>
-                <div className="group relative bg-neutral-50/50 rounded-xl border border-neutral-200 p-4 hover:border-neutral-300 focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-200 transition-all">
-                  <textarea
-                    value={scopeOfWork}
-                    onChange={(e) => { setScopeOfWork(e.target.value); setHasUnsavedChanges(true); }}
-                    onPaste={(e) => {
-                      e.preventDefault();
-                      // Smart Paste: Get text content and "beautify" it if coming from rich source
-                      const text = e.clipboardData.getData('text/plain');
-                      const html = e.clipboardData.getData('text/html');
-
-                      let processedText = text;
-
-                      // If we have HTML content (e.g. from Word/ChatGPT), try to extract valid structure
-                      if (html) {
-                        // Create temporary DOM to parse
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = html;
-
-                        // Replace list items with bullets explicitly
-                        const listItems = tempDiv.querySelectorAll('li');
-                        listItems.forEach(li => {
-                          li.innerHTML = '• ' + li.innerHTML;
-                        });
-
-                        // Handle paragraphs for spacing
-                        const paragraphs = tempDiv.querySelectorAll('p');
-                        paragraphs.forEach(p => {
-                          p.innerHTML = p.innerHTML + '\n\n';
-                        });
-
-                        // Use innerText to get clean visual representation
-                        processedText = tempDiv.innerText;
-                      }
-
-                      // Insert text at cursor position
-                      const textarea = e.target as HTMLTextAreaElement;
-                      const start = textarea.selectionStart;
-                      const end = textarea.selectionEnd;
-                      const currentValue = scopeOfWork || '';
-
-                      const newValue = currentValue.substring(0, start) + processedText + currentValue.substring(end);
-
-                      setScopeOfWork(newValue);
-                      setHasUnsavedChanges(true);
-
-                      // Restore cursor position after the pasted text (timeout needed for React to re-render)
-                      setTimeout(() => {
-                        textarea.selectionStart = textarea.selectionEnd = start + processedText.length;
-                      }, 0);
-                    }}
-                    readOnly={isLocked}
-                    className="w-full min-h-[320px] text-base text-neutral-700 bg-transparent border-none outline-none resize-y placeholder:text-neutral-400 focus:ring-0 leading-relaxed"
-                    placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives...
+                <SimpleEditor
+                  value={scopeOfWork}
+                  onChange={(val) => { setScopeOfWork(val); setHasUnsavedChanges(true); }}
+                  className="w-full h-auto min-h-[320px]"
+                  placeholder={`Describe the scope of work for this project. Include deliverables, milestones, and key objectives...
 
 Example:
 • Phase 1: Discovery & Planning
 • Phase 2: Design & Development  
 • Phase 3: Testing & Launch
-• Phase 4: Training & Support"
-                  />
-                </div>
+• Phase 4: Training & Support`}
+                />
               </div>
 
               {/* Project Timeline - Canvas Style */}
@@ -3631,6 +3588,20 @@ Example:
                       )}
 
                       <button
+                        onClick={async () => {
+                          if (hasUnsavedChanges) await saveChanges();
+                          const url = `${window.location.origin}/proposal/preview?id=${quote?.id}`;
+                          window.open(url, '_blank');
+                        }}
+                        disabled={saving || isNewQuote || !quote?.id}
+                        className="px-5 py-2.5 rounded-full text-sm font-semibold text-neutral-600 bg-neutral-100 hover:bg-neutral-200 hover:text-neutral-900 transition-all disabled:opacity-50 flex items-center gap-2"
+                        title={isNewQuote ? "Save draft to preview" : "Preview what the client sees"}
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span className="hidden xl:inline">Client Preview</span>
+                      </button>
+
+                      <button
                         onClick={saveChanges}
                         disabled={saving || (!isCollaborationResponse && !selectedClientId && !selectedLeadId) || !lineItems.some(i => i.description.trim())}
                         className="px-5 py-2.5 rounded-full text-sm font-semibold text-neutral-600 bg-neutral-100 hover:bg-neutral-200 hover:text-neutral-900 transition-all disabled:opacity-50"
@@ -4122,9 +4093,17 @@ Example:
                       // Scan through text to find cut-off point based on score
                       for (let i = 0; i < remainingText.length; i++) {
                         const char = remainingText[i];
-                        // Newline = ~80 chars worth of vertical space (approx 4 lines of text height vs 1 char width)
-                        // This helps catch "long vertical lists" which have low char count but high height
-                        currentScore += (char === '\n' ? 120 : 1);
+                        // Newline = ~80 chars worth of vertical space. 
+                        // Header (#) adds extra height margin.
+                        let penalty = 1;
+                        if (char === '\n') penalty = 60;
+
+                        // Check for headers start
+                        if ((i === 0 || remainingText[i - 1] === '\n') && char === '#') {
+                          penalty = 100; // Headers need more vertical space
+                        }
+
+                        currentScore += penalty;
 
                         if (currentScore >= maxScore) {
                           // We crossed the limit. Now assume we need to backtrack to a safe split point.
@@ -4171,7 +4150,7 @@ Example:
                     const isLastPage = idx === scopePages.length - 1;
 
                     // improved check for remaining space on page
-                    const pageScore = pageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0);
+                    const pageScore = pageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 60 : 1), 0);
                     const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
 
                     return (
@@ -4193,8 +4172,47 @@ Example:
                             {pageContent && (
                               <div className="mb-8">
                                 {idx === 0 && <h3 className="text-lg font-semibold text-neutral-900 mb-4">Project Scope</h3>}
-                                <div className="text-neutral-700 whitespace-pre-wrap leading-relaxed text-sm">
-                                  {pageContent}
+                                <div className="text-neutral-700">
+                                  {pageContent.split('\n').map((line, lineIdx) => {
+                                    const trimmed = line.trim();
+                                    if (!trimmed) return <div key={lineIdx} className="h-4" />; // Empty line spacer
+
+                                    // Header 1 (#)
+                                    if (trimmed.startsWith('# ')) {
+                                      return (
+                                        <h3 key={lineIdx} className="text-xl font-bold text-neutral-900 mt-6 mb-3 tracking-tight">
+                                          {trimmed.substring(2)}
+                                        </h3>
+                                      );
+                                    }
+
+                                    // Header 2 (##)
+                                    if (trimmed.startsWith('## ')) {
+                                      return (
+                                        <h4 key={lineIdx} className="text-lg font-semibold text-neutral-800 mt-4 mb-2 tracking-tight">
+                                          {trimmed.substring(3)}
+                                        </h4>
+                                      );
+                                    }
+
+                                    // Bullet List (•, -, *)
+                                    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                      const content = trimmed.substring(2);
+                                      return (
+                                        <div key={lineIdx} className="flex items-start gap-3 mb-2 ml-1">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-2 flex-shrink-0" />
+                                          <span className="leading-relaxed text-neutral-600 font-light text-base">{content}</span>
+                                        </div>
+                                      );
+                                    }
+
+                                    // Regular Paragraph
+                                    return (
+                                      <p key={lineIdx} className="mb-2 leading-relaxed text-neutral-600 font-light text-base">
+                                        {line}
+                                      </p>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
@@ -4276,7 +4294,7 @@ Example:
                     );
                   }).concat(
                     // If we have a timeline but it didn't fit on the last scope page, render it now on its own page
-                    (hasTimeline && (scopePages.length === 0 || scopePages[scopePages.length - 1].split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0) >= 2000)) ? [(
+                    (hasTimeline && (scopePages.length === 0 || scopePages[scopePages.length - 1].split('').reduce((acc, char) => acc + (char === '\n' ? 60 : 1), 0) >= 2000)) ? [(
                       <div key="timeline-only" className="w-full max-w-[816px] mx-auto bg-white h-[1056px] overflow-hidden shadow-2xl relative mb-12 last:mb-0 flex flex-col">
                         <div className="p-12 md:p-16 flex-1 flex flex-col">
                           <div className="flex items-center gap-4 mb-8 flex-shrink-0">
@@ -4447,7 +4465,7 @@ Example:
 
                       {terms && (
                         <div className="mb-12 flex-1">
-                          <div className="text-neutral-600 text-xs leading-relaxed text-justify columns-1 md:columns-2 gap-8">
+                          <div className="text-neutral-600 text-xs leading-relaxed text-justify columns-1 md:columns-2 gap-8 whitespace-pre-line">
                             {terms}
                           </div>
                         </div>
