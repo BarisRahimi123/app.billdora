@@ -954,7 +954,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
             if (!hasScope && !hasTimeline) return null;
 
             const scopeContent = quote?.scope_of_work || '';
-            const scopePages = hasScope ? paginateText(scopeContent) : [];
+            const scopePages = hasScope ? paginateText(scopeContent, 2000) : [];
             // If no scope but we have timeline, treat as 1 empty scope page to render timeline
             if (scopePages.length === 0 && hasTimeline) scopePages.push('');
 
@@ -1102,18 +1102,17 @@ Our team is dedicated to delivering high-quality results that meet your specific
                     </div>
 
                     {/* Footer - Stick to bottom */}
-                    <div className="absolute bottom-0 left-0 right-0 px-12 py-8 border-t border-neutral-100/50 bg-white">
-                      <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
-                        <div className="flex items-center gap-4">
-                          <span>{company?.company_name}</span>
-                          <span className="text-neutral-300">|</span>
-                          <span>{company?.website}</span>
-                        </div>
-                        <div className="flex gap-4">
-                          <span>Proposal #{quote?.quote_number}</span>
-                          <span className="text-neutral-300">•</span>
-                          <span>Page {idx + 2}</span>
-                        </div>
+                    {/* Footer - Stick to bottom */}
+                    <div className="mt-auto pt-8 border-t border-neutral-100/50 flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase flex-shrink-0">
+                      <div className="flex items-center gap-4">
+                        <span>{company?.company_name}</span>
+                        <span className="text-neutral-300">|</span>
+                        <span>{company?.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                      </div>
+                      <div className="flex gap-4">
+                        <span>Proposal #{quote?.quote_number}</span>
+                        <span className="text-neutral-300">•</span>
+                        <span>Page {idx + 2}</span>
                       </div>
                     </div>
                   </div>

@@ -4142,7 +4142,7 @@ Example:
                     return chunks;
                   };
 
-                  const scopePages = hasScope ? paginateText(scopeOfWork) : [];
+                  const scopePages = hasScope ? paginateText(scopeOfWork, 2000) : [];
                   // If no scope but we have timeline, treat as 1 empty scope page to render timeline
                   if (scopePages.length === 0 && hasTimeline) scopePages.push('');
 

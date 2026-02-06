@@ -6362,25 +6362,33 @@ function NotificationsTab() {
 function ImportExportTab({ companyId, showToast }: { companyId: string; showToast: (msg: string, type: 'success' | 'error') => void }) {
   const [importingProjects, setImportingProjects] = useState(false);
   const [importingClients, setImportingClients] = useState(false);
+  const [importingTasks, setImportingTasks] = useState(false);
   const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const projectsCsvInputRef = useRef<HTMLInputElement>(null);
   const clientsCsvInputRef = useRef<HTMLInputElement>(null);
+  const tasksCsvInputRef = useRef<HTMLInputElement>(null);
 
-  // Load clients for matching
+  // Load clients and projects for matching
   useEffect(() => {
     api.getClients(companyId).then(data => {
       setClients(data.map(c => ({ id: c.id, name: c.name })));
     }).catch(console.error);
+    
+    api.getProjects(companyId).then(data => {
+      setProjects(data.map(p => ({ id: p.id, name: p.name })));
+    }).catch(console.error);
   }, [companyId]);
 
   // Download CSV Template for Projects
+  // Download CSV Template for Projects (without hourly_rate - that's per employee)
   const downloadProjectsTemplate = () => {
-    const headers = ['project_name', 'client_name', 'description', 'status', 'budget', 'start_date', 'end_date', 'hourly_rate'];
+    const headers = ['project_name', 'client_name', 'description', 'status', 'budget', 'start_date', 'end_date'];
     const exampleRows = [
-      ['Website Redesign', 'Acme Corporation', 'Complete website overhaul with new design', 'active', '15000', '2026-02-01', '2026-04-30', '150'],
-      ['Mobile App Development', 'Acme Corporation', 'iOS and Android mobile application', 'active', '45000', '2026-03-01', '2026-08-31', '175'],
-      ['Brand Identity', 'TechStart Inc', 'Logo and brand guidelines', 'completed', '5000', '2025-11-01', '2025-12-15', '125'],
+      ['Website Redesign', 'Acme Corporation', 'Complete website overhaul with new design', 'active', '15000', '2026-02-01', '2026-04-30'],
+      ['Mobile App Development', 'Acme Corporation', 'iOS and Android mobile application', 'active', '45000', '2026-03-01', '2026-08-31'],
+      ['Brand Identity', 'TechStart Inc', 'Logo and brand guidelines', 'completed', '5000', '2025-11-01', '2025-12-15'],
     ];
     
     const csvContent = [
@@ -6392,6 +6400,30 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'billdora_projects_template.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  // Download CSV Template for Tasks (to add tasks to existing projects)
+  const downloadTasksTemplate = () => {
+    const headers = ['project_name', 'task_name', 'description', 'status', 'estimated_hours', 'due_date'];
+    const exampleRows = [
+      ['Website Redesign', 'Design Mockups', 'Create initial design mockups for homepage', 'pending', '16', '2026-02-15'],
+      ['Website Redesign', 'Frontend Development', 'Build responsive frontend with React', 'pending', '40', '2026-03-15'],
+      ['Website Redesign', 'Backend Integration', 'Connect frontend to API endpoints', 'pending', '24', '2026-04-01'],
+      ['Mobile App Development', 'UI/UX Design', 'Design app screens and user flow', 'pending', '32', '2026-03-20'],
+      ['Mobile App Development', 'iOS Development', 'Build iOS version with Swift', 'pending', '80', '2026-06-01'],
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'billdora_tasks_template.csv';
     link.click();
     URL.revokeObjectURL(link.href);
   };
@@ -6460,7 +6492,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
       const dataRows = rows.slice(1);
 
-      // Map header indices
+      // Map header indices (no hourly_rate - that's per employee, not project)
       const indices = {
         project_name: headers.indexOf('project_name'),
         client_name: headers.indexOf('client_name'),
@@ -6469,7 +6501,6 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
         budget: headers.indexOf('budget'),
         start_date: headers.indexOf('start_date'),
         end_date: headers.indexOf('end_date'),
-        hourly_rate: headers.indexOf('hourly_rate'),
       };
 
       if (indices.project_name === -1) {
@@ -6478,6 +6509,7 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
 
       let successCount = 0;
       const errors: string[] = [];
+      const newProjects: { id: string; name: string }[] = [];
 
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
@@ -6510,8 +6542,8 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
           const validStatuses = ['active', 'completed', 'on_hold', 'cancelled', 'in_progress'];
           const status = validStatuses.includes(statusRaw) ? statusRaw : 'active';
 
-          // Create project
-          await api.createProject({
+          // Create project (no hourly_rate - that's set per employee/time entry)
+          const newProject = await api.createProject({
             company_id: companyId,
             client_id: clientId,
             name: projectName,
@@ -6520,8 +6552,9 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
             budget: indices.budget !== -1 && row[indices.budget] ? parseFloat(row[indices.budget]) || undefined : undefined,
             start_date: indices.start_date !== -1 ? row[indices.start_date]?.trim() : undefined,
             end_date: indices.end_date !== -1 ? row[indices.end_date]?.trim() : undefined,
-            hourly_rate: indices.hourly_rate !== -1 && row[indices.hourly_rate] ? parseFloat(row[indices.hourly_rate]) || undefined : undefined,
           });
+          
+          newProjects.push({ id: newProject.id, name: newProject.name });
 
           successCount++;
         } catch (err: any) {
@@ -6530,6 +6563,11 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       }
 
       setImportResults({ success: successCount, errors });
+      
+      // Add newly created projects to the local list (for task imports)
+      if (newProjects.length > 0) {
+        setProjects(prev => [...prev, ...newProjects]);
+      }
       
       if (successCount > 0) {
         showToast(`Successfully imported ${successCount} project${successCount !== 1 ? 's' : ''}`, 'success');
@@ -6546,6 +6584,117 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
       // Reset file input
       if (projectsCsvInputRef.current) {
         projectsCsvInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Import Tasks from CSV
+  const handleTasksImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingTasks(true);
+    setImportResults(null);
+
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      
+      if (rows.length < 2) {
+        throw new Error('CSV file must have a header row and at least one data row');
+      }
+
+      const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const dataRows = rows.slice(1);
+
+      // Map header indices
+      const indices = {
+        project_name: headers.indexOf('project_name'),
+        task_name: headers.indexOf('task_name'),
+        description: headers.indexOf('description'),
+        status: headers.indexOf('status'),
+        estimated_hours: headers.indexOf('estimated_hours'),
+        due_date: headers.indexOf('due_date'),
+      };
+
+      if (indices.project_name === -1) {
+        throw new Error('CSV must have a "project_name" column');
+      }
+      if (indices.task_name === -1) {
+        throw new Error('CSV must have a "task_name" column');
+      }
+
+      // Re-fetch projects to ensure we have the latest
+      const latestProjects = await api.getProjects(companyId);
+      const projectsMap = latestProjects.map(p => ({ id: p.id, name: p.name }));
+
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const rowNum = i + 2;
+
+        try {
+          const projectName = row[indices.project_name]?.trim();
+          const taskName = row[indices.task_name]?.trim();
+          
+          if (!projectName) {
+            errors.push(`Row ${rowNum}: Missing project name`);
+            continue;
+          }
+          if (!taskName) {
+            errors.push(`Row ${rowNum}: Missing task name`);
+            continue;
+          }
+
+          // Find project by name (case-insensitive)
+          const matchedProject = projectsMap.find(p => 
+            p.name.toLowerCase() === projectName.toLowerCase()
+          );
+          
+          if (!matchedProject) {
+            errors.push(`Row ${rowNum}: Project "${projectName}" not found - task skipped`);
+            continue;
+          }
+
+          // Parse status
+          const statusRaw = indices.status !== -1 ? row[indices.status]?.trim().toLowerCase() : 'pending';
+          const validStatuses = ['pending', 'in_progress', 'completed', 'on_hold'];
+          const status = validStatuses.includes(statusRaw) ? statusRaw : 'pending';
+
+          // Create task
+          await api.createTask({
+            project_id: matchedProject.id,
+            name: taskName,
+            description: indices.description !== -1 ? row[indices.description]?.trim() : undefined,
+            status,
+            estimated_hours: indices.estimated_hours !== -1 && row[indices.estimated_hours] ? parseFloat(row[indices.estimated_hours]) || undefined : undefined,
+            due_date: indices.due_date !== -1 ? row[indices.due_date]?.trim() : undefined,
+          });
+
+          successCount++;
+        } catch (err: any) {
+          errors.push(`Row ${rowNum}: ${err?.message || 'Failed to create task'}`);
+        }
+      }
+
+      setImportResults({ success: successCount, errors });
+      
+      if (successCount > 0) {
+        showToast(`Successfully imported ${successCount} task${successCount !== 1 ? 's' : ''}`, 'success');
+      }
+      if (errors.length > 0 && successCount === 0) {
+        showToast('Import failed - check errors below', 'error');
+      }
+
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to import tasks', 'error');
+      setImportResults({ success: 0, errors: [err?.message || 'Unknown error'] });
+    } finally {
+      setImportingTasks(false);
+      if (tasksCsvInputRef.current) {
+        tasksCsvInputRef.current.value = '';
       }
     }
   };
@@ -6769,15 +6918,55 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
         </div>
       </div>
 
+      {/* Import Tasks */}
+      <div className="bg-white border border-neutral-200 rounded-lg p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <List className="w-5 h-5 text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-neutral-900">Import Tasks</h3>
+            <p className="text-xs text-neutral-500 mt-1 mb-4">
+              Upload a CSV file to bulk import tasks for your projects. Use the project name to link tasks to existing projects.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadTasksTemplate}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </button>
+              <label className={`flex items-center gap-2 px-3 py-2 text-xs font-medium text-white bg-[#476E66] rounded-lg hover:bg-[#3A5B54] transition-colors cursor-pointer ${importingTasks ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <Upload className="w-4 h-4" />
+                {importingTasks ? 'Importing...' : 'Upload CSV'}
+                <input
+                  ref={tasksCsvInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleTasksImport}
+                  disabled={importingTasks}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Tips */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Import Tips</h4>
+        <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Import Order & Tips</h4>
         <ul className="text-xs text-amber-700 space-y-1.5">
-          <li>• <strong>Import clients first</strong> before importing projects so they can be linked automatically</li>
-          <li>• The <strong>client_name</strong> in projects must exactly match an existing client name</li>
+          <li>• <strong>Step 1: Import Clients</strong> - Create your clients first</li>
+          <li>• <strong>Step 2: Import Projects</strong> - Use client name to auto-link projects</li>
+          <li>• <strong>Step 3: Import Tasks</strong> - Use project name to auto-link tasks</li>
+          <li className="pt-2 border-t border-amber-200 mt-2">• Names must <strong>exactly match</strong> existing records (case-insensitive)</li>
           <li>• Dates should be in <strong>YYYY-MM-DD</strong> format (e.g., 2026-02-15)</li>
-          <li>• Status options: <strong>active, completed, on_hold, cancelled, in_progress</strong></li>
-          <li>• Duplicate clients (same name) will be skipped during import</li>
+          <li>• Project status: <strong>active, completed, on_hold, cancelled, in_progress</strong></li>
+          <li>• Task status: <strong>pending, in_progress, completed, on_hold</strong></li>
+          <li>• Duplicate clients (same name) will be skipped</li>
+          <li>• <strong>Hourly rates</strong> are set per employee, not per project</li>
         </ul>
       </div>
     </div>
