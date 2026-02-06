@@ -1282,7 +1282,7 @@ export default function SalesPage() {
                           )}
                         </div>
                         <p className={`text-xs truncate ${selectedClient?.id === client.id ? 'text-white/60' : 'text-neutral-400'}`}>
-                          {client.email || client.display_name || 'No contact info'}
+                          {client.primary_contact_name || client.email || 'No contact info'}
                         </p>
                       </div>
                     </div>

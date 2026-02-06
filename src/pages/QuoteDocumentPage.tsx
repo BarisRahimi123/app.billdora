@@ -1817,10 +1817,10 @@ export default function QuoteDocumentPage() {
   const sendProposalEmail = async () => {
     // If a specific contact is selected, use their email; otherwise use primary contact or client email
     const selectedContact = selectedContactId ? clientContacts.find(c => c.id === selectedContactId) : null;
-    
+
     let recipientEmail: string | undefined;
     let recipientName: string;
-    
+
     if (recipientType === 'lead') {
       recipientEmail = selectedLead?.email;
       recipientName = selectedLead?.company_name || selectedLead?.name || 'Lead';
@@ -3027,6 +3027,52 @@ export default function QuoteDocumentPage() {
                   <textarea
                     value={scopeOfWork}
                     onChange={(e) => { setScopeOfWork(e.target.value); setHasUnsavedChanges(true); }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      // Smart Paste: Get text content and "beautify" it if coming from rich source
+                      const text = e.clipboardData.getData('text/plain');
+                      const html = e.clipboardData.getData('text/html');
+
+                      let processedText = text;
+
+                      // If we have HTML content (e.g. from Word/ChatGPT), try to extract valid structure
+                      if (html) {
+                        // Create temporary DOM to parse
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+
+                        // Replace list items with bullets explicitly
+                        const listItems = tempDiv.querySelectorAll('li');
+                        listItems.forEach(li => {
+                          li.innerHTML = '• ' + li.innerHTML;
+                        });
+
+                        // Handle paragraphs for spacing
+                        const paragraphs = tempDiv.querySelectorAll('p');
+                        paragraphs.forEach(p => {
+                          p.innerHTML = p.innerHTML + '\n\n';
+                        });
+
+                        // Use innerText to get clean visual representation
+                        processedText = tempDiv.innerText;
+                      }
+
+                      // Insert text at cursor position
+                      const textarea = e.target as HTMLTextAreaElement;
+                      const start = textarea.selectionStart;
+                      const end = textarea.selectionEnd;
+                      const currentValue = scopeOfWork || '';
+
+                      const newValue = currentValue.substring(0, start) + processedText + currentValue.substring(end);
+
+                      setScopeOfWork(newValue);
+                      setHasUnsavedChanges(true);
+
+                      // Restore cursor position after the pasted text (timeout needed for React to re-render)
+                      setTimeout(() => {
+                        textarea.selectionStart = textarea.selectionEnd = start + processedText.length;
+                      }, 0);
+                    }}
                     readOnly={isLocked}
                     className="w-full min-h-[320px] text-base text-neutral-700 bg-transparent border-none outline-none resize-y placeholder:text-neutral-400 focus:ring-0 leading-relaxed"
                     placeholder="Describe the scope of work for this project. Include deliverables, milestones, and key objectives...
@@ -6220,7 +6266,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                             <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Client</span>
                           )}
                         </div>
-                        
+
                         {/* Contact Selector for Clients with multiple contacts */}
                         {recipientType === 'client' && clientContacts.length > 0 ? (
                           <div className="space-y-2">
@@ -6259,7 +6305,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                             <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : (client?.primary_contact_email || client?.email)}</p>
                           </>
                         )}
-                        
+
                         {/* Show billing contact CC if exists and no custom CC */}
                         {recipientType === 'client' && client?.billing_contact_email && !ccEmail.trim() && !showCcInput && (
                           <div className="mt-2 pt-2 border-t border-neutral-200">
