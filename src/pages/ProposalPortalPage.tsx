@@ -1189,408 +1189,407 @@ Our team is dedicated to delivering high-quality results that meet your specific
               </div>
             </div>
           </div>
-        </div>
 
-        {/* PAGE 5: Terms & Acceptance */}
-        <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
-          <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
-            <div className="flex items-center gap-4 mb-8">
-              <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Terms & Acceptance</h2>
-              <div className="h-px bg-neutral-200 flex-1"></div>
-            </div>
-
-            {quote?.terms && (
-              <div className="mb-12 flex-1">
-                <div className="text-neutral-600 text-xs leading-relaxed text-justify columns-1 md:columns-2 gap-8">
-                  {quote.terms}
-                </div>
+          {/* PAGE 5: Terms & Acceptance */}
+          <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+            <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+              <div className="flex items-center gap-4 mb-8">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Terms & Acceptance</h2>
+                <div className="h-px bg-neutral-200 flex-1"></div>
               </div>
-            )}
 
-            <div className="mt-auto pt-16 mb-20">
-              <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
-              <p className="text-sm text-neutral-600 mb-12 max-w-2xl font-light">
-                By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {company?.company_name} to proceed with the scope of work defined within.
-              </p>
-
-              {/* Signature Grid - 2x2 Layout */}
-              <div className="grid grid-cols-2 gap-x-20 gap-y-16">
-
-                {/* Row 1: Signature & Printed Name */}
-
-                {/* Signature */}
-                <div className="relative group">
-                  {existingResponse?.status === 'accepted' ? (
-                    <>
-                      <div className="absolute bottom-3 left-0 text-emerald-800 font-serif text-3xl italic select-none">
-                        {existingResponse.signer_name || 'Signed'}
-                      </div>
-                      <div className="border-b border-neutral-300 h-12 w-full"></div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="absolute bottom-3 left-0 text-neutral-900 font-serif text-4xl opacity-[0.08] select-none">X</div>
-                      <div className="border-b border-neutral-300 h-10 w-full transition-colors group-hover:border-neutral-400"></div>
-                    </>
-                  )}
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Signature</p>
-                </div>
-
-                {/* Printed Name */}
-                <div>
-                  <div className="border-b border-neutral-300 h-10 w-full flex items-end pb-1">
-                    <span className="font-medium text-neutral-900 text-sm">
-                      {existingResponse?.status === 'accepted' ? existingResponse.signer_name : ''}
-                    </span>
+              {quote?.terms && (
+                <div className="mb-12 flex-1">
+                  <div className="text-neutral-600 text-xs leading-relaxed text-justify columns-1 md:columns-2 gap-8">
+                    {quote.terms}
                   </div>
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Printed Name</p>
                 </div>
+              )}
 
-                {/* Row 2: Title & Date */}
+              <div className="mt-auto pt-16 mb-20">
+                <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
+                <p className="text-sm text-neutral-600 mb-12 max-w-2xl font-light">
+                  By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {company?.company_name} to proceed with the scope of work defined within.
+                </p>
 
-                {/* Title */}
-                <div>
-                  <div className="border-b border-neutral-300 h-8 w-full"></div>
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Title</p>
-                </div>
+                {/* Signature Grid - 2x2 Layout */}
+                <div className="grid grid-cols-2 gap-x-20 gap-y-16">
 
-                {/* Date */}
-                <div>
-                  <div className="border-b border-neutral-300 h-8 w-full flex items-end pb-1">
-                    {existingResponse?.status === 'accepted' && existingResponse.responded_at && (
-                      <span className="font-medium text-neutral-900 text-sm">
-                        {new Date(existingResponse.responded_at).toLocaleDateString()}
-                      </span>
+                  {/* Row 1: Signature & Printed Name */}
+
+                  {/* Signature */}
+                  <div className="relative group">
+                    {existingResponse?.status === 'accepted' ? (
+                      <>
+                        <div className="absolute bottom-3 left-0 text-emerald-800 font-serif text-3xl italic select-none">
+                          {existingResponse.signer_name || 'Signed'}
+                        </div>
+                        <div className="border-b border-neutral-300 h-12 w-full"></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="absolute bottom-3 left-0 text-neutral-900 font-serif text-4xl opacity-[0.08] select-none">X</div>
+                        <div className="border-b border-neutral-300 h-10 w-full transition-colors group-hover:border-neutral-400"></div>
+                      </>
                     )}
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Signature</p>
                   </div>
-                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Date</p>
-                </div>
 
+                  {/* Printed Name */}
+                  <div>
+                    <div className="border-b border-neutral-300 h-10 w-full flex items-end pb-1">
+                      <span className="font-medium text-neutral-900 text-sm">
+                        {existingResponse?.status === 'accepted' ? existingResponse.signer_name : ''}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Printed Name</p>
+                  </div>
+
+                  {/* Row 2: Title & Date */}
+
+                  {/* Title */}
+                  <div>
+                    <div className="border-b border-neutral-300 h-8 w-full"></div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Title</p>
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <div className="border-b border-neutral-300 h-8 w-full flex items-end pb-1">
+                      {existingResponse?.status === 'accepted' && existingResponse.responded_at && (
+                        <span className="font-medium text-neutral-900 text-sm">
+                          {new Date(existingResponse.responded_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Date</p>
+                  </div>
+
+                </div>
               </div>
-            </div>
 
-            {/* Footer - Stick to bottom */}
-            <div className="absolute bottom-0 left-0 right-0 px-12 py-8 border-t border-neutral-100/50 bg-white">
-              <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
-                <div className="flex items-center gap-4">
-                  <span>{company?.company_name}</span>
-                  <span className="text-neutral-300">|</span>
-                  <span>{company?.website}</span>
-                </div>
-                <div className="flex gap-4">
-                  <span>Proposal #{quote?.quote_number}</span>
-                  <span className="text-neutral-300">•</span>
-                  <span>Page {totalScopePages + 3}</span>
+              {/* Footer - Stick to bottom */}
+              <div className="absolute bottom-0 left-0 right-0 px-12 py-8 border-t border-neutral-100/50 bg-white">
+                <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
+                  <div className="flex items-center gap-4">
+                    <span>{company?.company_name}</span>
+                    <span className="text-neutral-300">|</span>
+                    <span>{company?.website}</span>
+                  </div>
+                  <div className="flex gap-4">
+                    <span>Proposal #{quote?.quote_number}</span>
+                    <span className="text-neutral-300">•</span>
+                    <span>Page {totalScopePages + 3}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Action Buttons - Only shown when not printing */}
-        <div className="print:hidden pb-8">
-          {existingResponse?.status === 'accepted' ? (
-            <button
-              onClick={() => window.print()}
-              className="px-8 py-4 bg-[#476E66] text-white rounded-xl font-semibold text-lg hover:bg-[#3A5B54] transition-colors flex items-center justify-center gap-2"
-            >
-              <Printer className="w-5 h-5" />
-              Print / Save as PDF
-            </button>
-          ) : (
-            <button
-              onClick={() => setStep('respond')}
-              className="px-8 py-4 bg-[#476E66] text-white rounded-xl font-semibold text-lg hover:bg-[#3A5B54] transition-colors"
-            >
-              Respond to This Proposal
-            </button>
-          )}
+          {/* Action Buttons - Only shown when not printing */}
+          <div className="print:hidden pb-8">
+            {existingResponse?.status === 'accepted' ? (
+              <button
+                onClick={() => window.print()}
+                className="px-8 py-4 bg-[#476E66] text-white rounded-xl font-semibold text-lg hover:bg-[#3A5B54] transition-colors flex items-center justify-center gap-2"
+              >
+                <Printer className="w-5 h-5" />
+                Print / Save as PDF
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep('respond')}
+                className="px-8 py-4 bg-[#476E66] text-white rounded-xl font-semibold text-lg hover:bg-[#3A5B54] transition-colors"
+              >
+                Respond to This Proposal
+              </button>
+            )}
+          </div>
         </div>
-    </div>
       </main >
 
-    {/* Response Modal */ }
-  {
-    step === 'respond' && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-6 border-b flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-neutral-900">Your Response</h2>
-            <button onClick={() => { setStep('view'); setResponseType(null); }} className="p-2 hover:bg-neutral-100 rounded-lg">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-6">
-            {!responseType ? (
-              <div className="space-y-3">
-                <button
-                  onClick={() => setResponseType('accept')}
-                  className="w-full p-4 border-2 border-green-200 bg-green-50 rounded-xl text-left hover:border-green-400 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                      <Check className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-green-900">Accept & Sign</p>
-                      <p className="text-sm text-green-700">I approve this proposal and am ready to proceed</p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setResponseType('changes')}
-                  className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                      <Pen className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#476E66]">Request Changes</p>
-                      <p className="text-sm text-[#476E66]/70">I'd like some modifications to the proposal</p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setResponseType('discuss')}
-                  className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                      <MessageSquare className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#476E66]">Need to Discuss</p>
-                      <p className="text-sm text-[#476E66]/70">I'd like to talk before making a decision</p>
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setResponseType('later')}
-                  className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#476E66]">Not Right Now</p>
-                      <p className="text-sm text-[#476E66]/70">The timing isn't right, but maybe later</p>
-                    </div>
-                  </div>
+      {/* Response Modal */}
+      {
+        step === 'respond' && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-neutral-900">Your Response</h2>
+                <button onClick={() => { setStep('view'); setResponseType(null); }} className="p-2 hover:bg-neutral-100 rounded-lg">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            ) : responseType === 'accept' ? (
-              <div className="space-y-5">
-                {/* Proposal Summary */}
-                <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="text-sm text-neutral-500">Proposal</p>
-                      <p className="font-semibold text-neutral-900">{quote?.title}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-neutral-500">Total Amount</p>
-                      <p className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-neutral-500">Proposal #{quote?.quote_number}</p>
-                </div>
 
-                {/* Retainer Payment Notice */}
-                {quote?.retainer_enabled && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-sm font-bold">$</span>
+              <div className="p-6">
+                {!responseType ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => setResponseType('accept')}
+                      className="w-full p-4 border-2 border-green-200 bg-green-50 rounded-xl text-left hover:border-green-400 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
+                          <Check className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-green-900">Accept & Sign</p>
+                          <p className="text-sm text-green-700">I approve this proposal and am ready to proceed</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setResponseType('changes')}
+                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
+                          <Pen className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-[#476E66]">Request Changes</p>
+                          <p className="text-sm text-[#476E66]/70">I'd like some modifications to the proposal</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setResponseType('discuss')}
+                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
+                          <MessageSquare className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-[#476E66]">Need to Discuss</p>
+                          <p className="text-sm text-[#476E66]/70">I'd like to talk before making a decision</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setResponseType('later')}
+                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
+                          <Clock className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-[#476E66]">Not Right Now</p>
+                          <p className="text-sm text-[#476E66]/70">The timing isn't right, but maybe later</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                ) : responseType === 'accept' ? (
+                  <div className="space-y-5">
+                    {/* Proposal Summary */}
+                    <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="text-sm text-neutral-500">Proposal</p>
+                          <p className="font-semibold text-neutral-900">{quote?.title}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-neutral-500">Total Amount</p>
+                          <p className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-neutral-500">Proposal #{quote?.quote_number}</p>
+                    </div>
+
+                    {/* Retainer Payment Notice */}
+                    {quote?.retainer_enabled && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-white text-sm font-bold">$</span>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-amber-900">Deposit Due Upon Signing</p>
+                            <p className="text-2xl font-bold text-amber-800 mt-1">
+                              {formatCurrency(quote.retainer_type === 'percentage'
+                                ? subtotal * (quote.retainer_percentage || 0) / 100
+                                : quote.retainer_amount || 0
+                              )}
+                            </p>
+                            <p className="text-sm text-amber-700 mt-1">
+                              You will be directed to payment after signing.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Signer Information */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Your Full Name *</label>
+                        <input
+                          type="text"
+                          value={signerName}
+                          onChange={(e) => setSignerName(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                          placeholder="Enter your full legal name"
+                        />
                       </div>
                       <div>
-                        <p className="font-semibold text-amber-900">Deposit Due Upon Signing</p>
-                        <p className="text-2xl font-bold text-amber-800 mt-1">
-                          {formatCurrency(quote.retainer_type === 'percentage'
-                            ? subtotal * (quote.retainer_percentage || 0) / 100
-                            : quote.retainer_amount || 0
-                          )}
-                        </p>
-                        <p className="text-sm text-amber-700 mt-1">
-                          You will be directed to payment after signing.
-                        </p>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Title (Optional)</label>
+                        <input
+                          type="text"
+                          value={signerTitle}
+                          onChange={(e) => setSignerTitle(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                          placeholder="e.g., Owner, CEO, Manager"
+                        />
                       </div>
+                    </div>
+
+                    {/* Legal Consent Checkbox - Primary Signing Method */}
+                    <div className={`border-2 rounded-lg p-4 transition-colors ${consentChecked ? 'border-green-500 bg-green-50' : 'border-neutral-200'}`}>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={consentChecked}
+                          onChange={(e) => setConsentChecked(e.target.checked)}
+                          className="mt-1 w-5 h-5 rounded border-neutral-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                        />
+                        <div className="text-sm">
+                          <p className="font-medium text-neutral-900 mb-1">
+                            I agree to the terms of this proposal
+                          </p>
+                          <p className="text-neutral-600 leading-relaxed">
+                            By checking this box, I, <span className="font-semibold">{signerName || '[Your Name]'}</span>,
+                            confirm that I have reviewed and agree to the terms of Proposal #{quote?.quote_number}
+                            for <span className="font-semibold">{formatCurrency(total)}</span>.
+                            I authorize <span className="font-semibold">{company?.company_name}</span> to
+                            begin work as outlined in this proposal.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Optional Hand-Drawn Signature */}
+                    <div className="border-t border-neutral-200 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowOptionalSignature(!showOptionalSignature)}
+                        className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700"
+                      >
+                        <Pen className="w-4 h-4" />
+                        {showOptionalSignature ? 'Hide' : 'Add'} hand-drawn signature (optional)
+                      </button>
+
+                      {showOptionalSignature && (
+                        <div className="mt-3">
+                          <p className="text-xs text-neutral-500 mb-2">Draw your signature below (optional - the checkbox above is the legal signature)</p>
+                          <div className="border-2 border-dashed border-neutral-300 rounded-lg overflow-hidden bg-white">
+                            <canvas
+                              ref={canvasRef}
+                              width={400}
+                              height={120}
+                              className="w-full touch-none cursor-crosshair"
+                              onMouseDown={startDrawing}
+                              onMouseMove={draw}
+                              onMouseUp={stopDrawing}
+                              onMouseLeave={stopDrawing}
+                              onTouchStart={startDrawing}
+                              onTouchMove={draw}
+                              onTouchEnd={stopDrawing}
+                            />
+                          </div>
+                          <button onClick={clearSignature} className="text-xs text-neutral-500 hover:text-neutral-700 mt-1">
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Signing Metadata Preview */}
+                    <div className="bg-neutral-100 rounded-lg p-3 text-xs text-neutral-500">
+                      <p className="font-medium text-neutral-600 mb-1">Digital Signature Record</p>
+                      <p>Signed electronically on {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date().toLocaleTimeString()}</p>
+                      <p>Email: {client?.primary_contact_email || client?.email}</p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => { setResponseType(null); setConsentChecked(false); setShowOptionalSignature(false); }}
+                        className="flex-1 px-4 py-3 border border-neutral-300 rounded-lg hover:bg-neutral-50 font-medium"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={submitResponse}
+                        disabled={!signerName || !consentChecked || submitting}
+                        className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {submitting ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Signing...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-5 h-5" />
+                            Sign & Accept Proposal
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Legal Notice */}
+                    <p className="text-[10px] text-neutral-400 text-center leading-relaxed">
+                      By clicking "Sign & Accept Proposal", you agree that your electronic signature is the legal equivalent
+                      of your manual signature on this proposal. This agreement is legally binding under the
+                      Electronic Signatures in Global and National Commerce Act (ESIGN) and the Uniform Electronic Transactions Act (UETA).
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        {responseType === 'changes' ? 'What changes would you like?' :
+                          responseType === 'discuss' ? 'What would you like to discuss?' :
+                            'Any comments? (Optional)'}
+                      </label>
+                      <textarea
+                        value={comments}
+                        onChange={(e) => setComments(e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none"
+                        placeholder={responseType === 'changes' ? 'Please describe the changes you need...' :
+                          responseType === 'discuss' ? 'What questions or concerns do you have?' :
+                            'Any additional comments...'}
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-4">
+                      <button
+                        onClick={() => setResponseType(null)}
+                        className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={submitResponse}
+                        disabled={submitting}
+                        className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg font-medium hover:bg-[#3A5B54] disabled:opacity-50"
+                      >
+                        {submitting ? 'Submitting...' : 'Submit Response'}
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Signer Information */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">Your Full Name *</label>
-                    <input
-                      type="text"
-                      value={signerName}
-                      onChange={(e) => setSignerName(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
-                      placeholder="Enter your full legal name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">Title (Optional)</label>
-                    <input
-                      type="text"
-                      value={signerTitle}
-                      onChange={(e) => setSignerTitle(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
-                      placeholder="e.g., Owner, CEO, Manager"
-                    />
-                  </div>
-                </div>
-
-                {/* Legal Consent Checkbox - Primary Signing Method */}
-                <div className={`border-2 rounded-lg p-4 transition-colors ${consentChecked ? 'border-green-500 bg-green-50' : 'border-neutral-200'}`}>
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={consentChecked}
-                      onChange={(e) => setConsentChecked(e.target.checked)}
-                      className="mt-1 w-5 h-5 rounded border-neutral-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                    />
-                    <div className="text-sm">
-                      <p className="font-medium text-neutral-900 mb-1">
-                        I agree to the terms of this proposal
-                      </p>
-                      <p className="text-neutral-600 leading-relaxed">
-                        By checking this box, I, <span className="font-semibold">{signerName || '[Your Name]'}</span>,
-                        confirm that I have reviewed and agree to the terms of Proposal #{quote?.quote_number}
-                        for <span className="font-semibold">{formatCurrency(total)}</span>.
-                        I authorize <span className="font-semibold">{company?.company_name}</span> to
-                        begin work as outlined in this proposal.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Optional Hand-Drawn Signature */}
-                <div className="border-t border-neutral-200 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowOptionalSignature(!showOptionalSignature)}
-                    className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700"
-                  >
-                    <Pen className="w-4 h-4" />
-                    {showOptionalSignature ? 'Hide' : 'Add'} hand-drawn signature (optional)
-                  </button>
-
-                  {showOptionalSignature && (
-                    <div className="mt-3">
-                      <p className="text-xs text-neutral-500 mb-2">Draw your signature below (optional - the checkbox above is the legal signature)</p>
-                      <div className="border-2 border-dashed border-neutral-300 rounded-lg overflow-hidden bg-white">
-                        <canvas
-                          ref={canvasRef}
-                          width={400}
-                          height={120}
-                          className="w-full touch-none cursor-crosshair"
-                          onMouseDown={startDrawing}
-                          onMouseMove={draw}
-                          onMouseUp={stopDrawing}
-                          onMouseLeave={stopDrawing}
-                          onTouchStart={startDrawing}
-                          onTouchMove={draw}
-                          onTouchEnd={stopDrawing}
-                        />
-                      </div>
-                      <button onClick={clearSignature} className="text-xs text-neutral-500 hover:text-neutral-700 mt-1">
-                        Clear
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Signing Metadata Preview */}
-                <div className="bg-neutral-100 rounded-lg p-3 text-xs text-neutral-500">
-                  <p className="font-medium text-neutral-600 mb-1">Digital Signature Record</p>
-                  <p>Signed electronically on {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date().toLocaleTimeString()}</p>
-                  <p>Email: {client?.primary_contact_email || client?.email}</p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => { setResponseType(null); setConsentChecked(false); setShowOptionalSignature(false); }}
-                    className="flex-1 px-4 py-3 border border-neutral-300 rounded-lg hover:bg-neutral-50 font-medium"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={submitResponse}
-                    disabled={!signerName || !consentChecked || submitting}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {submitting ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Signing...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-5 h-5" />
-                        Sign & Accept Proposal
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Legal Notice */}
-                <p className="text-[10px] text-neutral-400 text-center leading-relaxed">
-                  By clicking "Sign & Accept Proposal", you agree that your electronic signature is the legal equivalent
-                  of your manual signature on this proposal. This agreement is legally binding under the
-                  Electronic Signatures in Global and National Commerce Act (ESIGN) and the Uniform Electronic Transactions Act (UETA).
-                </p>
+                {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">
-                    {responseType === 'changes' ? 'What changes would you like?' :
-                      responseType === 'discuss' ? 'What would you like to discuss?' :
-                        'Any comments? (Optional)'}
-                  </label>
-                  <textarea
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none"
-                    placeholder={responseType === 'changes' ? 'Please describe the changes you need...' :
-                      responseType === 'discuss' ? 'What questions or concerns do you have?' :
-                        'Any additional comments...'}
-                  />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setResponseType(null)}
-                    className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={submitResponse}
-                    disabled={submitting}
-                    className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg font-medium hover:bg-[#3A5B54] disabled:opacity-50"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit Response'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+            </div>
           </div>
-        </div>
-      </div>
-    )
-  }
+        )
+      }
     </div >
   );
 }
