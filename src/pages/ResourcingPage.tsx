@@ -83,44 +83,44 @@ export default function ResourcingPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <div>
-          <h1 className="text-base sm:text-lg font-bold text-neutral-900">Team</h1>
-          <p className="text-neutral-500 text-xs sm:text-sm mt-0.5">Manage staff members and their assignments</p>
+          <h1 className="text-[17px] font-bold text-neutral-900 uppercase tracking-wide">Team</h1>
+          <p className="text-[11px] text-neutral-500 font-bold uppercase tracking-widest mt-0.5">Manage staff members and their assignments</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors text-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-200 text-neutral-700 rounded-sm hover:bg-neutral-50 transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className="w-3 h-3" />
             <span className="hidden sm:inline">Invite</span>
           </button>
           <button
             onClick={() => { setEditingStaff(null); setShowModal(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3 h-3" />
             <span className="hidden sm:inline">Add Staff</span>
           </button>
         </div>
       </div>
 
       {/* Staff Selector Bar */}
-      <div className="bg-white rounded-lg border border-neutral-200 p-2.5" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="bg-white rounded-sm border border-neutral-200 p-2.5 shadow-sm">
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="SEARCH..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-28 sm:w-36 h-8 px-2.5 py-1.5 text-sm rounded-lg bg-neutral-50 border border-neutral-200 focus:outline-none focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66]"
+              className="w-28 sm:w-36 h-8 px-2.5 py-1.5 text-[11px] font-medium rounded-sm bg-neutral-50 border border-neutral-200 focus:outline-none focus:ring-0 focus:border-neutral-400 placeholder:text-neutral-400"
             />
-            <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer whitespace-nowrap">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-neutral-500 cursor-pointer whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={showInactive}
                 onChange={(e) => setShowInactive(e.target.checked)}
-                className="w-3.5 h-3.5 rounded text-[#476E66] focus:ring-[#476E66]"
+                className="w-3.5 h-3.5 rounded-sm border-neutral-300 text-[#476E66] focus:ring-0"
               />
               <span className="hidden sm:inline">Inactive</span>
             </label>
@@ -132,31 +132,28 @@ export default function ResourcingPage() {
                 <button
                   key={member.id}
                   onClick={() => { setSelectedStaff(member); setActiveTab('activity'); }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap text-sm ${
-                    selectedStaff?.id === member.id 
-                      ? 'bg-[#476E66]/10 text-[#476E66] ring-1 ring-[#476E66]' 
-                      : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                  }`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm transition-all whitespace-nowrap text-[10px] font-bold uppercase tracking-wide border ${selectedStaff?.id === member.id
+                    ? 'bg-[#476E66] text-white border-[#476E66] shadow-sm'
+                    : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
+                    }`}
                 >
                   {member.avatar_url ? (
-                    <img src={member.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                    <img src={member.avatar_url} alt="" className="w-4 h-4 rounded-sm object-cover border border-white/20" />
                   ) : (
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium ${
-                      selectedStaff?.id === member.id ? 'bg-[#476E66]/20 text-[#476E66]' : 'bg-[#476E66]/10 text-[#476E66]'
-                    }`}>
+                    <div className={`w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold ${selectedStaff?.id === member.id ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-600'
+                      }`}>
                       {member.full_name?.charAt(0) || '?'}
                     </div>
                   )}
-                  <span className="text-sm font-medium">{member.full_name?.split(' ')[0] || 'Staff'}</span>
+                  <span>{member.full_name?.split(' ')[0] || 'Staff'}</span>
                   {member.is_active === false && (
-                    <span className={`px-1 py-0.5 text-[10px] rounded ${
-                      selectedStaff?.id === member.id ? 'bg-[#476E66]/20 text-[#476E66]' : 'bg-neutral-200'
-                    }`}>Off</span>
+                    <span className={`px-1 py-px text-[8px] rounded-sm ${selectedStaff?.id === member.id ? 'bg-white/20 text-white' : 'bg-neutral-200 text-neutral-600'
+                      }`}>OFF</span>
                   )}
                 </button>
               ))}
               {filteredStaff.length === 0 && (
-                <span className="text-neutral-400 text-sm">No staff found</span>
+                <span className="text-neutral-400 text-xs uppercase tracking-wide py-1.5">No staff found</span>
               )}
             </div>
           </div>
@@ -164,51 +161,53 @@ export default function ResourcingPage() {
       </div>
 
       {/* Staff Details */}
-      <div className="bg-white rounded-lg border border-neutral-200 flex flex-col min-h-[calc(100vh-300px)]" style={{ boxShadow: 'var(--shadow-card)' }}>
-          {selectedStaff ? (
-            <>
-              {/* Tab Bar */}
-              <div className="border-b border-neutral-100">
-                <div className="flex items-center gap-0.5 px-2 pt-1.5 overflow-x-auto scrollbar-hide">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex items-center gap-1 px-2.5 py-2 text-xs font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-                        activeTab === tab.id
-                          ? 'bg-[#476E66]/10 text-[#476E66] border border-neutral-200 border-b-white -mb-px'
-                          : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50'
+      <div className="bg-white rounded-sm border border-neutral-200 flex flex-col min-h-[calc(100vh-300px)] shadow-sm">
+        {selectedStaff ? (
+          <>
+            {/* Tab Bar */}
+            <div className="border-b border-neutral-200 bg-neutral-50/50">
+              <div className="flex items-center gap-1 px-2 pt-2 overflow-x-auto scrollbar-hide">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest rounded-t-sm transition-all whitespace-nowrap border-t border-l border-r ${activeTab === tab.id
+                      ? 'bg-white text-neutral-900 border-neutral-200 border-b-transparent -mb-px shadow-sm'
+                      : 'bg-transparent text-neutral-500 border-transparent hover:text-neutral-700 hover:bg-neutral-100/50'
                       }`}
-                    >
-                      <span className="w-3.5 h-3.5">{tab.icon}</span>
-                      <span className="hidden lg:inline">{tab.label}</span>
-                    </button>
-                  ))}
+                  >
+                    <span className="w-3 h-3 opacity-70">{tab.icon}</span>
+                    <span className="hidden lg:inline">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white rounded-b-sm">
+              <div className="mb-6 flex items-center justify-between">
+                <h2 className="text-[15px] font-bold text-neutral-900 uppercase tracking-wide">{selectedStaff.full_name}</h2>
+                <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                  {tabs.find(t => t.id === activeTab)?.label}
                 </div>
               </div>
 
-              {/* Tab Content */}
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4">
-                <div className="mb-2.5">
-                  <h2 className="text-sm sm:text-base font-semibold text-neutral-900">{selectedStaff.full_name}</h2>
-                </div>
-                
-                {activeTab === 'activity' && <ActivityTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
-                {activeTab === 'tasks' && <CurrentTasksTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
-                {activeTab === 'time' && <TimeTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
-                {activeTab === 'performance' && <PerformanceTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
-                {activeTab === 'personal' && <PersonalDetailsTab staff={selectedStaff} onEdit={() => { setEditingStaff(selectedStaff); setShowModal(true); }} onDelete={async () => { await userManagementApi.updateUserProfile(selectedStaff.id, { is_active: false }); loadStaff(); }} onToggleActive={async () => { await userManagementApi.updateUserProfile(selectedStaff.id, { is_active: !selectedStaff.is_active }); loadStaff(); }} />}
-                {activeTab === 'compensation' && <CompensationTab staff={selectedStaff} companyId={profile?.company_id || ''} onUpdate={loadStaff} />}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-neutral-400">
-              <div className="text-center">
-                <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Select a staff member to view details</p>
-              </div>
+              {activeTab === 'activity' && <ActivityTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
+              {activeTab === 'tasks' && <CurrentTasksTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
+              {activeTab === 'time' && <TimeTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
+              {activeTab === 'performance' && <PerformanceTab staff={selectedStaff} companyId={profile?.company_id || ''} />}
+              {activeTab === 'personal' && <PersonalDetailsTab staff={selectedStaff} onEdit={() => { setEditingStaff(selectedStaff); setShowModal(true); }} onDelete={async () => { await userManagementApi.updateUserProfile(selectedStaff.id, { is_active: false }); loadStaff(); }} onToggleActive={async () => { await userManagementApi.updateUserProfile(selectedStaff.id, { is_active: !selectedStaff.is_active }); loadStaff(); }} />}
+              {activeTab === 'compensation' && <CompensationTab staff={selectedStaff} companyId={profile?.company_id || ''} onUpdate={loadStaff} />}
             </div>
-          )}
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-neutral-400">
+            <div className="text-center">
+              <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-300">Select a staff member</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
@@ -252,43 +251,43 @@ function PersonalDetailsTab({ staff, onEdit, onDelete, onToggleActive }: { staff
             <h3 className="text-xl font-semibold text-neutral-900">{staff.full_name || 'No Name'}</h3>
             <p className="text-neutral-500">{staff.email}</p>
             <div className="flex items-center gap-2 mt-2">
-              <span className="px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-lg text-sm capitalize">
+              <span className="px-2 py-0.5 bg-neutral-100 text-neutral-600 rounded-sm text-[9px] font-bold uppercase tracking-wider border border-neutral-200">
                 {staff.role || 'Staff'}
               </span>
               {staff.is_active !== false ? (
-                <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-medium">Active</span>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-sm text-[9px] font-bold uppercase tracking-wider border border-emerald-100">Active</span>
               ) : (
-                <span className="px-2.5 py-1 bg-neutral-100 text-neutral-500 rounded-lg text-xs font-medium">Inactive</span>
+                <span className="px-2 py-0.5 bg-neutral-100 text-neutral-500 rounded-sm text-[9px] font-bold uppercase tracking-wider border border-neutral-200">Inactive</span>
               )}
             </div>
           </div>
         </div>
         <div className="relative">
-          <button 
-            onClick={() => setShowMenu(!showMenu)} 
-            className="p-2 text-neutral-600 hover:bg-neutral-100 rounded-lg"
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-sm transition-colors"
           >
-            <MoreVertical className="w-5 h-5" />
+            <MoreVertical className="w-4 h-4" />
           </button>
           {showMenu && (
             <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-10">
-              <button 
-                onClick={() => { setShowMenu(false); onEdit(); }} 
+              <button
+                onClick={() => { setShowMenu(false); onEdit(); }}
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
               >
                 <Edit2 className="w-4 h-4" />
                 Edit Details
               </button>
-              <button 
-                onClick={() => { setShowMenu(false); onToggleActive(); }} 
+              <button
+                onClick={() => { setShowMenu(false); onToggleActive(); }}
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
               >
                 {staff.is_active !== false ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
                 {staff.is_active !== false ? 'Deactivate' : 'Activate'}
               </button>
               <hr className="my-1 border-neutral-100" />
-              <button 
-                onClick={() => { setShowMenu(false); onDelete(); }} 
+              <button
+                onClick={() => { setShowMenu(false); onDelete(); }}
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-neutral-900 hover:bg-neutral-100"
               >
                 <Trash2 className="w-4 h-4" />
@@ -301,8 +300,8 @@ function PersonalDetailsTab({ staff, onEdit, onDelete, onToggleActive }: { staff
 
       <div className="grid grid-cols-2 gap-4">
         {/* Personal Information */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-neutral-800 border-b pb-1.5">PERSONAL INFORMATION</h4>
+        <div className="space-y-4">
+          <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-100 pb-2">PERSONAL INFORMATION</h4>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-neutral-500">Full Name</label>
@@ -336,8 +335,8 @@ function PersonalDetailsTab({ staff, onEdit, onDelete, onToggleActive }: { staff
         </div>
 
         {/* Employment Details */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-neutral-800 border-b pb-1.5">EMPLOYMENT DETAILS</h4>
+        <div className="space-y-4">
+          <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-100 pb-2">EMPLOYMENT DETAILS</h4>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-neutral-500">Hire Date</label>
@@ -434,7 +433,7 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
   const [saving, setSaving] = useState(false);
   const [editingSection, setEditingSection] = useState<'groups' | 'departments' | 'teams' | null>(null);
   const [openMenu, setOpenMenu] = useState<'groups' | 'departments' | 'teams' | null>(null);
-  
+
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(staff.user_groups || []);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(staff.management_departments || []);
   const [selectedTeams, setSelectedTeams] = useState<string[]>(staff.staff_teams || []);
@@ -473,7 +472,7 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
       if (section === 'groups') updates.user_groups = selectedRoleIds;
       if (section === 'departments') updates.management_departments = selectedDepartments;
       if (section === 'teams') updates.staff_teams = selectedTeams;
-      
+
       await userManagementApi.updateUserProfile(staff.id, updates);
       setEditingSection(null);
       onUpdate?.();
@@ -525,38 +524,38 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
       {/* User Rights / Security Groups Section */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-semibold text-neutral-800">USER RIGHTS</h4>
+          <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">USER RIGHTS</h4>
           {editingSection === 'groups' ? (
             <div className="flex gap-2">
-              <button 
-                onClick={() => { setEditingSection(null); setSelectedRoleIds(staff.user_groups || []); }} 
-                className="px-3 py-1 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50"
+              <button
+                onClick={() => { setEditingSection(null); setSelectedRoleIds(staff.user_groups || []); }}
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest border border-neutral-200 rounded-sm hover:bg-neutral-50 text-neutral-600"
               >
                 Cancel
               </button>
-              <button 
-                onClick={() => saveSection('groups')} 
+              <button
+                onClick={() => saveSection('groups')}
                 disabled={saving}
-                className="px-3 py-1 text-sm bg-[#476E66] text-white rounded-lg hover:bg-black disabled:opacity-50"
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
           ) : (
             <div className="relative">
-              <button 
-                onClick={() => setOpenMenu(openMenu === 'groups' ? null : 'groups')} 
-                className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-lg"
+              <button
+                onClick={() => setOpenMenu(openMenu === 'groups' ? null : 'groups')}
+                className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-sm transition-colors"
               >
                 <MoreVertical className="w-4 h-4" />
               </button>
               {openMenu === 'groups' && (
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-10">
-                  <button 
-                    onClick={() => { setOpenMenu(null); setEditingSection('groups'); }} 
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-sm shadow-xl border border-neutral-200 py-1 z-10">
+                  <button
+                    onClick={() => { setOpenMenu(null); setEditingSection('groups'); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-neutral-700 hover:bg-neutral-50"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="w-3 h-3" />
                     Edit
                   </button>
                 </div>
@@ -564,8 +563,8 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
             </div>
           )}
         </div>
-        <p className="text-sm text-neutral-500 mb-4">
-          Security in Billdora is managed with the set of user <span className="text-neutral-500 underline cursor-pointer">groups</span>, listed below. Groups work just like a set of keys, permitting any team member that has them access to various areas within the program.
+        <p className="text-[11px] text-neutral-500 mb-4 leading-relaxed">
+          Security in Billdora is managed with the set of user <span className="text-neutral-700 font-bold underline cursor-pointer">groups</span>, listed below. Groups work just like a set of keys, permitting any team member that has them access to various areas within the program.
         </p>
         <div className="grid grid-cols-3 gap-x-8 gap-y-3">
           {securityGroups.map((group) => (
@@ -581,9 +580,9 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
                     setSelectedRoleIds(selectedRoleIds.filter(id => id !== group.id));
                   }
                 }}
-                className="w-4 h-4 rounded border-neutral-300 text-neutral-500 disabled:opacity-60"
+                className="w-3.5 h-3.5 rounded-sm border-neutral-300 text-[#476E66] focus:ring-0 disabled:opacity-60"
               />
-              <span className="text-sm text-neutral-700">{group.name}</span>
+              <span className="text-[13px] text-neutral-700">{group.name}</span>
             </label>
           ))}
         </div>
@@ -592,38 +591,38 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
       {/* Management Authority Section */}
       <div className="pt-4 border-t border-neutral-100">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-semibold text-neutral-800">MANAGEMENT AUTHORITY</h4>
+          <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">MANAGEMENT AUTHORITY</h4>
           {editingSection === 'departments' ? (
             <div className="flex gap-2">
-              <button 
-                onClick={() => { setEditingSection(null); setSelectedDepartments(staff.management_departments || []); }} 
-                className="px-3 py-1 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50"
+              <button
+                onClick={() => { setEditingSection(null); setSelectedDepartments(staff.management_departments || []); }}
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest border border-neutral-200 rounded-sm hover:bg-neutral-50 text-neutral-600"
               >
                 Cancel
               </button>
-              <button 
-                onClick={() => saveSection('departments')} 
+              <button
+                onClick={() => saveSection('departments')}
                 disabled={saving}
-                className="px-3 py-1 text-sm bg-[#476E66] text-white rounded-lg hover:bg-black disabled:opacity-50"
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
           ) : (
             <div className="relative">
-              <button 
-                onClick={() => setOpenMenu(openMenu === 'departments' ? null : 'departments')} 
-                className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-lg"
+              <button
+                onClick={() => setOpenMenu(openMenu === 'departments' ? null : 'departments')}
+                className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-sm transition-colors"
               >
                 <MoreVertical className="w-4 h-4" />
               </button>
               {openMenu === 'departments' && (
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-10">
-                  <button 
-                    onClick={() => { setOpenMenu(null); setEditingSection('departments'); }} 
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-sm shadow-xl border border-neutral-200 py-1 z-10">
+                  <button
+                    onClick={() => { setOpenMenu(null); setEditingSection('departments'); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-neutral-700 hover:bg-neutral-50"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="w-3 h-3" />
                     Edit
                   </button>
                 </div>
@@ -631,7 +630,7 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
             </div>
           )}
         </div>
-        <p className="text-sm text-neutral-500 mb-4">
+        <p className="text-[11px] text-neutral-500 mb-4 leading-relaxed">
           Below is a list of the departments {staff.full_name} manages (giving this manager authority to view/edit or approve time/expenses logged by team members in those departments).
         </p>
         <div className="grid grid-cols-3 gap-x-8 gap-y-3">
@@ -648,9 +647,9 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
                     setSelectedDepartments(selectedDepartments.filter(id => id !== dept.id));
                   }
                 }}
-                className="w-4 h-4 rounded border-neutral-300 text-neutral-500 disabled:opacity-60"
+                className="w-3.5 h-3.5 rounded-sm border-neutral-300 text-[#476E66] focus:ring-0 disabled:opacity-60"
               />
-              <span className="text-sm text-neutral-700">{dept.name}</span>
+              <span className="text-[13px] text-neutral-700">{dept.name}</span>
             </label>
           ))}
         </div>
@@ -659,38 +658,38 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
       {/* Staff Teams Section */}
       <div className="pt-4 border-t border-neutral-100">
         <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-semibold text-neutral-800">STAFF TEAMS</h4>
+          <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">STAFF TEAMS</h4>
           {editingSection === 'teams' ? (
             <div className="flex gap-2">
-              <button 
-                onClick={() => { setEditingSection(null); setSelectedTeams(staff.staff_teams || []); }} 
-                className="px-3 py-1 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50"
+              <button
+                onClick={() => { setEditingSection(null); setSelectedTeams(staff.staff_teams || []); }}
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest border border-neutral-200 rounded-sm hover:bg-neutral-50 text-neutral-600"
               >
                 Cancel
               </button>
-              <button 
-                onClick={() => saveSection('teams')} 
+              <button
+                onClick={() => saveSection('teams')}
                 disabled={saving}
-                className="px-3 py-1 text-sm bg-[#476E66] text-white rounded-lg hover:bg-black disabled:opacity-50"
+                className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
           ) : (
             <div className="relative">
-              <button 
-                onClick={() => setOpenMenu(openMenu === 'teams' ? null : 'teams')} 
-                className="p-1.5 text-neutral-500 hover:bg-neutral-100 rounded-lg"
+              <button
+                onClick={() => setOpenMenu(openMenu === 'teams' ? null : 'teams')}
+                className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 rounded-sm transition-colors"
               >
                 <MoreVertical className="w-4 h-4" />
               </button>
               {openMenu === 'teams' && (
-                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-10">
-                  <button 
-                    onClick={() => { setOpenMenu(null); setEditingSection('teams'); }} 
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+                <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-sm shadow-xl border border-neutral-200 py-1 z-10">
+                  <button
+                    onClick={() => { setOpenMenu(null); setEditingSection('teams'); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-neutral-700 hover:bg-neutral-50"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="w-3 h-3" />
                     Edit
                   </button>
                 </div>
@@ -698,7 +697,7 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
             </div>
           )}
         </div>
-        <p className="text-sm text-neutral-500 mb-4">
+        <p className="text-[11px] text-neutral-500 mb-4 leading-relaxed">
           Below is a list of available staff teams. These can be used to assign a group of team members to a project. Check off the teams you would like this team member to be a part of.
         </p>
         <div className="grid grid-cols-3 gap-x-8 gap-y-3">
@@ -715,9 +714,9 @@ function UserRightsTab({ staff, companyId, onUpdate }: { staff: UserProfile; com
                     setSelectedTeams(selectedTeams.filter(id => id !== team.id));
                   }
                 }}
-                className="w-4 h-4 rounded border-neutral-300 text-neutral-500 disabled:opacity-60"
+                className="w-3.5 h-3.5 rounded-sm border-neutral-300 text-[#476E66] focus:ring-0 disabled:opacity-60"
               />
-              <span className="text-sm text-neutral-700">{team.name}</span>
+              <span className="text-[13px] text-neutral-700">{team.name}</span>
             </label>
           ))}
         </div>
@@ -817,9 +816,8 @@ function TimeTab({ staff, companyId }: { staff: UserProfile; companyId: string }
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
-            className={`px-3 py-1.5 text-sm rounded-lg capitalize ${
-              viewMode === mode ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-            }`}
+            className={`px-3 py-1.5 text-sm rounded-lg capitalize ${viewMode === mode ? 'bg-[#476E66] text-white' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+              }`}
           >
             {mode}
           </button>
@@ -927,11 +925,10 @@ function ExpensesTab({ staff, companyId }: { staff: UserProfile; companyId: stri
                 <td className="px-4 py-3 text-sm text-neutral-900">{expense.description}</td>
                 <td className="px-4 py-3 text-sm text-neutral-600">{new Date(expense.date).toLocaleDateString()}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    expense.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${expense.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
                     expense.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                    'bg-neutral-100 text-neutral-600'
-                  }`}>
+                      'bg-neutral-100 text-neutral-600'
+                    }`}>
                     {expense.status || 'Pending'}
                   </span>
                 </td>
@@ -1063,7 +1060,7 @@ function TeamsTab({ staff }: { staff: UserProfile }) {
       <p className="text-sm text-neutral-500">
         Projects and teams that {staff.full_name} is assigned to.
       </p>
-      
+
       <div className="grid gap-4">
         {projects.map((pm) => (
           <div key={pm.id} className="border border-neutral-200 rounded-lg p-4 hover:border-neutral-300 transition-colors">
@@ -1132,7 +1129,7 @@ function CurrentTasksTab({ staff, companyId }: { staff: UserProfile; companyId: 
         <p className="text-sm text-neutral-500">Active tasks assigned to {staff.full_name}</p>
         <span className="px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded text-sm font-medium">{tasks.length} tasks</span>
       </div>
-      
+
       <div className="space-y-3">
         {tasks.map((task) => (
           <div key={task.id} className="border border-neutral-200 rounded-lg p-4 hover:border-neutral-300 transition-colors">
@@ -1142,9 +1139,8 @@ function CurrentTasksTab({ staff, companyId }: { staff: UserProfile; companyId: 
                 <p className="text-sm text-neutral-500">{(task as any).project?.name || 'No Project'}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'
-                }`}>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'
+                  }`}>
                   {task.status === 'in_progress' ? 'In Progress' : 'To Do'}
                 </span>
                 {task.due_date && (
@@ -1179,7 +1175,7 @@ function PerformanceTab({ staff, companyId }: { staff: UserProfile; companyId: s
     try {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      
+
       const { data: timeEntries } = await supabase
         .from('time_entries')
         .select('hours, billable')
@@ -1207,7 +1203,7 @@ function PerformanceTab({ staff, companyId }: { staff: UserProfile; companyId: s
   return (
     <div className="space-y-6">
       <p className="text-xs text-neutral-500">Performance metrics for {staff.full_name} (This Month)</p>
-      
+
       <div className="space-y-1">
         <div className="flex justify-between items-center py-2 border-b border-neutral-100">
           <span className="text-sm text-neutral-600">Total Hours</span>
@@ -1263,7 +1259,7 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
       try {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        
+
         // Get this month's billable hours
         const { data: monthlyEntries } = await supabase
           .from('time_entries')
@@ -1272,7 +1268,7 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
           .eq('user_id', staff.id)
           .eq('billable', true)
           .gte('date', startOfMonth);
-        
+
         // Get all-time billable hours
         const { data: allEntries } = await supabase
           .from('time_entries')
@@ -1280,11 +1276,11 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
           .eq('company_id', companyId)
           .eq('user_id', staff.id)
           .eq('billable', true);
-        
+
         const monthlyHours = monthlyEntries?.reduce((sum, t) => sum + (t.hours || 0), 0) || 0;
         const totalHours = allEntries?.reduce((sum, t) => sum + (t.hours || 0), 0) || 0;
         const billingRate = staff.hourly_rate || 0;
-        
+
         setBillableRevenue({
           monthly: monthlyHours * billingRate,
           total: totalHours * billingRate,
@@ -1319,12 +1315,12 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
     } else if (formData.annual_salary) {
       monthlySalary = parseFloat(formData.annual_salary) / 12;
     }
-    
+
     const benefits = (parseFloat(formData.health_insurance_cost) || 0) +
-                     (parseFloat(formData.retirement_contribution) || 0) +
-                     (parseFloat(formData.other_benefits_cost) || 0) +
-                     (parseFloat(formData.additional_expenses) || 0);
-    
+      (parseFloat(formData.retirement_contribution) || 0) +
+      (parseFloat(formData.other_benefits_cost) || 0) +
+      (parseFloat(formData.additional_expenses) || 0);
+
     return monthlySalary + benefits;
   };
 
@@ -1347,9 +1343,9 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
           updated_at: new Date().toISOString(),
         })
         .eq('id', staff.id);
-      
+
       if (error) throw error;
-      
+
       setEditing(false);
       onUpdate();
     } catch (error: any) {
@@ -1363,15 +1359,15 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-neutral-500">Compensation, costs and billing rates for {staff.full_name}</p>
+        <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wide">Compensation, costs and billing rates for {staff.full_name}</p>
         {!editing ? (
-          <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-sm bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors">
+          <button onClick={() => setEditing(true)} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-neutral-100 hover:bg-neutral-200 rounded-sm transition-colors text-neutral-600">
             Edit
           </button>
         ) : (
           <div className="flex gap-2">
-            <button onClick={() => { setEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-50">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50">
+            <button onClick={() => { setEditing(false); setSaveError(null); }} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border border-neutral-200 rounded-sm hover:bg-neutral-50 text-neutral-600">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] disabled:opacity-50">
               {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -1383,57 +1379,60 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
       )}
 
       {/* Summary - Cost vs Revenue */}
-      <div className="grid grid-cols-2 gap-4 border-b border-neutral-200 pb-3">
-        <div>
-          <p className="text-xs text-neutral-500">Total Monthly Cost</p>
-          <p className="text-base font-semibold text-neutral-900 mt-0.5">${calculateMonthlyCost().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+      <div className="grid grid-cols-2 gap-4 border-b border-neutral-200 pb-4 mb-4">
+        <div className="p-4 bg-neutral-50 rounded-sm border border-neutral-200">
+          <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Total Monthly Cost</p>
+          <p className="text-xl font-bold text-neutral-900">${calculateMonthlyCost().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
-        <div>
-          <p className="text-xs text-neutral-500">Revenue Generated (This Month)</p>
-          <p className={`text-base font-semibold mt-0.5 ${(billableRevenue?.monthly || 0) >= calculateMonthlyCost() ? 'text-emerald-600' : 'text-neutral-900'}`}>
-            ${(billableRevenue?.monthly || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <p className="text-xs text-neutral-400">{billableRevenue?.hours?.toFixed(1) || 0}h × ${formData.hourly_rate || 0}/hr</p>
+        <div className="p-4 bg-neutral-50 rounded-sm border border-neutral-200">
+          <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Revenue Generated (This Month)</p>
+          <div className="flex items-baseline gap-2">
+            <p className={`text-xl font-bold ${(billableRevenue?.monthly || 0) >= calculateMonthlyCost() ? 'text-emerald-700' : 'text-neutral-900'}`}>
+              ${(billableRevenue?.monthly || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-[10px] uppercase font-bold text-neutral-400 tracking-wide">{billableRevenue?.hours?.toFixed(1) || 0}h × ${formData.hourly_rate || 0}/hr</p>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Salary Section */}
-        <div className="border border-neutral-200 rounded-lg p-3">
-          <h3 className="text-sm font-medium text-neutral-900 mb-2">Salary / Pay Rate</h3>
-          <div className="space-y-2">
+        {/* Salary Section */}
+        <div className="border border-neutral-200 rounded-sm p-4 bg-white shadow-sm">
+          <h3 className="text-[10px] font-bold text-neutral-900 uppercase tracking-widest mb-3 border-b border-neutral-100 pb-2">Salary / Pay Rate</h3>
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Pay Type</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Pay Type</label>
               {editing ? (
-                <select 
-                  value={formData.salary_type} 
-                  onChange={(e) => setFormData({...formData, salary_type: e.target.value})}
-                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                <select
+                  value={formData.salary_type}
+                  onChange={(e) => setFormData({ ...formData, salary_type: e.target.value })}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none"
                 >
                   <option value="hourly">Hourly</option>
                   <option value="salary">Salary</option>
                   <option value="contract">Contract</option>
                 </select>
               ) : (
-                <p className="text-neutral-900 capitalize">{formData.salary_type}</p>
+                <p className="text-neutral-900 text-[13px] capitalize font-medium">{formData.salary_type}</p>
               )}
             </div>
             {formData.salary_type === 'hourly' ? (
               <div>
-                <label className="block text-sm text-neutral-600 mb-1">Hourly Pay Rate</label>
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Hourly Pay Rate</label>
                 {editing ? (
-                  <input type="number" value={formData.hourly_pay_rate} onChange={(e) => setFormData({...formData, hourly_pay_rate: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                  <input type="number" value={formData.hourly_pay_rate} onChange={(e) => setFormData({ ...formData, hourly_pay_rate: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
                 ) : (
-                  <p className="text-neutral-900">{formData.hourly_pay_rate ? `$${formData.hourly_pay_rate}/hr` : '-'}</p>
+                  <p className="text-neutral-900 text-[13px] font-medium">{formData.hourly_pay_rate ? `$${formData.hourly_pay_rate}/hr` : '-'}</p>
                 )}
               </div>
             ) : (
               <div>
-                <label className="block text-sm text-neutral-600 mb-1">Annual Salary</label>
+                <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Annual Salary</label>
                 {editing ? (
-                  <input type="number" value={formData.annual_salary} onChange={(e) => setFormData({...formData, annual_salary: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                  <input type="number" value={formData.annual_salary} onChange={(e) => setFormData({ ...formData, annual_salary: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
                 ) : (
-                  <p className="text-neutral-900">{formData.annual_salary ? `$${parseFloat(formData.annual_salary).toLocaleString()}/yr` : '-'}</p>
+                  <p className="text-neutral-900 text-[13px] font-medium">{formData.annual_salary ? `$${parseFloat(formData.annual_salary).toLocaleString()}/yr` : '-'}</p>
                 )}
               </div>
             )}
@@ -1441,72 +1440,74 @@ function CompensationTab({ staff, companyId, onUpdate }: { staff: UserProfile; c
         </div>
 
         {/* Benefits Section */}
-        <div className="border border-neutral-200 rounded-lg p-3">
-          <h3 className="text-sm font-medium text-neutral-900 mb-2">Benefits & Expenses (Monthly)</h3>
-          <div className="space-y-2">
+        {/* Benefits Section */}
+        <div className="border border-neutral-200 rounded-sm p-4 bg-white shadow-sm">
+          <h3 className="text-[10px] font-bold text-neutral-900 uppercase tracking-widest mb-3 border-b border-neutral-100 pb-2">Benefits & Expenses (Monthly)</h3>
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Health Insurance</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Health Insurance</label>
               {editing ? (
-                <input type="number" value={formData.health_insurance_cost} onChange={(e) => setFormData({...formData, health_insurance_cost: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                <input type="number" value={formData.health_insurance_cost} onChange={(e) => setFormData({ ...formData, health_insurance_cost: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
               ) : (
-                <p className="text-neutral-900">{formData.health_insurance_cost ? `$${formData.health_insurance_cost}` : '-'}</p>
+                <p className="text-neutral-900 text-[13px] font-medium">{formData.health_insurance_cost ? `$${formData.health_insurance_cost}` : '-'}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">401k / Retirement</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">401k / Retirement</label>
               {editing ? (
-                <input type="number" value={formData.retirement_contribution} onChange={(e) => setFormData({...formData, retirement_contribution: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                <input type="number" value={formData.retirement_contribution} onChange={(e) => setFormData({ ...formData, retirement_contribution: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
               ) : (
-                <p className="text-neutral-900">{formData.retirement_contribution ? `$${formData.retirement_contribution}` : '-'}</p>
+                <p className="text-neutral-900 text-[13px] font-medium">{formData.retirement_contribution ? `$${formData.retirement_contribution}` : '-'}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Other Benefits</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Other Benefits</label>
               {editing ? (
-                <input type="number" value={formData.other_benefits_cost} onChange={(e) => setFormData({...formData, other_benefits_cost: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                <input type="number" value={formData.other_benefits_cost} onChange={(e) => setFormData({ ...formData, other_benefits_cost: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
               ) : (
-                <p className="text-neutral-900">{formData.other_benefits_cost ? `$${formData.other_benefits_cost}` : '-'}</p>
+                <p className="text-neutral-900 text-[13px] font-medium">{formData.other_benefits_cost ? `$${formData.other_benefits_cost}` : '-'}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Additional Expenses</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Additional Expenses</label>
               {editing ? (
-                <input type="number" value={formData.additional_expenses} onChange={(e) => setFormData({...formData, additional_expenses: e.target.value})} className="w-full px-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                <input type="number" value={formData.additional_expenses} onChange={(e) => setFormData({ ...formData, additional_expenses: e.target.value })} className="w-full px-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
               ) : (
-                <p className="text-neutral-900">{formData.additional_expenses ? `$${formData.additional_expenses}` : '-'}</p>
+                <p className="text-neutral-900 text-[13px] font-medium">{formData.additional_expenses ? `$${formData.additional_expenses}` : '-'}</p>
               )}
             </div>
           </div>
         </div>
 
         {/* Client Billing Rate Section */}
-        <div className="border border-neutral-200 rounded-lg p-3">
-          <h3 className="text-sm font-medium text-neutral-900 mb-2">Client Billing Rate</h3>
-          <div className="space-y-2">
+        {/* Client Billing Rate Section */}
+        <div className="border border-neutral-200 rounded-sm p-4 bg-white shadow-sm">
+          <h3 className="text-[10px] font-bold text-neutral-900 uppercase tracking-widest mb-3 border-b border-neutral-100 pb-2">Client Billing Rate</h3>
+          <div className="space-y-3">
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Billable Status</label>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Billable Status</label>
               {editing ? (
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={formData.is_billable} onChange={(e) => setFormData({...formData, is_billable: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#476E66] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                  <span className="ml-2 text-sm text-neutral-600">{formData.is_billable ? 'Billable' : 'Non-Billable'}</span>
+                  <input type="checkbox" checked={formData.is_billable} onChange={(e) => setFormData({ ...formData, is_billable: e.target.checked })} className="sr-only peer" />
+                  <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#476E66] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                  <span className="ml-2 text-[13px] text-neutral-600">{formData.is_billable ? 'Billable' : 'Non-Billable'}</span>
                 </label>
               ) : (
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${formData.is_billable ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
+                <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wide ${formData.is_billable ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-neutral-100 text-neutral-600 border border-neutral-200'}`}>
                   {formData.is_billable ? 'Billable' : 'Non-Billable'}
                 </span>
               )}
             </div>
             <div>
-              <label className="block text-sm text-neutral-600 mb-1">Hourly Rate (Client)</label>
-              <p className="text-xs text-neutral-400 mb-2">Rate charged to clients for billable time</p>
+              <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Hourly Rate (Client)</label>
+              <p className="text-[10px] text-neutral-400 mb-2 uppercase tracking-wide">Rate charged to clients for billable time</p>
               {editing ? (
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">$</span>
-                  <input type="number" value={formData.hourly_rate} onChange={(e) => setFormData({...formData, hourly_rate: e.target.value})} className="w-full pl-7 pr-3 py-2 border border-neutral-200 rounded-lg" placeholder="0.00" />
+                  <input type="number" value={formData.hourly_rate} onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })} className="w-full pl-7 pr-3 py-2 border border-neutral-200 rounded-sm bg-neutral-50 text-[13px] focus:ring-0 focus:border-neutral-900 outline-none" placeholder="0.00" />
                 </div>
               ) : (
-                <p className="text-neutral-900 text-sm font-medium">{formData.hourly_rate ? `$${formData.hourly_rate}/hr` : '-'}</p>
+                <p className="text-neutral-900 text-xl font-bold">{formData.hourly_rate ? `$${formData.hourly_rate}/hr` : '-'}</p>
               )}
             </div>
           </div>
@@ -1530,7 +1531,7 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
   const [hourlyRate, setHourlyRate] = useState(staff?.hourly_rate?.toString() || '');
   const [isBillable, setIsBillable] = useState(staff?.is_billable !== false);
   const [isActive, setIsActive] = useState(staff?.is_active !== false);
-  
+
   // New fields
   const [phone, setPhone] = useState((staff as any)?.phone || '');
   const [address, setAddress] = useState((staff as any)?.address || '');
@@ -1545,13 +1546,13 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
   const [employeeId, setEmployeeId] = useState((staff as any)?.employee_id || '');
   const [reportsTo, setReportsTo] = useState((staff as any)?.reports_to || '');
   const [workLocation, setWorkLocation] = useState((staff as any)?.work_location || '');
-  
+
   // Emergency contact
   const [emergencyContactName, setEmergencyContactName] = useState((staff as any)?.emergency_contact_name || '');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState((staff as any)?.emergency_contact_relationship || '');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState((staff as any)?.emergency_contact_phone || '');
   const [emergencyContactEmail, setEmergencyContactEmail] = useState((staff as any)?.emergency_contact_email || '');
-  
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1594,13 +1595,13 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
           .select('id, email')
           .eq('email', email.toLowerCase())
           .maybeSingle();
-        
+
         if (existingUser) {
           setError('A user with this email already exists');
           setSaving(false);
           return;
         }
-        
+
         // Create staff profile
         await userManagementApi.createStaffProfile({
           company_id: companyId,
@@ -1627,10 +1628,10 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
           emergency_contact_phone: emergencyContactPhone,
           emergency_contact_email: emergencyContactEmail,
         } as any);
-        
+
         // Send invitation email
         const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).single();
-        
+
         await supabase.functions.invoke('send-email', {
           body: {
             to: email.toLowerCase(),
@@ -1644,7 +1645,7 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
             },
           },
         });
-        
+
         setError(null);
       }
       onSave();
@@ -1679,11 +1680,10 @@ function StaffModal({ staff, companyId, onClose, onSave }: {
               key={section.id}
               type="button"
               onClick={() => setActiveSection(section.id as any)}
-              className={`px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
-                activeSection === section.id
-                  ? 'border-[#476E66] text-[#476E66]'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
-              }`}
+              className={`px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${activeSection === section.id
+                ? 'border-[#476E66] text-[#476E66]'
+                : 'border-transparent text-neutral-500 hover:text-neutral-700'
+                }`}
             >
               {section.label}
             </button>
@@ -2041,11 +2041,11 @@ function InviteModal({ companyId, currentUserId, onClose, onSent }: {
         company_id: companyId,
         email: email.toLowerCase(),
       });
-      
+
       // Send invitation email via edge function
       const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).single();
       const { data: inviterData } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
-      
+
       const emailResult = await supabase.functions.invoke('send-email', {
         body: {
           to: email.toLowerCase(),
@@ -2059,16 +2059,16 @@ function InviteModal({ companyId, currentUserId, onClose, onSent }: {
           },
         },
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (emailResult.error) {
         console.error('Email send failed:', emailResult.error);
         setError('Invitation created but email failed to send. Please notify the user manually.');
         setSending(false);
         return;
       }
-      
+
       setSuccess(true);
       setTimeout(() => {
         onSent();

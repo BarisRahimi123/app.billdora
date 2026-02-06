@@ -1186,7 +1186,7 @@ export const api = {
       // Mark original invoices as consolidated
       const { error: updateError } = await supabase
         .from('invoices')
-        .update({ 
+        .update({
           consolidated_into: consolidatedInvoice.id,
           status: 'consolidated'
         })
@@ -1672,6 +1672,17 @@ export interface UserProfile {
   is_active?: boolean;
   avatar_url?: string;
   created_at?: string;
+  // Personal Details
+  phone?: string;
+  date_of_birth?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  hire_date?: string;
+  // Arrays
   user_groups?: string[];
   management_departments?: string[];
   staff_teams?: string[];
@@ -3047,13 +3058,13 @@ export const collaborationApi = {
       // Fetch category names for trade display
       const categoryIds = [...new Set((sentData || []).map((s: any) => s.category_id).filter(Boolean))];
       let categoryMap = new Map<string, string>();
-      
+
       if (categoryIds.length > 0) {
         const { data: categoryData } = await supabase
           .from('collaborator_categories')
           .select('id, name')
           .in('id', categoryIds);
-        
+
         for (const cat of categoryData || []) {
           categoryMap.set(cat.id, cat.name);
         }
@@ -3076,9 +3087,9 @@ export const collaborationApi = {
       for (const item of sentData || []) {
         const key = item.collaborator_email?.toLowerCase() || item.collaborator_company_id || '';
         if (!key) continue;
-        
+
         const tradeName = (item as any).category_id ? categoryMap.get((item as any).category_id) || '' : '';
-        
+
         const existing = partnersMap.get(key);
         if (existing) {
           existing.projectCount++;
@@ -3108,14 +3119,14 @@ export const collaborationApi = {
 
       // Process people who've invited us - need to fetch their company info
       const ownerCompanyIds = [...new Set((receivedData || []).map(r => r.owner_company_id).filter(Boolean))];
-      
+
       let companyInfoMap = new Map<string, { name: string; email: string }>();
       if (ownerCompanyIds.length > 0) {
         const { data: companyData } = await supabase
           .from('company_settings')
           .select('company_id, company_name, email')
           .in('company_id', ownerCompanyIds);
-        
+
         for (const c of companyData || []) {
           companyInfoMap.set(c.company_id, { name: c.company_name || '', email: c.email || '' });
         }
@@ -3125,7 +3136,7 @@ export const collaborationApi = {
         if (!item.owner_company_id) continue;
         const key = item.owner_company_id;
         const companyInfo = companyInfoMap.get(key) || { name: '', email: '' };
-        
+
         const existing = partnersMap.get(key);
         if (existing) {
           existing.projectCount++;
@@ -3149,7 +3160,7 @@ export const collaborationApi = {
         }
       }
 
-      return Array.from(partnersMap.values()).sort((a, b) => 
+      return Array.from(partnersMap.values()).sort((a, b) =>
         new Date(b.lastCollaboration).getTime() - new Date(a.lastCollaboration).getTime()
       );
     } catch (err) {

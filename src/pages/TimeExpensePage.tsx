@@ -9,13 +9,13 @@ type TimeTab = 'timesheet' | 'expenses' | 'approvals' | 'approved';
 type DatePreset = 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_year' | 'custom';
 
 // Date Range Picker Component
-function DateRangePicker({ 
-  startDate, 
-  endDate, 
-  onDateChange 
-}: { 
-  startDate: string; 
-  endDate: string; 
+function DateRangePicker({
+  startDate,
+  endDate,
+  onDateChange
+}: {
+  startDate: string;
+  endDate: string;
   onDateChange: (start: string, end: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -37,7 +37,7 @@ function DateRangePicker({
   const applyPreset = (p: DatePreset) => {
     const now = new Date();
     let start: Date, end: Date;
-    
+
     switch (p) {
       case 'this_week':
         start = new Date(now);
@@ -66,7 +66,7 @@ function DateRangePicker({
       default:
         return;
     }
-    
+
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
     setPreset(p);
@@ -107,7 +107,7 @@ function DateRangePicker({
         </span>
         <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-      
+
       {isOpen && (
         <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-neutral-200 z-50 overflow-hidden">
           <div className="p-2 border-b border-neutral-100">
@@ -116,9 +116,8 @@ function DateRangePicker({
               <button
                 key={p}
                 onClick={() => applyPreset(p)}
-                className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${
-                  preset === p ? 'bg-[#476E66] text-white' : 'hover:bg-neutral-100 text-neutral-700'
-                }`}
+                className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${preset === p ? 'bg-[#476E66] text-white' : 'hover:bg-neutral-100 text-neutral-700'
+                  }`}
               >
                 {presetLabels[p]}
               </button>
@@ -230,7 +229,7 @@ export default function TimeExpensePage() {
   const savedDraftRows = useMemo(() => {
     const rows: SubmittedRow[] = [];
     const seen = new Set<string>();
-    
+
     // First, create rows from all draft entries (regardless of week)
     allDraftEntries.forEach(entry => {
       const key = `${entry.project_id}-${entry.task_id || 'null'}`;
@@ -241,7 +240,7 @@ export default function TimeExpensePage() {
         rows.push({ id: key, project, task, entries: {} });
       }
     });
-    
+
     // Then, populate entries from current week's timeEntries
     timeEntries.forEach(entry => {
       if (entry.approval_status !== 'draft' && entry.approval_status !== 'rejected') return;
@@ -250,7 +249,7 @@ export default function TimeExpensePage() {
         row.entries[entry.date] = entry;
       }
     });
-    
+
     return rows;
   }, [allDraftEntries, timeEntries, projects, tasks]);
 
@@ -258,7 +257,7 @@ export default function TimeExpensePage() {
   const submittedRows = useMemo(() => {
     const rows: SubmittedRow[] = [];
     const seen = new Set<string>();
-    
+
     timeEntries.forEach(entry => {
       // Only show pending and approved entries in the submitted section (not rejected)
       if (entry.approval_status !== 'pending' && entry.approval_status !== 'approved') return;
@@ -394,17 +393,17 @@ export default function TimeExpensePage() {
     try {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
-      
+
       const [projectsData, entriesData, expensesData, allDraftData] = await Promise.all([
         api.getProjects(profile.company_id),
         api.getTimeEntries(profile.company_id, user.id, weekStart.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0]),
         api.getExpenses(profile.company_id, user.id),
         // Load all draft/rejected entries (no date filter) for persistent rows
-        api.getTimeEntries(profile.company_id, user.id).then(entries => 
+        api.getTimeEntries(profile.company_id, user.id).then(entries =>
           entries.filter(e => e.approval_status === 'draft' || e.approval_status === 'rejected')
         ),
       ]);
-      
+
       setProjects(projectsData);
       setTimeEntries(entriesData);
       setAllDraftEntries(allDraftData);
@@ -418,7 +417,7 @@ export default function TimeExpensePage() {
         ]);
         setPendingTimeEntries(pendingTime);
         setPendingExpenses(pendingExp);
-        
+
         // Load approved entries
         await loadApprovedData();
       }
@@ -573,10 +572,10 @@ export default function TimeExpensePage() {
 
   async function updateTimeEntry(projectId: string, taskId: string | null, date: string, hours: number) {
     if (!profile?.company_id || !user?.id) return;
-    
-    const existing = timeEntries.find(e => 
-      e.project_id === projectId && 
-      e.task_id === taskId && 
+
+    const existing = timeEntries.find(e =>
+      e.project_id === projectId &&
+      e.task_id === taskId &&
       e.date === date
     );
 
@@ -610,13 +609,13 @@ export default function TimeExpensePage() {
     const project = projects.find(p => p.id === projectId) || null;
     const task = taskId ? tasks[projectId]?.find(t => t.id === taskId) || null : null;
     const key = `${projectId}-${taskId || 'null'}`;
-    
+
     // Check if row already exists in drafts, saved drafts (from timer), or submitted
     if (draftRows.some(r => r.id === key) || savedDraftRows.some(r => r.id === key) || submittedRows.some(r => r.id === key)) {
       alert('This project/task already has a row. Please use the existing row.');
       return;
     }
-    
+
     setDraftRows([...draftRows, { id: key, project, task, projectId, taskId }]);
     setShowTimeEntryModal(false);
   };
@@ -664,47 +663,47 @@ export default function TimeExpensePage() {
   }
 
   return (
-    <div className="space-y-1.5 sm:space-y-3 pb-16 sm:pb-20">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-base sm:text-xl font-bold text-neutral-900">Time & Expense</h1>
+    <div className="space-y-6 pb-16 sm:pb-20">
+      <div className="flex items-end justify-between gap-3 border-b border-neutral-200 pb-4">
+        <div>
+          <h1 className="text-3xl font-light tracking-tight text-neutral-900 leading-tight">TIME & EXPENSE</h1>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#476E66] mt-1">Track billables</p>
+        </div>
         <button
           onClick={() => activeTab === 'timesheet' ? setShowTimeEntryModal(true) : setShowExpenseModal(true)}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm whitespace-nowrap"
+          className="flex items-center gap-2 px-4 py-2 bg-[#476E66] text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-[#3A5B54] transition-all shadow-lg shadow-[#476E66]/20 hover:shadow-xl hover:shadow-[#476E66]/30 hover:-translate-y-0.5"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">{activeTab === 'timesheet' ? 'Add Row' : 'Add Expense'}</span>
           <span className="sm:hidden">Add</span>
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-0.5 sm:p-1 bg-neutral-100 rounded-lg overflow-x-auto">
+      <div className="flex gap-8 border-b border-neutral-200 pb-0.5 overflow-x-auto">
         <button
           onClick={() => setActiveTab('timesheet')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === 'timesheet' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
+          className={`pb-3 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'timesheet' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'
+            }`}
         >
-          <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Timesheet</span><span className="sm:hidden">Time</span>
+          Timesheet
         </button>
         <button
           onClick={() => setActiveTab('expenses')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-            activeTab === 'expenses' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
+          className={`pb-3 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'expenses' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'
+            }`}
         >
-          <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Expenses</span><span className="sm:hidden">Exp.</span>
+          Expenses
         </button>
         {canApprove && (
           <button
             onClick={() => setActiveTab('approvals')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'approvals' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
+            className={`pb-3 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'approvals' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'
+              }`}
           >
-            <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Approvals</span><span className="sm:hidden">Approve</span>
+            Approvals
             {(pendingTimeEntries.length + pendingExpenses.length) > 0 && (
-              <span className="ml-0.5 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">
+              <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
                 {pendingTimeEntries.length + pendingExpenses.length}
               </span>
             )}
@@ -713,60 +712,69 @@ export default function TimeExpensePage() {
         {canApprove && (
           <button
             onClick={() => setActiveTab('approved')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === 'approved' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
+            className={`pb-3 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'approved' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'
+              }`}
           >
-            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Approved History</span><span className="sm:hidden">History</span>
+            History
           </button>
         )}
       </div>
 
       {/* Timer - Ultra Compact for Mobile */}
       {activeTab === 'timesheet' && (
-        <div className="bg-white rounded-lg border border-neutral-100 p-2" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="bg-white rounded-sm border border-neutral-200 p-3 shadow-sm mb-6">
           {/* Row 1: Timer + Buttons */}
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className={`text-xl sm:text-2xl font-mono font-bold ${timerRunning ? 'text-emerald-600' : 'text-neutral-900'}`}>
+          <div className="flex items-center justify-between gap-4 mb-3">
+            <div className={`text-3xl font-mono font-bold tracking-tight ${timerRunning ? 'text-[#476E66]' : 'text-neutral-900'}`}>
               {formatTimer(timerSeconds)}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {!timerRunning ? (
-                <button onClick={startTimer} className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors">
-                  <Play className="w-4 h-4" />
+                <button onClick={startTimer} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">
+                  <Play className="w-5 h-5 fill-current" />
                 </button>
               ) : (
-                <button onClick={pauseTimer} className="p-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors">
-                  <Pause className="w-4 h-4" />
+                <button onClick={pauseTimer} className="p-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors shadow-sm">
+                  <Pause className="w-5 h-5 fill-current" />
                 </button>
               )}
-              <button onClick={stopTimer} disabled={timerSeconds === 0 || !timerProjectId} className="p-1.5 bg-red-400 text-white rounded-lg hover:bg-red-500 disabled:opacity-50 transition-colors">
-                <Square className="w-4 h-4" />
+              <button
+                onClick={stopTimer}
+                disabled={timerSeconds === 0 || !timerProjectId}
+                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                <Square className="w-5 h-5 fill-current" />
               </button>
             </div>
           </div>
           {/* Row 2: Project + Task (side by side on mobile) */}
-          <div className="flex gap-1.5 mb-1.5">
-            <select
-              value={timerProjectId}
-              onChange={(e) => { setTimerProjectId(e.target.value); setTimerTaskId(''); }}
-              className="flex-1 px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-neutral-50"
-              disabled={timerRunning}
-            >
-              <option value="">No Project</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select
-              value={timerTaskId}
-              onChange={(e) => setTimerTaskId(e.target.value)}
-              className="flex-1 px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-neutral-50"
-              disabled={timerRunning || !timerProjectId}
-            >
-              <option value="">No Task</option>
-              {timerProjectId && tasks[timerProjectId]?.filter(t => 
-                !t.collaborator_company_id || t.collaborator_company_id === profile?.company_id
-              ).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+          <div className="flex gap-2 mb-2">
+            <div className="relative flex-1">
+              <select
+                value={timerProjectId}
+                onChange={(e) => { setTimerProjectId(e.target.value); setTimerTaskId(''); }}
+                className="w-full pl-3 pr-8 py-2 border border-neutral-200 rounded-sm text-xs font-medium focus:ring-0 focus:border-neutral-900 outline-none bg-neutral-50 appearance-none transition-colors"
+                disabled={timerRunning}
+              >
+                <option value="">Select Project...</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500 pointer-events-none" />
+            </div>
+            <div className="relative flex-1">
+              <select
+                value={timerTaskId}
+                onChange={(e) => setTimerTaskId(e.target.value)}
+                className="w-full pl-3 pr-8 py-2 border border-neutral-200 rounded-sm text-xs font-medium focus:ring-0 focus:border-neutral-900 outline-none bg-neutral-50 appearance-none transition-colors"
+                disabled={timerRunning || !timerProjectId}
+              >
+                <option value="">Select Task...</option>
+                {timerProjectId && tasks[timerProjectId]?.filter(t =>
+                  !t.collaborator_company_id || t.collaborator_company_id === profile?.company_id
+                ).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500 pointer-events-none" />
+            </div>
           </div>
           {/* Row 3: Description */}
           <input
@@ -774,32 +782,32 @@ export default function TimeExpensePage() {
             placeholder="What are you working on?"
             value={timerDescription}
             onChange={(e) => setTimerDescription(e.target.value)}
-            className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+            className="w-full px-3 py-2 border border-neutral-200 rounded-sm text-xs font-medium focus:ring-0 focus:border-neutral-900 outline-none placeholder:text-neutral-400 transition-colors"
           />
         </div>
       )}
 
       {/* Timesheet - Mobile Optimized */}
       {activeTab === 'timesheet' && (
-        <div className="space-y-1.5 sm:space-y-3">
+        <div className="space-y-4">
           {/* Draft Section */}
-          <div className="bg-white rounded-lg overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <div className="flex items-center justify-between p-1.5 sm:p-3 border-b border-neutral-100">
-              <div className="px-2 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded-full text-xs font-medium">Draft</div>
+          <div className="bg-white rounded-sm border border-neutral-200 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between p-3 border-b border-neutral-200 bg-neutral-50">
+              <div className="px-2 py-0.5 bg-neutral-900 text-white rounded-sm text-[10px] font-bold uppercase tracking-widest">Draft</div>
               {/* Desktop: Week Navigation */}
-              <div className="hidden md:flex items-center gap-1.5 sm:gap-2">
-                <button 
-                  type="button" 
+              <div className="hidden md:flex items-center gap-3">
+                <button
+                  type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateWeek(-1); }}
-                  className="p-1.5 hover:bg-neutral-200 bg-neutral-100 rounded-lg cursor-pointer transition-colors"
+                  className="p-1 hover:bg-neutral-200 rounded-sm cursor-pointer transition-colors text-neutral-500 hover:text-neutral-900"
                 >
-                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-700" />
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-                <h3 className="text-xs sm:text-sm lg:text-base font-semibold text-neutral-900 select-none text-center">
+                <h3 className="text-sm font-bold text-neutral-900 select-none text-center uppercase tracking-wide px-2">
                   {formatDate(weekDays[0])} - {formatDate(weekDays[6])}, {weekDays[0].getFullYear()}
                 </h3>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateWeek(1); }}
                   className="p-1.5 hover:bg-neutral-200 bg-neutral-100 rounded-lg cursor-pointer transition-colors"
                 >
@@ -808,8 +816,8 @@ export default function TimeExpensePage() {
               </div>
               {/* Mobile: Single Day Navigation - Compact */}
               <div className="flex md:hidden items-center gap-1">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateMobileDay(-1); }}
                   className="p-1 hover:bg-neutral-200 bg-neutral-100 rounded cursor-pointer transition-colors"
                 >
@@ -819,8 +827,8 @@ export default function TimeExpensePage() {
                   <span className="text-xs text-neutral-600">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekDays[mobileDayIndex].getDay()]}</span>
                   <span className="text-sm font-bold text-neutral-900 ml-1">{formatDate(weekDays[mobileDayIndex])}</span>
                 </div>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateMobileDay(1); }}
                   className="p-1 hover:bg-neutral-200 bg-neutral-100 rounded cursor-pointer transition-colors"
                 >
@@ -857,7 +865,7 @@ export default function TimeExpensePage() {
                       <td colSpan={10} className="text-center py-6">
                         <div className="space-y-2">
                           <p className="text-neutral-500 text-sm">No time entries for this week</p>
-                          <button 
+                          <button
                             onClick={() => setShowTimeEntryModal(true)}
                             className="px-4 py-2 border border-[#476E66] text-[#476E66] rounded-lg hover:bg-[#476E66]/5 transition-colors font-medium text-sm"
                           >
@@ -871,76 +879,75 @@ export default function TimeExpensePage() {
                   {savedDraftRows.map((row) => {
                     const hasRejected = Object.values(row.entries).some(e => e.approval_status === 'rejected');
                     return (
-                    <tr key={`saved-${row.id}`} className={hasRejected ? "hover:bg-red-50/50 bg-red-50/30" : "hover:bg-green-50/50 bg-green-50/30"}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-neutral-900">
-                          {row.project?.name || 'Unknown Project'}
-                          {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
-                        </div>
-                        {hasRejected ? (
-                          <span className="text-xs text-red-600 font-medium">⚠️ Rejected - Please revise and resubmit</span>
-                        ) : (
-                          <span className="text-xs text-green-600 font-medium">From Timer</span>
-                        )}
-                      </td>
-                      {weekDays.map((day, i) => {
-                        const dateKey = formatDateKey(day);
-                        const entry = row.entries[dateKey];
-                        const isRejected = entry?.approval_status === 'rejected';
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        const isFutureDate = dateKey > todayStr;
-                        return (
-                          <td key={i} className="px-2 py-3">
-                            <input
-                              type="number"
-                              min="0"
-                              max="24"
-                              step="0.5"
-                              defaultValue={entry?.hours || ''}
-                              disabled={isFutureDate}
-                              className={`w-full h-10 text-center rounded-lg border-2 outline-none ${
-                                isFutureDate 
-                                  ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed' 
-                                  : isRejected 
+                      <tr key={`saved-${row.id}`} className={hasRejected ? "hover:bg-red-50/50 bg-red-50/30" : "hover:bg-green-50/50 bg-green-50/30"}>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-neutral-900">
+                            {row.project?.name || 'Unknown Project'}
+                            {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
+                          </div>
+                          {hasRejected ? (
+                            <span className="text-xs text-red-600 font-medium">⚠️ Rejected - Please revise and resubmit</span>
+                          ) : (
+                            <span className="text-xs text-green-600 font-medium">From Timer</span>
+                          )}
+                        </td>
+                        {weekDays.map((day, i) => {
+                          const dateKey = formatDateKey(day);
+                          const entry = row.entries[dateKey];
+                          const isRejected = entry?.approval_status === 'rejected';
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isFutureDate = dateKey > todayStr;
+                          return (
+                            <td key={i} className="px-2 py-3">
+                              <input
+                                type="number"
+                                min="0"
+                                max="24"
+                                step="0.5"
+                                defaultValue={entry?.hours || ''}
+                                disabled={isFutureDate}
+                                className={`w-full h-10 text-center rounded-lg border-2 outline-none ${isFutureDate
+                                  ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed'
+                                  : isRejected
                                     ? 'border-red-300 bg-red-50 focus:ring-2 focus:ring-red-400 focus:border-transparent'
                                     : 'border-green-300 bg-green-50 focus:ring-2 focus:ring-green-400 focus:border-transparent'
-                              }`}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                if (entry) {
-                                  setRejectedEdits(prev => ({ ...prev, [entry.id]: val }));
-                                }
-                              }}
-                            />
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-center font-semibold text-neutral-900">
-                        {Object.values(row.entries).reduce((sum, e) => sum + (rejectedEdits[e.id] !== undefined ? rejectedEdits[e.id] : (e.hours || 0)), 0)}h
-                      </td>
-                      <td className="px-2 py-3">
-                        <button 
-                          onClick={async () => {
-                            for (const entry of Object.values(row.entries)) {
-                              await api.deleteTimeEntry(entry.id);
-                            }
-                            await loadData();
-                          }}
-                          className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                                  }`}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  if (entry) {
+                                    setRejectedEdits(prev => ({ ...prev, [entry.id]: val }));
+                                  }
+                                }}
+                              />
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 text-center font-semibold text-neutral-900">
+                          {Object.values(row.entries).reduce((sum, e) => sum + (rejectedEdits[e.id] !== undefined ? rejectedEdits[e.id] : (e.hours || 0)), 0)}h
+                        </td>
+                        <td className="px-2 py-3">
+                          <button
+                            onClick={async () => {
+                              for (const entry of Object.values(row.entries)) {
+                                await api.deleteTimeEntry(entry.id);
+                              }
+                              await loadData();
+                            }}
+                            className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
                     );
                   })}
                   {/* Local draft rows */}
                   {draftRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-neutral-100/50">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-neutral-900">
-                          {row.project?.name || 'Unknown Project'}
-                          {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
+                    <tr key={row.id} className="hover:bg-neutral-50/50 transition-colors">
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm text-neutral-900">{row.project?.name || 'Unknown Project'}</span>
+                          {row.task && <span className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mt-0.5">{row.task.name}</span>}
                         </div>
                       </td>
                       {weekDays.map((day, i) => {
@@ -949,21 +956,20 @@ export default function TimeExpensePage() {
                         const todayStr = new Date().toISOString().split('T')[0];
                         const isFutureDate = dateKey > todayStr;
                         return (
-                          <td key={i} className="px-2 py-3">
+                          <td key={i} className="px-1 py-3 text-center">
                             <input
                               type="number"
                               min="0"
                               max="24"
                               step="0.5"
                               value={draftVal || ''}
-                              placeholder=""
+                              placeholder="-"
                               disabled={isFutureDate}
                               title={isFutureDate ? 'Cannot enter time for future dates' : ''}
-                              className={`w-full h-10 text-center rounded-lg border-2 outline-none ${
-                                isFutureDate 
-                                  ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed' 
-                                  : 'border-neutral-200 bg-neutral-100 focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66]'
-                              }`}
+                              className={`w-12 h-9 text-center rounded-sm border-2 text-xs font-bold outline-none transition-colors placeholder:text-neutral-300 ${isFutureDate
+                                ? 'border-neutral-100 bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                                : 'border-neutral-200 bg-white text-neutral-900 focus:border-[#476E66] focus:ring-0'
+                                }`}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0;
                                 setDraftValue(row.id, dateKey, val);
@@ -972,13 +978,13 @@ export default function TimeExpensePage() {
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center font-semibold text-neutral-900">
+                      <td className="px-4 py-3 text-center font-bold text-sm text-neutral-900 font-mono">
                         {getDraftRowTotal(row)}h
                       </td>
-                      <td className="px-2 py-3">
-                        <button 
+                      <td className="px-2 py-3 text-center">
+                        <button
                           onClick={() => removeDraftRow(row)}
-                          className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
+                          className="p-1.5 hover:bg-neutral-100 text-neutral-400 hover:text-red-500 rounded-sm transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -986,30 +992,30 @@ export default function TimeExpensePage() {
                     </tr>
                   ))}
                   <tr>
-                    <td colSpan={10} className="py-3">
-                      <button 
+                    <td colSpan={10} className="py-2 px-4">
+                      <button
                         onClick={() => setShowTimeEntryModal(true)}
-                        className="text-[#476E66] hover:text-[#3A5B54] font-medium text-sm flex items-center gap-1"
+                        className="text-[#476E66] hover:text-[#3A5B54] text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 py-2"
                       >
-                        <span className="text-lg">+</span> Add another project row
+                        <Plus className="w-3.5 h-3.5" /> Add another project row
                       </button>
                     </td>
                   </tr>
                 </tbody>
                 {draftRows.length > 0 && (
-                  <tfoot className="bg-neutral-100 border-t border-neutral-200">
+                  <tfoot className="bg-neutral-50 border-t border-neutral-200">
                     <tr>
-                      <td className="px-4 py-3 font-semibold text-neutral-900">Draft Total</td>
+                      <td className="px-4 py-3 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Total Draft Hours</td>
                       {weekDays.map((day, i) => {
                         const dateKey = formatDateKey(day);
                         const dayTotal = draftRows.reduce((sum, row) => sum + (getDraftValue(row.id, dateKey) || 0), 0);
                         return (
-                          <td key={i} className="px-2 py-3 text-center font-medium text-neutral-700">
+                          <td key={i} className="px-1 py-3 text-center font-bold text-xs text-neutral-600 font-mono">
                             {dayTotal > 0 ? `${dayTotal}h` : '-'}
                           </td>
                         );
                       })}
-                      <td className="px-4 py-3 text-center font-bold text-neutral-600 text-lg">
+                      <td className="px-4 py-3 text-center font-bold text-neutral-900 text-sm font-mono">
                         {getTotalDraftHours()}h
                       </td>
                       <td></td>
@@ -1035,7 +1041,7 @@ export default function TimeExpensePage() {
                       <td colSpan={3} className="text-center py-6">
                         <div className="space-y-2">
                           <p className="text-neutral-500 text-sm">No time entries for {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][weekDays[mobileDayIndex].getDay()]}</p>
-                          <button 
+                          <button
                             onClick={() => setShowTimeEntryModal(true)}
                             className="px-4 py-2 border border-[#476E66] text-[#476E66] rounded-lg hover:bg-[#476E66]/5 transition-colors font-medium text-sm"
                           >
@@ -1076,13 +1082,12 @@ export default function TimeExpensePage() {
                             step="0.5"
                             defaultValue={entry?.hours || ''}
                             disabled={isFutureDate}
-                            className={`w-full h-11 text-center rounded-lg border-2 outline-none text-sm ${
-                              isFutureDate 
-                                ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed' 
-                                : isRejected 
-                                  ? 'border-red-300 bg-red-50 focus:ring-2 focus:ring-red-400 focus:border-transparent'
-                                  : 'border-green-300 bg-green-50 focus:ring-2 focus:ring-green-400 focus:border-transparent'
-                            }`}
+                            className={`w-full h-11 text-center rounded-lg border-2 outline-none text-sm ${isFutureDate
+                              ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed'
+                              : isRejected
+                                ? 'border-red-300 bg-red-50 focus:ring-2 focus:ring-red-400 focus:border-transparent'
+                                : 'border-green-300 bg-green-50 focus:ring-2 focus:ring-green-400 focus:border-transparent'
+                              }`}
                             onChange={(e) => {
                               const val = parseFloat(e.target.value) || 0;
                               if (entry) {
@@ -1092,7 +1097,7 @@ export default function TimeExpensePage() {
                           />
                         </td>
                         <td className="px-2 py-3">
-                          <button 
+                          <button
                             onClick={async () => {
                               await api.deleteTimeEntry(entry.id);
                               await loadData();
@@ -1130,11 +1135,10 @@ export default function TimeExpensePage() {
                             placeholder=""
                             disabled={isFutureDate}
                             title={isFutureDate ? 'Cannot enter time for future dates' : ''}
-                            className={`w-full h-11 text-center rounded-lg border-2 outline-none text-sm ${
-                              isFutureDate 
-                                ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed' 
-                                : 'border-neutral-200 bg-neutral-100 focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66]'
-                            }`}
+                            className={`w-full h-11 text-center rounded-lg border-2 outline-none text-sm ${isFutureDate
+                              ? 'border-neutral-200 bg-neutral-50 text-neutral-400 cursor-not-allowed'
+                              : 'border-neutral-200 bg-neutral-100 focus:ring-2 focus:ring-[#476E66] focus:border-[#476E66]'
+                              }`}
                             onChange={(e) => {
                               const val = parseFloat(e.target.value) || 0;
                               setDraftValue(row.id, dateKey, val);
@@ -1142,7 +1146,7 @@ export default function TimeExpensePage() {
                           />
                         </td>
                         <td className="px-2 py-3">
-                          <button 
+                          <button
                             onClick={() => removeDraftRow(row)}
                             className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
                           >
@@ -1154,7 +1158,7 @@ export default function TimeExpensePage() {
                   })}
                   <tr>
                     <td colSpan={3} className="py-3 px-3">
-                      <button 
+                      <button
                         onClick={() => setShowTimeEntryModal(true)}
                         className="text-[#476E66] hover:text-[#3A5B54] font-medium text-sm flex items-center gap-1"
                       >
@@ -1179,7 +1183,7 @@ export default function TimeExpensePage() {
                 })()}
               </table>
             </div>
-            
+
             {/* Submit Button - Compact */}
             <div className="p-2 sm:p-4 border-t border-neutral-100 flex justify-center sm:justify-end">
               <button
@@ -1203,8 +1207,8 @@ export default function TimeExpensePage() {
                 </div>
                 {/* Mobile: Single Day Navigation for Submitted */}
                 <div className="flex md:hidden items-center gap-1.5">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateMobileDay(-1); }}
                     className="p-1 hover:bg-neutral-200 bg-neutral-100 rounded cursor-pointer transition-colors"
                   >
@@ -1214,8 +1218,8 @@ export default function TimeExpensePage() {
                     <span className="text-xs text-neutral-600">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][weekDays[mobileDayIndex].getDay()]}</span>
                     <span className="text-sm font-bold text-neutral-900 ml-1">{formatDate(weekDays[mobileDayIndex])}</span>
                   </div>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigateMobileDay(1); }}
                     className="p-1 hover:bg-neutral-200 bg-neutral-100 rounded cursor-pointer transition-colors"
                   >
@@ -1259,11 +1263,10 @@ export default function TimeExpensePage() {
                               </div>
                             </td>
                             <td className="px-2 py-2 text-center">
-                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                                entry?.approval_status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                              <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${entry?.approval_status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
                                 entry?.approval_status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                'bg-amber-100 text-amber-700'
-                              }`}>
+                                  'bg-amber-100 text-amber-700'
+                                }`}>
                                 {entry?.hours || 0}h
                               </span>
                             </td>
@@ -1324,11 +1327,10 @@ export default function TimeExpensePage() {
                           const entry = row.entries[dateKey];
                           return (
                             <td key={i} className="px-2 py-3">
-                              <div className={`w-full h-10 flex items-center justify-center rounded-lg border-2 text-neutral-600 ${
-                                entry?.approval_status === 'approved' ? 'border-emerald-300 bg-neutral-100' :
+                              <div className={`w-full h-10 flex items-center justify-center rounded-lg border-2 text-neutral-600 ${entry?.approval_status === 'approved' ? 'border-emerald-300 bg-neutral-100' :
                                 entry?.approval_status === 'rejected' ? 'border-red-300 bg-neutral-100' :
-                                entry ? 'border-amber-300 bg-neutral-100' : 'border-neutral-200 bg-neutral-100'
-                              }`}>
+                                  entry ? 'border-amber-300 bg-neutral-100' : 'border-neutral-200 bg-neutral-100'
+                                }`}>
                                 {entry?.hours || '-'}
                               </div>
                             </td>
@@ -1398,7 +1400,7 @@ export default function TimeExpensePage() {
                   <tr>
                     <td colSpan={7} className="text-center py-12 text-neutral-500">
                       <p className="text-sm">No expenses recorded</p>
-                      <button 
+                      <button
                         onClick={() => setShowExpenseModal(true)}
                         className="mt-2 text-[#476E66] hover:text-[#3A5B54] font-medium text-sm"
                       >
@@ -1415,22 +1417,21 @@ export default function TimeExpensePage() {
                       <td className="px-3 py-2.5 text-xs text-neutral-600">{expense.category || '-'}</td>
                       {canViewFinancials && <td className="px-3 py-2.5 text-right text-sm font-medium text-neutral-900">{formatCurrency(expense.amount)}</td>}
                       <td className="px-3 py-2.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          expense.approval_status === 'approved' ? 'bg-[#476E66]/10 text-[#476E66]' :
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${expense.approval_status === 'approved' ? 'bg-[#476E66]/10 text-[#476E66]' :
                           expense.approval_status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
-                        }`}>
+                          }`}>
                           {expense.approval_status || 'pending'}
                         </span>
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex items-center gap-1">
-                          <button 
+                          <button
                             onClick={() => { setEditingExpense(expense); setShowExpenseModal(true); }}
                             className="p-1.5 hover:bg-neutral-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button 
+                          <button
                             onClick={() => deleteExpense(expense.id)}
                             className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
                           >
@@ -1450,7 +1451,7 @@ export default function TimeExpensePage() {
             {expenses.length === 0 ? (
               <div className="text-center py-12 text-neutral-500">
                 <p className="text-sm">No expenses recorded</p>
-                <button 
+                <button
                   onClick={() => setShowExpenseModal(true)}
                   className="mt-2 text-[#476E66] hover:text-[#3A5B54] font-medium text-sm"
                 >
@@ -1480,13 +1481,13 @@ export default function TimeExpensePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <button 
+                      <button
                         onClick={() => { setEditingExpense(expense); setShowExpenseModal(true); }}
                         className="p-1.5 hover:bg-neutral-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => deleteExpense(expense.id)}
                         className="p-1.5 hover:bg-red-100 text-neutral-400 hover:text-neutral-900 rounded-lg"
                       >
@@ -1498,10 +1499,9 @@ export default function TimeExpensePage() {
                     {canViewFinancials && (
                       <div className="text-sm font-semibold text-neutral-900">{formatCurrency(expense.amount)}</div>
                     )}
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      expense.approval_status === 'approved' ? 'bg-[#476E66]/10 text-[#476E66]' :
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${expense.approval_status === 'approved' ? 'bg-[#476E66]/10 text-[#476E66]' :
                       expense.approval_status === 'rejected' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
+                      }`}>
                       {expense.approval_status || 'pending'}
                     </span>
                   </div>
@@ -1578,7 +1578,7 @@ export default function TimeExpensePage() {
                   const allSelected = group.entries.every(e => selectedTimeEntries.has(e.id));
                   const someSelected = group.entries.some(e => selectedTimeEntries.has(e.id));
                   const totalHours = group.entries.reduce((sum, e) => sum + Number(e.hours), 0);
-                  
+
                   return (
                     <div key={projectId}>
                       {/* Project Header */}
@@ -1744,7 +1744,7 @@ export default function TimeExpensePage() {
                   const allSelected = group.expenses.every(e => selectedExpenses.has(e.id));
                   const someSelected = group.expenses.some(e => selectedExpenses.has(e.id));
                   const totalAmount = group.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-                  
+
                   return (
                     <div key={projectId}>
                       <div className="bg-neutral-50 px-6 py-3 flex items-center justify-between">
@@ -1941,7 +1941,7 @@ export default function TimeExpensePage() {
                   const userCount = Object.keys(project.users).length;
                   const entryCount = Object.values(project.users).reduce((sum, u) => sum + u.entries.length, 0);
                   const isProjectExpanded = expandedTimeProjects.has(projectId);
-                  
+
                   return (
                     <div key={projectId}>
                       {/* Project Header - Clickable */}
@@ -1966,7 +1966,7 @@ export default function TimeExpensePage() {
                         </div>
                         <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{projectTotalHours.toFixed(1)}h</span>
                       </button>
-                      
+
                       {/* Users under project - Collapsible */}
                       {isProjectExpanded && (
                         <div className="border-l-2 border-[#476E66]/20 ml-4">
@@ -1974,7 +1974,7 @@ export default function TimeExpensePage() {
                             const userTotalHours = user.entries.reduce((sum, e) => sum + Number(e.hours), 0);
                             const userKey = `${projectId}-${oduserId}`;
                             const isUserExpanded = expandedTimeUsers.has(userKey);
-                            
+
                             return (
                               <div key={oduserId}>
                                 {/* User Header - Clickable */}
@@ -1997,7 +1997,7 @@ export default function TimeExpensePage() {
                                   </div>
                                   <span className="text-sm font-medium text-emerald-600">{userTotalHours.toFixed(2)}h</span>
                                 </button>
-                                
+
                                 {/* Entries Table - Collapsible */}
                                 {isUserExpanded && (
                                   <div className="overflow-x-auto">
@@ -2073,7 +2073,7 @@ export default function TimeExpensePage() {
                   const userCount = Object.keys(project.users).length;
                   const expenseCount = Object.values(project.users).reduce((sum, u) => sum + u.expenses.length, 0);
                   const isProjectExpanded = expandedExpenseProjects.has(projectId);
-                  
+
                   return (
                     <div key={projectId}>
                       {/* Project Header - Clickable */}
@@ -2098,7 +2098,7 @@ export default function TimeExpensePage() {
                         </div>
                         <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{formatCurrency(projectTotal)}</span>
                       </button>
-                      
+
                       {/* Users under project - Collapsible */}
                       {isProjectExpanded && (
                         <div className="border-l-2 border-[#476E66]/20 ml-4">
@@ -2106,7 +2106,7 @@ export default function TimeExpensePage() {
                             const userTotal = user.expenses.reduce((sum, e) => sum + Number(e.amount), 0);
                             const userKey = `expense-${projectId}-${oduserId}`;
                             const isUserExpanded = expandedExpenseUsers.has(userKey);
-                            
+
                             return (
                               <div key={oduserId}>
                                 {/* User Header - Clickable */}
@@ -2129,7 +2129,7 @@ export default function TimeExpensePage() {
                                   </div>
                                   <span className="text-sm font-medium text-[#476E66]">{formatCurrency(userTotal)}</span>
                                 </button>
-                                
+
                                 {/* Expenses - Collapsible */}
                                 {isUserExpanded && (
                                   <>
@@ -2220,13 +2220,13 @@ export default function TimeExpensePage() {
   );
 }
 
-function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, existingSavedDraftRows, existingSubmittedRows, onClose, onAdd }: { 
-  projects: Project[]; 
-  tasks: { [projectId: string]: Task[] }; 
+function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, existingSavedDraftRows, existingSubmittedRows, onClose, onAdd }: {
+  projects: Project[];
+  tasks: { [projectId: string]: Task[] };
   existingDraftRows: DraftRow[];
   existingSavedDraftRows: SubmittedRow[];
   existingSubmittedRows: SubmittedRow[];
-  onClose: () => void; 
+  onClose: () => void;
   onAdd: (projectId: string, taskId: string | null) => void;
 }) {
   const [projectId, setProjectId] = useState('');
@@ -2266,9 +2266,9 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Project *</label>
-            <select 
-              value={projectId} 
-              onChange={(e) => { setProjectId(e.target.value); setTaskId(''); }} 
+            <select
+              value={projectId}
+              onChange={(e) => { setProjectId(e.target.value); setTaskId(''); }}
               className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
             >
               <option value="">Select a project</option>
@@ -2277,9 +2277,9 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
           </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Task (optional)</label>
-            <select 
-              value={taskId} 
-              onChange={(e) => setTaskId(e.target.value)} 
+            <select
+              value={taskId}
+              onChange={(e) => setTaskId(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
               disabled={!projectId || loadingTasks}
             >
@@ -2292,8 +2292,8 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
           )}
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors">Cancel</button>
-            <button 
-              onClick={() => onAdd(projectId, taskId || null)} 
+            <button
+              onClick={() => onAdd(projectId, taskId || null)}
               disabled={!projectId || isRowExists}
               className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
             >

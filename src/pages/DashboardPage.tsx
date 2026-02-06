@@ -145,16 +145,16 @@ export default function DashboardPage() {
   // Load dashboard data function
   const loadData = useCallback(async (signal?: AbortSignal) => {
     console.log('[Dashboard] loadData called - userId:', user?.id, 'companyId:', profile?.company_id, 'authLoading:', authLoading);
-    
+
     if (!profile?.company_id || !user?.id) {
       console.log('[Dashboard] Early return - userId:', user?.id, 'profile:', profile ? JSON.stringify({ id: profile.id, email: profile.email, company_id: profile.company_id }) : 'null');
-      
+
       if (user?.id && !profile) {
         console.log('[Dashboard] User exists but profile still loading, showing loading state');
         setLoading(true);
         return;
       }
-      
+
       setLoading(false);
       if (!authLoading && user?.id) {
         if (!profile) {
@@ -167,13 +167,13 @@ export default function DashboardPage() {
       }
       return;
     }
-    
+
     try {
       if (signal?.aborted) return;
-      
+
       console.log('[Dashboard] Starting data fetch for company:', profile.company_id);
       setLoading(true);
-      
+
       const [statsData, projectsData, timeEntries, invoicesData, quotesData, allTimeEntries, companyExpenses, companyProfiles, clientsData] = await Promise.all([
         api.getDashboardStats(profile.company_id, user.id),
         api.getProjects(profile.company_id),
@@ -185,15 +185,15 @@ export default function DashboardPage() {
         api.getCompanyProfiles(profile.company_id),
         api.getClients(profile.company_id),
       ]);
-      
+
       const activeProjects = projectsData.filter(p => p.status === 'active' || p.status === 'in_progress').length;
       const totalRevenue = invoicesData.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0);
       const outstandingInvoices = invoicesData.filter(i => i.status === 'sent').reduce((sum, i) => sum + Number(i.total), 0);
       const hoursThisWeek = statsData.billableHours + statsData.nonBillableHours;
-      
+
       setStats({ ...statsData, activeProjects, totalRevenue, outstandingInvoices, hoursThisWeek });
       setProjects(projectsData);
-      
+
       const timeActivities: ActivityItem[] = timeEntries.slice(0, 5).map((te: TimeEntry) => ({
         id: te.id,
         type: 'time' as const,
@@ -201,7 +201,7 @@ export default function DashboardPage() {
         date: te.date,
         meta: te.description,
       }));
-      
+
       let notificationActivities: ActivityItem[] = [];
       try {
         const notifications = await notificationsApi.getNotifications(profile.company_id, undefined, 10);
@@ -216,12 +216,12 @@ export default function DashboardPage() {
       } catch (err) {
         console.warn('Failed to load notifications for activity feed:', err);
       }
-      
+
       const allActivities = [...timeActivities, ...notificationActivities]
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, RECENT_ACTIVITIES_LIMIT);
       setActivities(allActivities);
-      
+
       const monthlyRevenue: Record<string, number> = {};
       const now = new Date();
       for (let i = REVENUE_TREND_MONTHS - 1; i >= 0; i--) {
@@ -239,7 +239,7 @@ export default function DashboardPage() {
         }
       });
       setRevenueData(Object.entries(monthlyRevenue).map(([month, revenue]) => ({ month, revenue })));
-      
+
       const aging = { '0-30': { count: 0, amount: 0 }, '31-60': { count: 0, amount: 0 }, '61-90': { count: 0, amount: 0 }, '90+': { count: 0, amount: 0 } };
       const today = new Date();
       invoicesData.filter(i => i.status === 'sent' && i.due_date).forEach(inv => {
@@ -288,7 +288,7 @@ export default function DashboardPage() {
         momentum: quotesThisMonth,
         profitMargin: Math.max(0, profitMarginPct),
       });
-      
+
       setActualProfit(totalRevenue - annualOverhead);
       setTotalExpenses(annualOverhead);
 
@@ -298,8 +298,8 @@ export default function DashboardPage() {
       const proposalsPending = quotesData.filter(q => q.status === 'sent' || q.status === 'draft').length;
       const pipelineValue = quotesData
         .filter(q => q.status === 'sent' || q.status === 'draft')
-        .reduce((sum, q) => sum + Number(q.total || 0), 0);
-      
+        .reduce((sum, q) => sum + Number(q.total_amount || 0), 0);
+
       setSalesStats({
         proposalsSent: quotesData.filter(q => ['sent', 'accepted', 'converted', 'declined'].includes(q.status || '')).length,
         proposalsAccepted,
@@ -330,9 +330,9 @@ export default function DashboardPage() {
         })
         .sort((a, b) => b.totalRevenue - a.totalRevenue)
         .slice(0, 3);
-      
+
       setTopClients(topClientsList);
-      
+
       setError(null);
       console.log('[Dashboard] Data loaded successfully');
     } catch (err: any) {
@@ -353,13 +353,13 @@ export default function DashboardPage() {
 
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
-  
+
   useEffect(() => {
     console.log('[Dashboard] useEffect triggered - userId:', user?.id, 'companyId:', profile?.company_id, 'authLoading:', authLoading);
-    
+
     const abortController = new AbortController();
     loadDataRef.current(abortController.signal);
-    
+
     return () => {
       abortController.abort();
     };
@@ -368,7 +368,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (timeEntry.project_id && profile?.company_id) {
       api.getTasks(timeEntry.project_id).then(tasks => {
-        const filtered = tasks.filter(t => 
+        const filtered = tasks.filter(t =>
           !t.collaborator_company_id || t.collaborator_company_id === profile.company_id
         );
         setProjectTasks(filtered);
@@ -398,7 +398,7 @@ export default function DashboardPage() {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     if (date.toDateString() === today.toDateString()) return 'Today';
     if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -407,7 +407,7 @@ export default function DashboardPage() {
   const validateTimeEntry = () => {
     const errors: Record<string, string> = {};
     const hours = parseFloat(timeEntry.hours);
-    
+
     if (!timeEntry.hours || isNaN(hours)) {
       errors.hours = 'Hours is required';
     } else if (hours < MIN_TIME_ENTRY_HOURS) {
@@ -417,7 +417,7 @@ export default function DashboardPage() {
     } else if (hours % 0.25 !== 0) {
       errors.hours = 'Hours must be in 0.25 increments';
     }
-    
+
     if (!timeEntry.date) {
       errors.date = 'Date is required';
     } else {
@@ -425,18 +425,18 @@ export default function DashboardPage() {
       const today = new Date();
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(today.getFullYear() - 1);
-      
+
       if (entryDate > today) {
         errors.date = 'Date cannot be in the future';
       } else if (entryDate < oneYearAgo) {
         errors.date = 'Date cannot be more than 1 year ago';
       }
     }
-    
+
     if (timeEntry.description && timeEntry.description.length > 500) {
       errors.description = 'Description must be less than 500 characters';
     }
-    
+
     setTimeErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -444,7 +444,7 @@ export default function DashboardPage() {
   const handleSaveTime = async () => {
     if (!profile?.company_id || !user?.id) return;
     if (!validateTimeEntry()) return;
-    
+
     setSaving(true);
     try {
       await api.createTimeEntry({
@@ -478,9 +478,9 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <InlineError 
-          message={error} 
-          onDismiss={() => setError(null)} 
+        <InlineError
+          message={error}
+          onDismiss={() => setError(null)}
         />
       </div>
     );
@@ -496,18 +496,17 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Subscription Notice Banner */}
       {subscriptionNotice && (
-        <div className={`flex items-center gap-3 p-4 rounded-xl ${
-          subscriptionNotice.type === 'success' 
-            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
-            : 'bg-amber-50 border border-amber-200 text-amber-800'
-        }`}>
+        <div className={`flex items-center gap-3 p-4 rounded-xl ${subscriptionNotice.type === 'success'
+          ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+          : 'bg-amber-50 border border-amber-200 text-amber-800'
+          }`}>
           {subscriptionNotice.type === 'success' ? (
             <CheckCircle className="w-5 h-5 flex-shrink-0" />
           ) : (
             <XCircle className="w-5 h-5 flex-shrink-0" />
           )}
           <p className="flex-1 text-sm font-medium">{subscriptionNotice.message}</p>
-          <button 
+          <button
             onClick={() => setSubscriptionNotice(null)}
             className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"
           >
@@ -527,26 +526,24 @@ export default function DashboardPage() {
           <div className="flex bg-neutral-100 rounded-lg p-0.5 sm:p-1">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
-                activeTab === 'overview' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
-              }`}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${activeTab === 'overview' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
+                }`}
             >
               Overview
             </button>
             <button
               onClick={() => setActiveTab('health')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all flex items-center gap-1 sm:gap-1.5 ${
-                activeTab === 'health' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
-              }`}
+              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all flex items-center gap-1 sm:gap-1.5 ${activeTab === 'health' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
+                }`}
             >
               <TreePine className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Health
             </button>
           </div>
-          
+
           {/* Quick Add */}
           <div className="relative" ref={quickAddRef}>
-            <button 
+            <button
               onClick={() => setShowQuickAdd(!showQuickAdd)}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-xs sm:text-sm font-medium"
             >
@@ -585,24 +582,27 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* Hero Metrics Row - 4 Uniform Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-4">
+          {/* Hero Metrics Row - Minimalist */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Profit/Loss Card */}
             {canViewFinancials && (
-              <div 
+              <div
                 onClick={() => setShowProfitTargetModal(true)}
-                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all group min-w-0" 
-                style={{ boxShadow: 'var(--shadow-card)' }}
+                className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all group"
+                style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
               >
-                <div className="flex items-center gap-2 sm:block">
-                  <div className={`w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl flex items-center justify-center flex-shrink-0 sm:mb-3 ${isOnTrack ? 'bg-emerald-100' : isBehind ? 'bg-amber-100' : 'bg-red-100'}`}>
-                    <Target className={`w-3 h-3 sm:w-5 sm:h-5 ${isOnTrack ? 'text-emerald-600' : isBehind ? 'text-amber-600' : 'text-red-600'}`} />
+                <div className="flex flex-col h-full justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Net Profit</span>
+                    <div className={`w-2 h-2 rounded-full ${isOnTrack ? 'bg-emerald-500' : isBehind ? 'bg-amber-500' : 'bg-red-500'}`}></div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm sm:text-2xl font-bold truncate ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
+                  <div>
+                    <span className={`text-3xl font-light tracking-tight ${actualProfit >= 0 ? 'text-neutral-900' : 'text-red-600'}`}>
                       {formatCurrency(actualProfit)}
-                    </p>
-                    <p className="text-[9px] sm:text-sm text-neutral-500">P&L</p>
+                    </span>
+                    <div className="mt-2 text-xs text-neutral-400 font-medium">
+                      {profitPct > 0 ? `${Math.round(profitPct)}% of target` : 'No target set'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -610,18 +610,23 @@ export default function DashboardPage() {
 
             {/* Revenue Card */}
             {canViewFinancials && (
-              <div 
+              <div
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
-                style={{ boxShadow: 'var(--shadow-card)' }}
+                className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all"
+                style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
               >
-                <div className="flex items-center gap-2 sm:block">
-                  <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
-                    <DollarSign className="w-3 h-3 sm:w-5 sm:h-5 text-emerald-600" />
+                <div className="flex flex-col h-full justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Revenue</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-neutral-300" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm sm:text-2xl font-bold text-neutral-900 truncate">{formatCurrency(stats?.totalRevenue || 0)}</p>
-                    <p className="text-[9px] sm:text-sm text-neutral-500">Revenue</p>
+                  <div>
+                    <span className="text-3xl font-light tracking-tight text-neutral-900">
+                      {formatCurrency(stats?.totalRevenue || 0)}
+                    </span>
+                    <div className="mt-2 text-xs text-neutral-400 font-medium">
+                      Year to Date
+                    </div>
                   </div>
                 </div>
               </div>
@@ -629,158 +634,156 @@ export default function DashboardPage() {
 
             {/* Outstanding Card */}
             {canViewFinancials && (
-              <div 
+              <div
                 onClick={() => navigate('/invoicing')}
-                className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
-                style={{ boxShadow: 'var(--shadow-card)' }}
+                className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all"
+                style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
               >
-                <div className="flex items-center gap-2 sm:block">
-                  <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
-                    <Wallet className="w-3 h-3 sm:w-5 sm:h-5 text-amber-600" />
+                <div className="flex flex-col h-full justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Outstanding</span>
+                    <Wallet className="w-3.5 h-3.5 text-neutral-300" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm sm:text-2xl font-bold text-neutral-900 truncate">{formatCurrency(stats?.outstandingInvoices || 0)}</p>
-                    <p className="text-[9px] sm:text-sm text-neutral-500">Outstanding</p>
+                  <div>
+                    <span className="text-3xl font-light tracking-tight text-neutral-900">
+                      {formatCurrency(stats?.outstandingInvoices || 0)}
+                    </span>
+                    <div className="mt-2 text-xs text-neutral-400 font-medium">
+                      {stats?.outstandingInvoices && stats.outstandingInvoices > 0 ? 'Action required' : 'All caught up'}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Hours Card */}
-            <div 
+            <div
               onClick={() => navigate('/time-expense')}
-              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all min-w-0" 
-              style={{ boxShadow: 'var(--shadow-card)' }}
+              className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all"
+              style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
             >
-              <div className="flex items-center gap-2 sm:block">
-                <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-md sm:rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0 sm:mb-3">
-                  <Clock className="w-3 h-3 sm:w-5 sm:h-5 text-blue-600" />
+              <div className="flex flex-col h-full justify-between">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Hours Logged</span>
+                  <Clock className="w-3.5 h-3.5 text-neutral-300" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm sm:text-2xl font-bold text-neutral-900">{stats?.hoursThisWeek || 0}h</p>
-                  <p className="text-[9px] sm:text-sm text-neutral-500">Hours</p>
+                <div>
+                  <span className="text-3xl font-light tracking-tight text-neutral-900">
+                    {stats?.hoursThisWeek || 0}<span className="text-lg text-neutral-400 ml-1">h</span>
+                  </span>
+                  <div className="mt-2 text-xs text-neutral-400 font-medium">
+                    This Week
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Work in Progress Section */}
-          <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Work in Progress</h2>
-            <div className="flex justify-between sm:grid sm:grid-cols-4 sm:gap-4">
-              <div 
-                onClick={() => navigate('/projects')}
-                className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
-              >
-                <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
-                <div className="sm:block">
-                  <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.activeProjects || 0}</span>
-                  <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">proj</span>
+          {/* Work in Progress Section - Integrated Strip */}
+          <div className="bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Active Overview</h2>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div onClick={() => navigate('/projects')} className="group cursor-pointer">
+                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Active Projects</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-light text-neutral-900">{stats?.activeProjects || 0}</span>
                 </div>
               </div>
-              <div 
-                onClick={() => navigate('/projects')}
-                className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
-              >
-                <CheckSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
-                <div className="sm:block">
-                  <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.pendingTasks || 0}</span>
-                  <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">tasks</span>
+
+              <div onClick={() => navigate('/projects')} className="group cursor-pointer">
+                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Pending Tasks</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-light text-neutral-900">{stats?.pendingTasks || 0}</span>
                 </div>
               </div>
+
               {canViewFinancials && (
-                <div 
-                  onClick={() => navigate('/time-expense')}
-                  className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
-                  <div className="sm:block">
-                    <span className="text-sm sm:text-xl font-bold text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</span>
-                    <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block hidden sm:inline">wip</span>
+                <div onClick={() => navigate('/time-expense')} className="group cursor-pointer">
+                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Unbilled WIP</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-light text-neutral-900">{formatCurrency(stats?.unbilledWIP || 0)}</span>
                   </div>
                 </div>
               )}
+
               {canViewFinancials && (
-                <div 
-                  onClick={() => navigate('/invoicing')}
-                  className="flex items-center gap-1.5 sm:block sm:p-4 sm:bg-neutral-50 sm:rounded-xl cursor-pointer"
-                >
-                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#476E66] flex-shrink-0 sm:mb-2" />
-                  <div className="sm:block">
-                    <span className="text-sm sm:text-xl font-bold text-neutral-900">{stats?.draftInvoices || 0}</span>
-                    <span className="text-[8px] sm:text-xs text-neutral-400 ml-0.5 sm:ml-0 sm:block">drafts</span>
+                <div onClick={() => navigate('/invoicing')} className="group cursor-pointer">
+                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Draft Invoices</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-light text-neutral-900">{stats?.draftInvoices || 0}</span>
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Sales Pipeline & Top Clients Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 sm:gap-4">
+          {/* Split Row: Pipeline & Top Clients */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Sales Pipeline */}
-            <div 
+            <div
               onClick={() => navigate('/sales')}
-              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
-              style={{ boxShadow: 'var(--shadow-card)' }}
+              className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all"
+              style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
             >
-              <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900">Sales Pipeline</h2>
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-400" />
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Sales Pipeline</h2>
+                <ArrowUpRight className="w-4 h-4 text-neutral-300" />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-                <div className="text-center sm:text-left p-2 sm:p-3 bg-purple-50 rounded-lg sm:rounded-xl">
-                  <p className="text-sm sm:text-xl font-bold text-purple-700">{salesStats.proposalsSent}</p>
-                  <p className="text-[8px] sm:text-xs text-purple-600">Sent</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-1">Sent</span>
+                  <span className="text-xl font-light text-neutral-900">{salesStats.proposalsSent}</span>
                 </div>
-                <div className="text-center sm:text-left p-2 sm:p-3 bg-emerald-50 rounded-lg sm:rounded-xl">
-                  <p className="text-sm sm:text-xl font-bold text-emerald-700">{salesStats.proposalsAccepted}</p>
-                  <p className="text-[8px] sm:text-xs text-emerald-600">Won</p>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-1">Won</span>
+                  <span className="text-xl font-light text-neutral-900">{salesStats.proposalsAccepted}</span>
                 </div>
-                <div className="text-center sm:text-left p-2 sm:p-3 bg-blue-50 rounded-lg sm:rounded-xl">
-                  <p className="text-sm sm:text-xl font-bold text-blue-700">{salesStats.winRate}%</p>
-                  <p className="text-[8px] sm:text-xs text-blue-600">Win Rate</p>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-1">Win Rate</span>
+                  <span className="text-xl font-light text-neutral-900">{salesStats.winRate}%</span>
                 </div>
-                <div className="text-center sm:text-left p-2 sm:p-3 bg-amber-50 rounded-lg sm:rounded-xl">
-                  <p className="text-sm sm:text-xl font-bold text-amber-700 truncate">{formatCurrency(salesStats.pipelineValue)}</p>
-                  <p className="text-[8px] sm:text-xs text-amber-600">Pipeline</p>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-1">Value</span>
+                  <span className="text-xl font-light text-neutral-900 truncate">{formatCurrency(salesStats.pipelineValue)}</span>
                 </div>
+              </div>
+
+              {/* Visual Pipeline Bar */}
+              <div className="mt-8 flex h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                <div style={{ width: `${(salesStats.proposalsAccepted / (salesStats.proposalsSent || 1)) * 100}%` }} className="bg-emerald-500 h-full" />
+                <div style={{ width: `${(salesStats.proposalsPending / (salesStats.proposalsSent || 1)) * 100}%` }} className="bg-neutral-300 h-full" />
               </div>
             </div>
 
             {/* Top Clients */}
-            <div 
+            <div
               onClick={() => navigate('/sales?tab=clients')}
-              className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5 cursor-pointer hover:shadow-md transition-all" 
-              style={{ boxShadow: 'var(--shadow-card)' }}
+              className="bg-white rounded-2xl p-6 cursor-pointer border border-neutral-100/60 hover:border-neutral-200 transition-all"
+              style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
             >
-              <div className="flex items-center justify-between mb-2 sm:mb-4">
-                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900">Top Clients</h2>
-                <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Top Clients</h2>
               </div>
               {topClients.length === 0 ? (
-                <div className="text-center py-4 sm:py-6">
-                  <Building2 className="w-6 h-6 sm:w-8 sm:h-8 text-neutral-300 mx-auto mb-2" />
-                  <p className="text-[9px] sm:text-xs text-neutral-400">No client revenue yet</p>
+                <div className="text-center py-6">
+                  <p className="text-xs text-neutral-400">No client revenue yet</p>
                 </div>
               ) : (
-                <div className="space-y-1.5 sm:space-y-2">
+                <div className="space-y-4">
                   {topClients.map((client, index) => (
-                    <div 
-                      key={client.id} 
-                      className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-neutral-50 rounded-lg sm:rounded-xl"
-                    >
-                      <div className={`w-5 h-5 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] sm:text-sm font-bold ${
-                        index === 0 ? 'bg-amber-100 text-amber-700' :
-                        index === 1 ? 'bg-neutral-200 text-neutral-600' :
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        {index + 1}
+                    <div key={client.id} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs font-mono text-neutral-300 w-4">0{index + 1}</span>
+                        <div>
+                          <p className="text-sm font-medium text-neutral-900">{client.name}</p>
+                          <p className="text-[10px] text-neutral-400 uppercase tracking-wide">{client.invoiceCount} Invoices</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] sm:text-sm font-medium text-neutral-900 truncate">{client.name}</p>
-                        <p className="text-[8px] sm:text-xs text-neutral-500">{client.invoiceCount} invoice{client.invoiceCount !== 1 ? 's' : ''}</p>
-                      </div>
-                      <p className="text-[10px] sm:text-sm font-semibold text-emerald-600 flex-shrink-0">{formatCurrency(client.totalRevenue)}</p>
+                      <span className="text-sm font-medium text-neutral-900">{formatCurrency(client.totalRevenue)}</span>
                     </div>
                   ))}
                 </div>
@@ -789,32 +792,42 @@ export default function DashboardPage() {
           </div>
 
           {/* Insights Row */}
-          <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
+          <div className="grid grid-cols-2 gap-4">
             {/* Billability */}
-            <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Billability</h2>
-              <div className="flex items-center gap-2 sm:gap-6">
-                <div className="relative w-10 h-10 sm:w-24 sm:h-24 flex-shrink-0">
+            <div className="bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
+              <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-6">Revenue Efficiency</h2>
+              <div className="flex items-center gap-8">
+                <div className="relative w-24 h-24 flex-shrink-0">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
-                    <circle cx="48" cy="48" r="40" fill="none" stroke="#F3F4F6" strokeWidth="12" />
+                    <circle cx="48" cy="48" r="40" fill="none" stroke="#F5F5F5" strokeWidth="6" />
                     <circle
-                      cx="48" cy="48" r="40" fill="none" stroke="#476E66" strokeWidth="12"
+                      cx="48" cy="48" r="40" fill="none" stroke="#476E66" strokeWidth="6"
                       strokeDasharray={`${(stats?.utilization || 0) * 2.51} 251`}
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] sm:text-xl font-bold text-neutral-900">{stats?.utilization || 0}%</span>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <span className="text-xl font-light text-neutral-900">{stats?.utilization || 0}%</span>
                   </div>
                 </div>
-                <div className="flex-1 space-y-1 sm:space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[8px] sm:text-sm text-neutral-600">Billable</span>
-                    <span className="text-[8px] sm:text-sm font-semibold text-neutral-900">{stats?.billableHours || 0}h</span>
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-neutral-500">Billable</span>
+                      <span className="text-neutral-900 font-medium">{stats?.billableHours || 0}h</span>
+                    </div>
+                    <div className="w-full bg-neutral-100 h-1 rounded-full overflow-hidden">
+                      <div className="bg-[#476E66] h-full" style={{ width: `${(stats?.billableHours || 0) / ((stats?.billableHours || 0) + (stats?.nonBillableHours || 0) || 1) * 100}%` }}></div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[8px] sm:text-sm text-neutral-600">Non-bill</span>
-                    <span className="text-[8px] sm:text-sm font-semibold text-neutral-900">{stats?.nonBillableHours || 0}h</span>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-neutral-500">Non-Billable</span>
+                      <span className="text-neutral-900 font-medium">{stats?.nonBillableHours || 0}h</span>
+                    </div>
+                    <div className="w-full bg-neutral-100 h-1 rounded-full overflow-hidden">
+                      <div className="bg-neutral-300 h-full" style={{ width: `${(stats?.nonBillableHours || 0) / ((stats?.billableHours || 0) + (stats?.nonBillableHours || 0) || 1) * 100}%` }}></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -822,22 +835,24 @@ export default function DashboardPage() {
 
             {/* Payment Aging */}
             {canViewFinancials && (
-              <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-                <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Aging</h2>
-                <div className="space-y-1 sm:space-y-3">
+              <div className="bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-6">Aging Receivables</h2>
+                <div className="space-y-4">
                   {agingData.map((d, i) => {
                     const maxAmount = Math.max(...agingData.map(a => a.amount), 1);
                     const width = (d.amount / maxAmount) * 100;
-                    const colors = ['#476E66', '#8B7355', '#6B5B4F', '#4A4A4A'];
+                    // Monochrome / Subtle gradient approach
+                    const colors = ['bg-neutral-800', 'bg-neutral-600', 'bg-neutral-400', 'bg-neutral-300'];
                     return (
-                      <div key={d.range} className="flex items-center gap-1.5">
-                        <span className="text-[8px] sm:text-sm text-neutral-500 w-7 sm:w-auto">{d.range}d</span>
-                        <div className="flex-1 h-1.5 sm:h-2 bg-neutral-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all"
-                            style={{ width: `${Math.max(width, 2)}%`, backgroundColor: colors[i] }}
+                      <div key={d.range} className="flex items-center gap-4">
+                        <span className="text-[10px] font-medium text-neutral-400 w-8 uppercase tracking-wider">{d.range}d</span>
+                        <div className="flex-1 h-1 bg-neutral-50 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${colors[i]}`}
+                            style={{ width: `${Math.max(width, 2)}%` }}
                           />
                         </div>
+                        <span className="text-xs text-neutral-900 w-16 text-right font-medium">{d.amount > 0 ? formatCurrency(d.amount) : '-'}</span>
                       </div>
                     );
                   })}
@@ -846,40 +861,38 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Revenue Trend - Hidden on mobile */}
+          {/* Revenue Trend - Minimalist Bar Chart */}
           {canViewFinancials && (
-            <div className="hidden sm:block bg-white rounded-xl p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-neutral-400" />
-                <h2 className="text-sm font-semibold text-neutral-900">Revenue Trend</h2>
+            <div className="hidden sm:block bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Revenue Trend</h2>
               </div>
               <div className="h-48">
                 {revenueData.length > 0 && revenueData.some(d => d.revenue > 0) ? (
-                  <div className="flex items-end justify-between h-full gap-1 sm:gap-2">
+                  <div className="flex items-end justify-between h-full gap-2">
                     {revenueData.map((d, i) => {
                       const maxRevenue = Math.max(...revenueData.map(r => r.revenue), 1);
                       const height = (d.revenue / maxRevenue) * 100;
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1 sm:gap-2">
-                          <div className="w-full flex flex-col items-center justify-end h-24 sm:h-36">
-                            {d.revenue > 0 && (
-                              <span className="text-[9px] sm:text-xs font-medium text-neutral-600 mb-0.5 sm:mb-1 truncate max-w-full">
-                                {formatCurrency(d.revenue)}
-                              </span>
-                            )}
-                            <div 
-                              className="w-full max-w-8 sm:max-w-12 bg-[#476E66] rounded-t-md sm:rounded-t-lg transition-all hover:bg-[#3A5B54]"
-                              style={{ height: `${Math.max(height, 4)}%` }}
+                        <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                          <div className="w-full flex flex-col items-center justify-end h-32 relative">
+                            {/* Tooltip-like value on hover */}
+                            <div className="opacity-0 group-hover:opacity-100 absolute -top-8 transition-opacity text-xs font-bold text-neutral-900 bg-white shadow-sm border border-neutral-100 px-2 py-1 rounded-md pointer-events-none z-10">
+                              {formatCurrency(d.revenue)}
+                            </div>
+                            <div
+                              className="w-full bg-neutral-100 hover:bg-[#476E66] transition-all duration-300 rounded-sm"
+                              style={{ height: `${Math.max(height, 2)}%` }}
                             />
                           </div>
-                          <span className="text-[9px] sm:text-xs text-neutral-500">{d.month}</span>
+                          <span className="text-[10px] text-neutral-400 font-medium uppercase tracking-wider">{d.month}</span>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-neutral-400 text-xs sm:text-sm">
-                    No revenue data yet
+                  <div className="h-full flex items-center justify-center text-neutral-300 text-sm">
+                    No revenue data recorded yet
                   </div>
                 )}
               </div>
@@ -887,33 +900,23 @@ export default function DashboardPage() {
           )}
 
           {/* Recent Activity */}
-          <div className="bg-white rounded-lg sm:rounded-xl px-2.5 py-2 sm:p-5" style={{ boxShadow: 'var(--shadow-card)' }}>
-            <h2 className="text-[9px] sm:text-sm font-semibold text-neutral-900 mb-1.5 sm:mb-4">Recent Activity</h2>
+          <div className="bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
+            <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-6">Recent Activity</h2>
             {activities.length === 0 ? (
-              <p className="text-neutral-400 text-center py-3 sm:py-8 text-[9px] sm:text-sm">No recent activity</p>
+              <p className="text-neutral-400 text-center py-8 text-sm italic">No recent activity</p>
             ) : (
-              <div className="space-y-1.5 sm:space-y-2">
+              <div className="space-y-4">
                 {activities.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-neutral-50 rounded-lg sm:rounded-xl hover:bg-neutral-100 transition-colors">
-                    <div className={`w-6 h-6 sm:w-9 sm:h-9 rounded-md sm:rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      activity.type === 'time' ? 'bg-[#476E66]/10' :
-                      activity.type === 'proposal_signed' ? 'bg-emerald-100' :
-                      activity.type === 'proposal_viewed' ? 'bg-blue-100' :
-                      activity.type === 'proposal_sent' ? 'bg-purple-100' :
-                      activity.type === 'collaboration' ? 'bg-amber-100' :
-                      'bg-neutral-100'
-                    }`}>
-                      {activity.icon ? (
-                        <span className="text-xs sm:text-base">{activity.icon}</span>
-                      ) : (
-                        <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-[#476E66]" />
-                      )}
+                  <div key={activity.id} className="flex gap-4 group">
+                    <div className="flex flex-col items-center mt-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-neutral-300 group-hover:bg-[#476E66] transition-colors"></div>
+                      <div className="w-px h-full bg-neutral-100 my-1 group-last:hidden"></div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] sm:text-sm font-medium text-neutral-900 line-clamp-1">{activity.description}</p>
-                      {activity.meta && <p className="text-[8px] sm:text-xs text-neutral-500 truncate">{activity.meta}</p>}
+                    <div className="pb-4">
+                      <p className="text-sm text-neutral-900 font-medium">{activity.description}</p>
+                      {activity.meta && <p className="text-xs text-neutral-500 mt-0.5">{activity.meta}</p>}
+                      <p className="text-[10px] text-neutral-300 mt-1 uppercase tracking-wider">{formatDate(activity.date)}</p>
                     </div>
-                    <span className="text-[8px] sm:text-xs text-neutral-400 flex-shrink-0">{formatDate(activity.date)}</span>
                   </div>
                 ))}
               </div>
@@ -943,11 +946,10 @@ export default function DashboardPage() {
                         setTargetPeriod(period);
                         localStorage.setItem('billdora_target_period', period);
                       }}
-                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                        targetPeriod === period
-                          ? 'bg-white text-neutral-900 shadow-sm'
-                          : 'text-neutral-600 hover:text-neutral-900'
-                      }`}
+                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${targetPeriod === period
+                        ? 'bg-white text-neutral-900 shadow-sm'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                        }`}
                     >
                       {period.charAt(0).toUpperCase() + period.slice(1)}
                     </button>
@@ -979,11 +981,11 @@ export default function DashboardPage() {
               <button onClick={() => setShowTargetsModal(false)} className="flex-1 px-4 py-2.5 text-neutral-700 hover:bg-neutral-100 rounded-lg transition-colors text-sm font-medium">
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => {
                   localStorage.setItem('billdora_health_targets', JSON.stringify(healthTargets));
                   setShowTargetsModal(false);
-                }} 
+                }}
                 className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
               >
                 Save Targets
@@ -1013,11 +1015,10 @@ export default function DashboardPage() {
                   <button
                     key={period}
                     onClick={() => setTempTargetPeriod(period)}
-                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                      tempTargetPeriod === period
-                        ? 'bg-white text-neutral-900 shadow-sm'
-                        : 'text-neutral-600 hover:text-neutral-900'
-                    }`}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${tempTargetPeriod === period
+                      ? 'bg-white text-neutral-900 shadow-sm'
+                      : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
                   >
                     {period.charAt(0).toUpperCase() + period.slice(1)}
                   </button>
@@ -1054,14 +1055,14 @@ export default function DashboardPage() {
               <button onClick={() => setShowProfitTargetModal(false)} className="flex-1 px-4 py-2.5 text-neutral-700 hover:bg-neutral-100 rounded-lg border border-neutral-200 transition-colors text-sm font-medium">
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setProfitTarget(tempProfitTarget);
                   setTargetPeriod(tempTargetPeriod);
                   localStorage.setItem('billdora_profit_target', String(tempProfitTarget));
                   localStorage.setItem('billdora_target_period', tempTargetPeriod);
                   setShowProfitTargetModal(false);
-                }} 
+                }}
                 className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm font-medium"
               >
                 Save
@@ -1086,8 +1087,8 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-2">Project</label>
-                  <select 
-                    value={timeEntry.project_id} 
+                  <select
+                    value={timeEntry.project_id}
                     onChange={(e) => setTimeEntry({ ...timeEntry, project_id: e.target.value })}
                     className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent text-sm"
                   >
@@ -1101,8 +1102,8 @@ export default function DashboardPage() {
                 {timeEntry.project_id && projectTasks.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-2">Task</label>
-                    <select 
-                      value={timeEntry.task_id} 
+                    <select
+                      value={timeEntry.task_id}
                       onChange={(e) => setTimeEntry({ ...timeEntry, task_id: e.target.value })}
                       className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent text-sm"
                     >
@@ -1117,10 +1118,10 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-2">Hours *</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       step="0.25"
-                      value={timeEntry.hours} 
+                      value={timeEntry.hours}
                       onChange={(e) => { setTimeEntry({ ...timeEntry, hours: e.target.value }); setTimeErrors(prev => ({ ...prev, hours: '' })); }}
                       className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent text-sm ${timeErrors.hours ? 'border-red-300' : 'border-neutral-200'}`}
                       placeholder="1.5"
@@ -1129,9 +1130,9 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-2">Date *</label>
-                    <input 
-                      type="date" 
-                      value={timeEntry.date} 
+                    <input
+                      type="date"
+                      value={timeEntry.date}
                       onChange={(e) => { setTimeEntry({ ...timeEntry, date: e.target.value }); setTimeErrors(prev => ({ ...prev, date: '' })); }}
                       className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent text-sm ${timeErrors.date ? 'border-red-300' : 'border-neutral-200'}`}
                     />
@@ -1143,11 +1144,11 @@ export default function DashboardPage() {
                   <label className="block text-sm font-medium text-neutral-700 mb-2">
                     Description {timeEntry.description && <span className="text-neutral-400 font-normal">({timeEntry.description.length}/500)</span>}
                   </label>
-                  <textarea 
-                    value={timeEntry.description} 
-                    onChange={(e) => { 
-                      setTimeEntry({ ...timeEntry, description: e.target.value }); 
-                      setTimeErrors(prev => ({ ...prev, description: '' })); 
+                  <textarea
+                    value={timeEntry.description}
+                    onChange={(e) => {
+                      setTimeEntry({ ...timeEntry, description: e.target.value });
+                      setTimeErrors(prev => ({ ...prev, description: '' }));
                     }}
                     className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent text-sm ${timeErrors.description ? 'border-red-300' : 'border-neutral-200'}`}
                     rows={3}
@@ -1160,14 +1161,14 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex gap-3 px-6 py-4 border-t border-neutral-100 bg-neutral-50">
-              <button 
-                onClick={() => setShowTimeModal(false)} 
+              <button
+                onClick={() => setShowTimeModal(false)}
                 className="flex-1 px-4 py-2.5 text-sm border border-neutral-200 rounded-lg hover:bg-neutral-100 transition-colors font-medium text-neutral-700"
               >
                 Cancel
               </button>
-              <button 
-                onClick={handleSaveTime} 
+              <button
+                onClick={handleSaveTime}
                 disabled={saving || !timeEntry.hours}
                 className="flex-1 px-4 py-2.5 text-sm bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >

@@ -106,31 +106,31 @@ export default function InvoicingPage() {
   // Check if selected invoices can be consolidated (same client, ONLY draft invoices, not already consolidated)
   const canConsolidate = useMemo(() => {
     if (selectedInvoices.size < 2) return { allowed: false, reason: 'Select at least 2 invoices' };
-    
+
     const selected = invoices.filter(inv => selectedInvoices.has(inv.id));
-    
+
     // Check all from same client
     const clientIds = [...new Set(selected.map(inv => inv.client_id))];
     if (clientIds.length > 1) return { allowed: false, reason: 'Invoices must be from the same client' };
-    
+
     // Check all are draft status (not sent, paid, or consolidated)
     const nonDraftInvoices = selected.filter(inv => inv.status !== 'draft');
     if (nonDraftInvoices.length > 0) {
       return { allowed: false, reason: 'Only draft invoices can be consolidated' };
     }
-    
+
     // Check none are already consolidated into another invoice
     const alreadyConsolidated = selected.filter(inv => inv.consolidated_into);
     if (alreadyConsolidated.length > 0) {
       return { allowed: false, reason: 'Some invoices are already consolidated into another invoice' };
     }
-    
+
     // Prevent re-consolidating consolidated invoices (invoices that have consolidated_from)
     const areConsolidatedInvoices = selected.filter(inv => inv.consolidated_from && inv.consolidated_from.length > 0);
     if (areConsolidatedInvoices.length > 0) {
       return { allowed: false, reason: 'Cannot re-consolidate consolidated invoices. Select original invoices only.' };
     }
-    
+
     return { allowed: true, reason: '' };
   }, [selectedInvoices, invoices]);
 
@@ -149,12 +149,12 @@ export default function InvoicingPage() {
 
   const handleConsolidateConfirm = useCallback(async () => {
     if (!canConsolidate.allowed || !profile?.company_id) return;
-    
+
     setShowConsolidateModal(false);
     setConsolidating(true);
     try {
       const result = await api.consolidateInvoices(Array.from(selectedInvoices), profile.company_id);
-      
+
       if (result.success) {
         showToast(`Successfully consolidated ${selectedInvoices.size} invoices into ${result.consolidatedInvoice?.invoice_number}`, 'success');
         loadData();
@@ -282,21 +282,21 @@ export default function InvoicingPage() {
 
   // Sent invoices list
   const sentInvoicesList = useMemo(() => {
-    return invoices.filter(i => i.status === 'sent').sort((a, b) => 
+    return invoices.filter(i => i.status === 'sent').sort((a, b) =>
       new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
     );
   }, [invoices]);
 
   const filteredInvoices = useMemo(() => {
     let filtered = invoices;
-    
+
     // Apply tab filter first
     if (activeTab === 'sent') {
       filtered = sentInvoicesList;
     } else if (activeTab === 'aging') {
       filtered = agingInvoices;
     }
-    
+
     // Then apply search and status filters
     return filtered.filter(i => {
       const matchesSearch = i.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -361,7 +361,7 @@ export default function InvoicingPage() {
         updates.public_view_token = crypto.randomUUID();
       }
       await api.updateInvoice(invoiceId, updates);
-      
+
       // Send notification when invoice is marked as paid
       if (status === 'paid' && profile?.company_id) {
         const invoice = invoices.find(inv => inv.id === invoiceId);
@@ -378,7 +378,7 @@ export default function InvoicingPage() {
               is_read: false,
             });
           } catch (e) { console.warn('Failed to create notification:', e); }
-          
+
           // Send email notification if user has it enabled
           try {
             const { data: userData } = await supabase.from('profiles').select('email_preferences').eq('id', profile.id).single();
@@ -403,7 +403,7 @@ export default function InvoicingPage() {
           } catch (e) { console.warn('Failed to send email:', e); }
         }
       }
-      
+
       loadData();
     } catch (error) {
       console.error('Failed to update invoice:', error);
@@ -453,8 +453,8 @@ export default function InvoicingPage() {
       });
       // Update status to sent with timestamp and generate view token
       const viewToken = invoice.public_view_token || crypto.randomUUID();
-      await api.updateInvoice(invoice.id, { 
-        status: 'sent', 
+      await api.updateInvoice(invoice.id, {
+        status: 'sent',
         sent_at: new Date().toISOString(),
         sent_date: new Date().toISOString().split('T')[0],
         public_view_token: viewToken
@@ -477,7 +477,7 @@ export default function InvoicingPage() {
   const generatePDF = useCallback((invoice: Invoice) => {
     const client = clients.find(c => c.id === invoice.client_id);
     const project = projects.find(p => p.id === invoice.project_id);
-    
+
     const content = `
 <!DOCTYPE html>
 <html>
@@ -590,23 +590,23 @@ export default function InvoicingPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 pb-20">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-neutral-900">Invoicing</h1>
-          <p className="text-neutral-500 text-xs sm:text-sm">Manage invoices and payments</p>
+          <h1 className="text-3xl font-light tracking-tight text-neutral-900 uppercase">Invoicing</h1>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#476E66] mt-1">Manage invoices and payments</p>
         </div>
-        <div className="flex gap-2 sm:gap-3">
+        <div className="flex gap-3">
           <button
             onClick={handleExportCSV}
-            className="hidden sm:flex items-center gap-2 px-4 py-2.5 border border-neutral-200 bg-white text-neutral-700 rounded-xl hover:bg-neutral-50 transition-colors"
+            className="hidden sm:flex items-center gap-2 px-4 py-2.5 border border-neutral-200 bg-white text-neutral-900 rounded-sm hover:bg-neutral-50 transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
             Export CSV
           </button>
           <button
             onClick={() => setShowMakePaymentModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 border border-neutral-200 bg-white text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors text-sm"
+            className="flex items-center gap-1.5 px-4 py-2.5 border border-neutral-200 bg-white text-neutral-900 rounded-sm hover:bg-neutral-50 transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
           >
             <DollarSign className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Log Payment</span>
@@ -614,172 +614,154 @@ export default function InvoicingPage() {
           </button>
           <button
             onClick={() => checkAndProceed('invoices', currentMonthInvoiceCount, () => setShowInvoiceModal(true))}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors text-sm"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Create Invoice</span>
-            <span className="sm:hidden">Create</span>
+            <span className="sm:hidden">New</span>
           </button>
         </div>
       </div>
 
       {/* Stats Cards - Hide on mobile when AR Aging is active */}
-      <div className={`grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 ${activeTab === 'aging' ? 'hidden sm:grid' : ''}`}>
-        <div 
+      <div className={`grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${activeTab === 'aging' ? 'hidden sm:grid' : ''}`}>
+        <div
           onClick={() => setStatusFilter('draft')}
-          className="bg-white rounded-lg p-2 cursor-pointer hover:bg-neutral-50 transition-colors" 
-          style={{ boxShadow: 'var(--shadow-card)' }}
+          className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:border-[#476E66]/50 transition-all shadow-sm group"
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-              <Clock className="w-3.5 h-3.5 text-[#476E66]" />
-            </div>
-            <span className="text-neutral-600 text-xs font-medium leading-tight">Work-in-Progress</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-[#476E66] transition-colors">Work-in-Progress</span>
+            <Clock className="w-3.5 h-3.5 text-neutral-400 group-hover:text-[#476E66]" />
           </div>
-          <p className="text-base font-semibold text-neutral-900">{formatCurrency(stats.wip)}</p>
-          <p className="text-xs text-neutral-400">{stats.drafts} draft invoices</p>
+          <p className="text-2xl font-light tracking-tight text-neutral-900">{formatCurrency(stats.wip)}</p>
+          <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wide">{stats.drafts} draft invoices</p>
         </div>
 
-        <div 
+        <div
           onClick={() => setStatusFilter('draft')}
-          className="bg-white rounded-lg p-2 cursor-pointer hover:bg-neutral-50 transition-colors" 
-          style={{ boxShadow: 'var(--shadow-card)' }}
+          className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:border-[#476E66]/50 transition-all shadow-sm group"
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-3.5 h-3.5 text-[#476E66]" />
-            </div>
-            <span className="text-neutral-600 text-xs font-medium">Drafts</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-[#476E66] transition-colors">Drafts</span>
+            <FileText className="w-3.5 h-3.5 text-neutral-400 group-hover:text-[#476E66]" />
           </div>
-          <p className="text-base font-semibold text-neutral-900">{formatCurrency(stats.wip)}</p>
-          <p className="text-xs text-neutral-400">{stats.drafts} invoices</p>
+          <p className="text-2xl font-light tracking-tight text-neutral-900">{formatCurrency(stats.wip)}</p>
+          <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wide">{stats.drafts} invoices</p>
         </div>
 
-        <div 
+        <div
           onClick={() => setActiveTab('sent')}
-          className={`bg-white rounded-lg p-2 cursor-pointer hover:bg-neutral-50 transition-colors ${activeTab === 'sent' ? 'ring-1 ring-[#476E66]' : ''}`}
-          style={{ boxShadow: 'var(--shadow-card)' }}
+          className={`bg-white rounded-sm border p-4 cursor-pointer transition-all shadow-sm group ${activeTab === 'sent' ? 'border-[#476E66] ring-1 ring-[#476E66]/10' : 'border-neutral-200 hover:border-[#476E66]/50'}`}
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-              <Send className="w-3.5 h-3.5 text-blue-600" />
-            </div>
-            <span className="text-neutral-600 text-xs font-medium">Sent</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-[#476E66] transition-colors">Sent</span>
+            <Send className="w-3.5 h-3.5 text-neutral-400 group-hover:text-[#476E66]" />
           </div>
-          <p className="text-base font-semibold text-neutral-900">{formatCurrency(stats.sentTotal)}</p>
-          <p className="text-xs text-neutral-400">{stats.sentCount} invoices</p>
+          <p className="text-2xl font-light tracking-tight text-neutral-900">{formatCurrency(stats.sentTotal)}</p>
+          <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wide">{stats.sentCount} invoices</p>
         </div>
 
-        <div 
+        <div
           onClick={() => setActiveTab('aging')}
-          className={`bg-white rounded-lg p-2 cursor-pointer hover:bg-neutral-50 transition-colors ${activeTab === 'aging' ? 'ring-1 ring-[#476E66]' : ''}`}
-          style={{ boxShadow: 'var(--shadow-card)' }}
+          className={`bg-white rounded-sm border p-4 cursor-pointer transition-all shadow-sm group ${activeTab === 'aging' ? 'border-red-500 ring-1 ring-red-500/10' : 'border-neutral-200 hover:border-red-300'}`}
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-            </div>
-            <span className="text-neutral-600 text-xs font-medium">A/R Aging</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-red-600 transition-colors">A/R Aging</span>
+            <AlertCircle className="w-3.5 h-3.5 text-neutral-400 group-hover:text-red-600" />
           </div>
-          <p className="text-base font-semibold text-neutral-900">{formatCurrency(stats.arAging)}</p>
-          <p className="text-xs text-neutral-400">{stats.agingCount} overdue</p>
+          <p className="text-2xl font-light tracking-tight text-neutral-900">{formatCurrency(stats.arAging)}</p>
+          <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wide text-red-600 font-bold">{stats.agingCount} overdue</p>
         </div>
 
-        <div 
+        <div
           onClick={() => setStatusFilter('all')}
-          className="bg-white rounded-lg p-2 cursor-pointer hover:bg-neutral-50 transition-colors" 
-          style={{ boxShadow: 'var(--shadow-card)' }}
+          className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:border-[#476E66]/50 transition-all shadow-sm group"
         >
-          <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-              <Repeat className="w-3.5 h-3.5 text-[#476E66]" />
-            </div>
-            <span className="text-neutral-600 text-xs font-medium">Recurring</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 group-hover:text-[#476E66] transition-colors">Recurring</span>
+            <Repeat className="w-3.5 h-3.5 text-neutral-400 group-hover:text-[#476E66]" />
           </div>
-          <p className="text-base font-semibold text-neutral-900">{recurringInvoices.filter(r => r.is_active).length}</p>
-          <p className="text-xs text-neutral-400">Active schedules</p>
+          <p className="text-2xl font-light tracking-tight text-neutral-900">{recurringInvoices.filter(r => r.is_active).length}</p>
+          <p className="text-[10px] text-neutral-400 mt-1 uppercase tracking-wide">Active schedules</p>
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex items-center gap-1 bg-neutral-100 p-0.5 rounded-lg w-fit overflow-x-auto">
+      <div className="flex items-center gap-6 border-b border-neutral-200 pb-0.5 overflow-x-auto">
         <button
           onClick={() => { setActiveTab('all'); setStatusFilter('all'); }}
-          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-            activeTab === 'all' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-          }`}
+          className={`pb-2 text-[11px] font-bold uppercase tracking-widest transition-colors border-b-2 ${activeTab === 'all' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600 hover:border-neutral-200'
+            }`}
         >
           All Invoices
         </button>
         <button
           onClick={() => { setActiveTab('sent'); setStatusFilter('all'); }}
-          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
-            activeTab === 'sent' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-          }`}
+          className={`pb-2 text-[11px] font-bold uppercase tracking-widest transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'sent' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600 hover:border-neutral-200'
+            }`}
         >
-          <Send className="w-3 h-3" /> Sent
-          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{stats.sentCount}</span>
+          Sent
+          {stats.sentCount > 0 && <span className="bg-neutral-100 text-neutral-600 text-[9px] px-1.5 py-0.5 rounded-full">{stats.sentCount}</span>}
         </button>
         <button
           onClick={() => { setActiveTab('aging'); setStatusFilter('all'); }}
-          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
-            activeTab === 'aging' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-          }`}
+          className={`pb-2 text-[11px] font-bold uppercase tracking-widest transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'aging' ? 'border-red-600 text-red-600' : 'border-transparent text-neutral-400 hover:text-neutral-600 hover:border-neutral-200'
+            }`}
         >
-          <AlertCircle className="w-3 h-3" /> AR Aging
-          {stats.agingCount > 0 && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">{stats.agingCount}</span>}
+          AR Aging
+          {stats.agingCount > 0 && <span className="bg-red-50 text-red-600 text-[9px] px-1.5 py-0.5 rounded-full">{stats.agingCount}</span>}
         </button>
       </div>
 
       {/* AR Aging Summary - Only show when on aging tab - Ultra compact on mobile */}
       {activeTab === 'aging' && (
-        <div className="bg-white rounded-lg p-1.5 sm:p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="bg-white rounded-sm border border-neutral-200 p-2 shadow-sm">
           <div className="flex items-center gap-1 overflow-x-auto">
-            <div className="flex-1 min-w-0 p-1 sm:p-2 bg-emerald-50 rounded text-center">
-              <p className="text-[8px] text-neutral-500 truncate">Current</p>
-              <p className="text-[10px] sm:text-sm font-semibold text-emerald-700">{formatCurrency(agingBuckets.current.amount)}</p>
-              <p className="text-[7px] text-neutral-400">{agingBuckets.current.count}</p>
+            <div className="flex-1 min-w-0 p-2 bg-emerald-50/50 rounded-sm text-center border border-emerald-100">
+              <p className="text-[9px] font-bold text-emerald-800 uppercase tracking-widest truncate">Current</p>
+              <p className="text-sm font-bold text-emerald-700 mt-1">{formatCurrency(agingBuckets.current.amount)}</p>
+              <p className="text-[10px] text-emerald-600/70">{agingBuckets.current.count}</p>
             </div>
-            <div className="flex-1 min-w-0 p-1 sm:p-2 bg-yellow-50 rounded text-center">
-              <p className="text-[8px] text-neutral-500 truncate">1-30d</p>
-              <p className="text-[10px] sm:text-sm font-semibold text-yellow-700">{formatCurrency(agingBuckets['1-30'].amount)}</p>
-              <p className="text-[7px] text-neutral-400">{agingBuckets['1-30'].count}</p>
+            <div className="flex-1 min-w-0 p-2 bg-amber-50/50 rounded-sm text-center border border-amber-100">
+              <p className="text-[9px] font-bold text-amber-800 uppercase tracking-widest truncate">1-30d</p>
+              <p className="text-sm font-bold text-amber-700 mt-1">{formatCurrency(agingBuckets['1-30'].amount)}</p>
+              <p className="text-[10px] text-amber-600/70">{agingBuckets['1-30'].count}</p>
             </div>
-            <div className="flex-1 min-w-0 p-1 sm:p-2 bg-orange-50 rounded text-center">
-              <p className="text-[8px] text-neutral-500 truncate">31-60d</p>
-              <p className="text-[10px] sm:text-sm font-semibold text-orange-700">{formatCurrency(agingBuckets['31-60'].amount)}</p>
-              <p className="text-[7px] text-neutral-400">{agingBuckets['31-60'].count}</p>
+            <div className="flex-1 min-w-0 p-2 bg-orange-50/50 rounded-sm text-center border border-orange-100">
+              <p className="text-[9px] font-bold text-orange-800 uppercase tracking-widest truncate">31-60d</p>
+              <p className="text-sm font-bold text-orange-700 mt-1">{formatCurrency(agingBuckets['31-60'].amount)}</p>
+              <p className="text-[10px] text-orange-600/70">{agingBuckets['31-60'].count}</p>
             </div>
-            <div className="flex-1 min-w-0 p-1 sm:p-2 bg-red-50 rounded text-center">
-              <p className="text-[8px] text-neutral-500 truncate">61-90d</p>
-              <p className="text-[10px] sm:text-sm font-semibold text-red-600">{formatCurrency(agingBuckets['61-90'].amount)}</p>
-              <p className="text-[7px] text-neutral-400">{agingBuckets['61-90'].count}</p>
+            <div className="flex-1 min-w-0 p-2 bg-red-50/50 rounded-sm text-center border border-red-100">
+              <p className="text-[9px] font-bold text-red-800 uppercase tracking-widest truncate">61-90d</p>
+              <p className="text-sm font-bold text-red-700 mt-1">{formatCurrency(agingBuckets['61-90'].amount)}</p>
+              <p className="text-[10px] text-red-600/70">{agingBuckets['61-90'].count}</p>
             </div>
-            <div className="flex-1 min-w-0 p-1 sm:p-2 bg-red-100 rounded text-center">
-              <p className="text-[8px] text-neutral-500 truncate">90+d</p>
-              <p className="text-[10px] sm:text-sm font-semibold text-red-700">{formatCurrency(agingBuckets['90+'].amount)}</p>
-              <p className="text-[7px] text-neutral-400">{agingBuckets['90+'].count}</p>
+            <div className="flex-1 min-w-0 p-2 bg-red-100/50 rounded-sm text-center border border-red-200">
+              <p className="text-[9px] font-bold text-red-900 uppercase tracking-widest truncate">90+d</p>
+              <p className="text-sm font-bold text-red-900 mt-1">{formatCurrency(agingBuckets['90+'].amount)}</p>
+              <p className="text-[10px] text-red-800/70">{agingBuckets['90+'].count}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Search and filters */}
-      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap bg-white p-3 rounded-sm border border-neutral-200 shadow-sm">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
             placeholder="Search invoices..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 rounded-lg border border-neutral-200 focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none text-sm"
+            className="w-full pl-9 pr-3 py-2 rounded-sm border border-neutral-200 focus:border-neutral-900 focus:ring-0 outline-none text-[13px] placeholder:text-neutral-400 transition-colors bg-neutral-50 focus:bg-white"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none text-sm"
+          className="px-3 py-2 border border-neutral-200 rounded-sm focus:border-neutral-900 focus:ring-0 outline-none text-[13px] font-medium bg-neutral-50 focus:bg-white transition-colors cursor-pointer"
         >
           <option value="all">All Status</option>
           <option value="draft">Draft</option>
@@ -788,17 +770,17 @@ export default function InvoicingPage() {
           <option value="overdue">Overdue</option>
           <option value="consolidated">Consolidated</option>
         </select>
-        <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg">
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-sm border border-neutral-200">
           <button
             onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+            className={`p-1.5 rounded-sm transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200'}`}
             title="List View"
           >
-            <List className="w-3.5 h-3.5" />
+            <List className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode('client')}
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'client' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+            className={`p-1.5 rounded-sm transition-all ${viewMode === 'client' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200'}`}
             title="Client View"
           >
             <LayoutGrid className="w-3.5 h-3.5" />
@@ -808,36 +790,36 @@ export default function InvoicingPage() {
 
       {/* Invoices Table */}
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-lg overflow-x-auto" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="bg-white rounded-sm border border-neutral-200 overflow-hidden shadow-sm">
           <table className="w-full">
-            <thead className="bg-neutral-50 border-b border-neutral-100">
+            <thead className="bg-white border-b border-neutral-200">
               <tr>
-                <th className="w-8 px-2 py-2">
+                <th className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
                     checked={filteredInvoices.length > 0 && selectedInvoices.size === filteredInvoices.length}
                     onChange={toggleSelectAll}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-3.5 h-3.5 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]"
+                    className="w-3.5 h-3.5 rounded-sm border-neutral-200 text-[#476E66] focus:ring-0 focus:ring-offset-0 cursor-pointer"
                   />
                 </th>
-                <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Invoice</th>
-                <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Client</th>
-                {activeTab === 'sent' && <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden sm:table-cell">Sent To</th>}
-                {activeTab !== 'sent' && <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden sm:table-cell">Project</th>}
-                <th className="text-right px-2 py-2 text-xs font-medium text-neutral-600">Amount</th>
-                {activeTab === 'aging' && <th className="text-center px-2 py-2 text-xs font-medium text-neutral-600">Days Overdue</th>}
-                {activeTab !== 'aging' && <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden md:table-cell">Status</th>}
-                <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden lg:table-cell">Views</th>
-                <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600 hidden md:table-cell">Due Date</th>
-                <th className="w-20">
+                <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invoice</th>
+                <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Client</th>
+                {activeTab === 'sent' && <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest hidden sm:table-cell">Sent To</th>}
+                {activeTab !== 'sent' && <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest hidden sm:table-cell">Project</th>}
+                <th className="text-right px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Amount</th>
+                {activeTab === 'aging' && <th className="text-center px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Days Overdue</th>}
+                {activeTab !== 'aging' && <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest hidden md:table-cell">Status</th>}
+                <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest hidden lg:table-cell">Views</th>
+                <th className="text-left px-2 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest hidden md:table-cell">Due Date</th>
+                <th className="w-20 px-2 py-3">
                   {selectedInvoices.size > 0 && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 justify-end">
                       {selectedInvoices.size >= 2 && (
                         <button
                           onClick={handleConsolidateClick}
                           disabled={consolidating || !canConsolidate.allowed}
-                          className={`p-1 rounded ${canConsolidate.allowed ? 'text-[#476E66] hover:bg-[#476E66]/10' : 'text-neutral-300 cursor-not-allowed'}`}
+                          className={`p-1 rounded-sm ${canConsolidate.allowed ? 'text-[#476E66] hover:bg-[#476E66]/10' : 'text-neutral-300 cursor-not-allowed'}`}
                           title={canConsolidate.allowed ? `Consolidate ${selectedInvoices.size} invoices` : canConsolidate.reason}
                         >
                           <Layers className="w-3.5 h-3.5" />
@@ -846,7 +828,7 @@ export default function InvoicingPage() {
                       <button
                         onClick={handleBatchDelete}
                         disabled={deleting}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        className="p-1 text-red-600 hover:bg-red-50 rounded-sm"
                         title={`Delete ${selectedInvoices.size} selected`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -856,122 +838,128 @@ export default function InvoicingPage() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-50">
+            <tbody className="divide-y divide-neutral-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-neutral-500 text-sm">No invoices found</td>
+                  <td colSpan={10} className="text-center py-12">
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">No invoices found</p>
+                  </td>
                 </tr>
               ) : (
                 filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id} className={`hover:bg-neutral-50/50 transition-colors cursor-pointer ${selectedInvoices.has(invoice.id) ? 'bg-[#476E66]/5' : ''}`} onClick={() => setViewingInvoice(invoice)}>
-                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                  <tr key={invoice.id} className={`hover:bg-neutral-50/80 transition-colors cursor-pointer group ${selectedInvoices.has(invoice.id) ? 'bg-[#476E66]/5' : ''}`} onClick={() => setViewingInvoice(invoice)}>
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedInvoices.has(invoice.id)}
                         onChange={() => toggleInvoiceSelection(invoice.id)}
-                        className="w-3.5 h-3.5 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]"
+                        className="w-3.5 h-3.5 rounded-sm border-neutral-200 text-[#476E66] focus:ring-0 focus:ring-offset-0 cursor-pointer"
                       />
                     </td>
-                    <td className="px-2 py-2">
-                      <p className="text-sm font-medium text-neutral-900">{invoice.invoice_number}</p>
-                      <p className="text-xs text-neutral-500">{new Date(invoice.created_at || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                    <td className="px-2 py-3">
+                      <p className="text-[13px] font-medium text-neutral-900 font-mono">{invoice.invoice_number}</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5 uppercase tracking-wide">{new Date(invoice.created_at || '').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                     </td>
-                    <td className="px-2 py-2 text-sm text-neutral-600">{invoice.client?.name || '-'}</td>
+                    <td className="px-2 py-3 text-[13px] font-medium text-neutral-700">{invoice.client?.name || '-'}</td>
                     {activeTab === 'sent' && (
-                      <td className="px-2 py-2 text-sm text-neutral-600 hidden sm:table-cell">
-                        <div className="flex items-center gap-1">
+                      <td className="px-2 py-3 text-[13px] text-neutral-500 hidden sm:table-cell">
+                        <div className="flex items-center gap-1.5">
                           <Mail className="w-3 h-3 text-neutral-400" />
                           <span className="truncate max-w-[120px]">{invoice.client?.email || '-'}</span>
                         </div>
                       </td>
                     )}
-                    {activeTab !== 'sent' && <td className="px-2 py-2 text-sm text-neutral-600 hidden sm:table-cell">{invoice.project?.name || '-'}</td>}
-                    <td className="px-2 py-2 text-right text-sm font-medium text-neutral-900">{formatCurrency(invoice.total)}</td>
+                    {activeTab !== 'sent' && <td className="px-2 py-3 text-[13px] text-neutral-500 hidden sm:table-cell">{invoice.project?.name || '-'}</td>}
+                    <td className="px-2 py-3 text-right text-[13px] font-bold text-neutral-900 font-mono tracking-tight">{formatCurrency(invoice.total)}</td>
                     {activeTab === 'aging' && (
-                      <td className="px-2 py-2 text-center">
+                      <td className="px-2 py-3 text-center">
                         {(() => {
                           const daysOverdue = (invoice as any).daysOverdue || 0;
-                          const bgColor = daysOverdue <= 0 ? 'bg-emerald-100 text-emerald-700' : 
-                                          daysOverdue <= 30 ? 'bg-yellow-100 text-yellow-700' : 
-                                          daysOverdue <= 60 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700';
+                          const bgColor = daysOverdue <= 0 ? 'bg-emerald-100 text-emerald-700' :
+                            daysOverdue <= 30 ? 'bg-yellow-100 text-yellow-700' :
+                              daysOverdue <= 60 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700';
                           return (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${bgColor}`}>
+                            <span className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest ${bgColor}`}>
                               {daysOverdue <= 0 ? 'Current' : `${daysOverdue}d`}
                             </span>
                           );
                         })()}
                       </td>
                     )}
-                    {activeTab !== 'aging' && <td className="px-2 py-2 hidden md:table-cell">
+                    {activeTab !== 'aging' && <td className="px-2 py-3 hidden md:table-cell">
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                        <span className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest border ${invoice.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                            invoice.status === 'sent' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                              invoice.status === 'overdue' ? 'bg-red-50 text-red-700 border-red-100' :
+                                'bg-neutral-100 text-neutral-600 border-neutral-200'
+                          }`}>
                           {invoice.status || 'draft'}
                         </span>
                         {invoice.consolidated_from && invoice.consolidated_from.length > 0 && (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded text-xs" title={`Combined from ${invoice.consolidated_from.length} invoices`}>
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded-sm text-[9px] font-bold uppercase tracking-widest" title={`Combined from ${invoice.consolidated_from.length} invoices`}>
                             <Layers className="w-3 h-3" /> {invoice.consolidated_from.length}
                           </span>
                         )}
                         {recurringInvoices.some(r => r.template_invoice_id === invoice.id && r.is_active) && (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-xs">
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] border border-[#476E66]/20 rounded-sm text-[9px] font-bold uppercase tracking-widest">
                             <Repeat className="w-3 h-3" /> Recurring
                           </span>
                         )}
                       </div>
                     </td>}
-                    <td className="px-2 py-2 hidden lg:table-cell">
+                    <td className="px-2 py-3 hidden lg:table-cell">
                       {invoice.view_count ? (
                         <div className="flex flex-col">
-                          <span className="text-xs font-medium text-neutral-900">{invoice.view_count} view{invoice.view_count !== 1 ? 's' : ''}</span>
+                          <span className="text-[11px] font-bold text-neutral-900 capitalize">{invoice.view_count} view{invoice.view_count !== 1 ? 's' : ''}</span>
                           {invoice.last_viewed_at && (
-                            <span className="text-[10px] text-neutral-500">
-                              {new Date(invoice.last_viewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(invoice.last_viewed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                            <span className="text-[9px] text-neutral-400 mt-0.5 uppercase tracking-wide">
+                              {new Date(invoice.last_viewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-neutral-400">—</span>
+                        <span className="text-[10px] text-neutral-300 uppercase tracking-widest font-bold">Never</span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-xs text-neutral-600 hidden md:table-cell">
+                    <td className="px-2 py-3 text-[11px] font-medium text-neutral-500 hidden md:table-cell">
                       {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
                     </td>
-                    <td className="px-1 py-2 relative">
-                      <button 
+                    <td className="px-2 py-3 relative text-right">
+                      <button
                         onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === invoice.id ? null : invoice.id); }}
-                        className="p-1 hover:bg-neutral-100 rounded"
+                        className="p-1.5 hover:bg-neutral-100 rounded-sm text-neutral-400 hover:text-neutral-900 transition-colors"
                       >
-                        <MoreHorizontal className="w-3.5 h-3.5 text-neutral-400" />
+                        <MoreHorizontal className="w-4 h-4" />
                       </button>
                       {activeMenu === invoice.id && (
-                        <div ref={menuRef} className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-neutral-100 py-1 z-20">
-                          <button onClick={(e) => { e.stopPropagation(); setViewingInvoice(invoice); setActiveMenu(null); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50">
-                            <Eye className="w-4 h-4" /> View Invoice
+                        <div ref={menuRef} className="absolute right-0 mt-1 w-52 bg-white rounded-sm shadow-lg border border-neutral-200 py-1 z-20">
+                          <button onClick={(e) => { e.stopPropagation(); setViewingInvoice(invoice); setActiveMenu(null); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 tracking-wide uppercase">
+                            <Eye className="w-3.5 h-3.5" /> View Invoice
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); generatePDF(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50">
-                            <Printer className="w-4 h-4" /> Download PDF
+                          <button onClick={(e) => { e.stopPropagation(); generatePDF(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 tracking-wide uppercase">
+                            <Printer className="w-3.5 h-3.5" /> Download PDF
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); duplicateInvoice(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50">
-                            <Copy className="w-4 h-4" /> Duplicate Invoice
+                          <button onClick={(e) => { e.stopPropagation(); duplicateInvoice(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 tracking-wide uppercase">
+                            <Copy className="w-3.5 h-3.5" /> Duplicate
                           </button>
                           {invoice.status === 'draft' && (
                             <>
-                              <button onClick={(e) => { e.stopPropagation(); sendInvoiceEmail(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-blue-600 hover:bg-neutral-100">
-                                <Mail className="w-4 h-4" /> Send to Client
+                              <button onClick={(e) => { e.stopPropagation(); sendInvoiceEmail(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-blue-600 hover:bg-blue-50 tracking-wide uppercase">
+                                <Mail className="w-3.5 h-3.5" /> Send to Client
                               </button>
-                              <button onClick={(e) => { e.stopPropagation(); updateInvoiceStatus(invoice.id, 'sent'); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50">
-                                <Send className="w-4 h-4" /> Mark as Sent
+                              <button onClick={(e) => { e.stopPropagation(); updateInvoiceStatus(invoice.id, 'sent'); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50 tracking-wide uppercase">
+                                <Send className="w-3.5 h-3.5" /> Mark as Sent
                               </button>
                             </>
                           )}
                           {(invoice.status === 'sent' || invoice.status === 'draft') && (
-                            <button onClick={(e) => { e.stopPropagation(); openPaymentModal(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-neutral-900 hover:bg-neutral-100">
-                              <CreditCard className="w-4 h-4" /> Record Payment
+                            <button onClick={(e) => { e.stopPropagation(); openPaymentModal(invoice); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-[#476E66] hover:bg-[#476E66]/5 tracking-wide uppercase">
+                              <CreditCard className="w-3.5 h-3.5" /> Record Payment
                             </button>
                           )}
                           <div className="border-t border-neutral-100 my-1"></div>
-                          <button onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteInvoice(invoice.id); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-                            <Trash2 className="w-4 h-4" /> Delete Invoice
+                          <button onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteInvoice(invoice.id); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 tracking-wide uppercase">
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
                           </button>
                         </div>
                       )}
@@ -1088,11 +1076,10 @@ export default function InvoicingPage() {
             <button
               onClick={handleConsolidateClick}
               disabled={consolidating || !canConsolidate.allowed}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                canConsolidate.allowed 
-                  ? 'bg-[#476E66] hover:bg-[#3d5f58] text-white' 
-                  : 'bg-neutral-700 text-neutral-400 cursor-not-allowed'
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${canConsolidate.allowed
+                ? 'bg-[#476E66] hover:bg-[#3d5f58] text-white'
+                : 'bg-neutral-700 text-neutral-400 cursor-not-allowed'
+                }`}
               title={canConsolidate.allowed ? 'Combine into single invoice' : canConsolidate.reason}
             >
               {consolidating ? (
@@ -1137,11 +1124,11 @@ export default function InvoicingPage() {
                 <p className="text-sm text-neutral-500">Combine {selectedInvoices.size} invoices into one</p>
               </div>
             </div>
-            
+
             <div className="bg-neutral-50 rounded-xl p-4 mb-4">
               <div className="text-sm text-neutral-600 mb-2">Client</div>
               <div className="font-medium text-neutral-900 mb-3">{consolidationDetails.clientName}</div>
-              
+
               <div className="text-sm text-neutral-600 mb-2">Invoices to consolidate</div>
               <div className="space-y-1 max-h-32 overflow-y-auto mb-3">
                 {consolidationDetails.selected.map(inv => (
@@ -1151,17 +1138,17 @@ export default function InvoicingPage() {
                   </div>
                 ))}
               </div>
-              
+
               <div className="border-t border-neutral-200 pt-3 flex justify-between">
                 <span className="font-medium text-neutral-700">Total Amount</span>
                 <span className="font-semibold text-neutral-900">{formatCurrency(consolidationDetails.totalAmount)}</span>
               </div>
             </div>
-            
+
             <p className="text-sm text-neutral-500 mb-4">
               The original invoices will be marked as "consolidated" and a new draft invoice will be created with all line items combined.
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConsolidateModal(false)}
@@ -1216,7 +1203,7 @@ export default function InvoicingPage() {
               payment_date: payment.date,
               payment_method: payment.method
             });
-            
+
             // Send notification for payment
             if (profile?.company_id) {
               const clientName = clients.find(c => c.id === selectedInvoice.client_id)?.name || 'Client';
@@ -1227,7 +1214,7 @@ export default function InvoicingPage() {
                 NotificationService.paymentReceived(profile.company_id, selectedInvoice.invoice_number, clientName, amount, selectedInvoice.id);
               }
             }
-            
+
             loadData();
             setShowPaymentModal(false);
             setSelectedInvoice(null);
@@ -1255,7 +1242,7 @@ export default function InvoicingPage() {
                   payment_date: paymentInfo.date,
                   payment_method: paymentInfo.method
                 });
-                
+
                 // Send notification for payment
                 if (profile?.company_id) {
                   const clientName = clients.find(c => c.id === invoice.client_id)?.name || 'Client';
@@ -1307,10 +1294,10 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
   const [dueDate, setDueDate] = useState(getDefaultDueDate());
   const [calculatorType, setCalculatorType] = useState('manual');
   const [pdfTemplateId, setPdfTemplateId] = useState('');
-  const [pdfTemplates, setPdfTemplates] = useState<{id: string; name: string; is_default: boolean}[]>([]);
+  const [pdfTemplates, setPdfTemplates] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
   const [enabledCalculators, setEnabledCalculators] = useState<string[]>(['manual', 'milestone', 'percentage', 'time_materials', 'fixed_fee']);
   const [saving, setSaving] = useState(false);
-  
+
   // Task billing state
   const [tasks, setTasks] = useState<any[]>([]);
   const [selectedTasks, setSelectedTasks] = useState<Map<string, { billingType: 'milestone' | 'percentage'; percentageToBill: number }>>(new Map());
@@ -1394,7 +1381,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
         .eq('approval_status', 'approved')
         .eq('billable', true)
         .is('invoice_id', null);
-      
+
       if (timeData) {
         setTmTimeEntries(timeData);
         // Auto-select all time entries
@@ -1408,7 +1395,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
         .eq('project_id', projectId)
         .eq('approval_status', 'approved')
         .eq('billable', true);
-      
+
       if (expenseData) {
         setTmExpenses(expenseData);
         // Auto-select all expenses
@@ -1427,7 +1414,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
         .select('default_calculator, enabled_calculators')
         .eq('company_id', companyId)
         .single();
-      
+
       if (settings) {
         setCalculatorType(settings.default_calculator || 'manual');
         setEnabledCalculators(settings.enabled_calculators || CALCULATOR_OPTIONS.map(c => c.id));
@@ -1438,7 +1425,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
         .select('id, name, is_default')
         .eq('company_id', companyId)
         .order('is_default', { ascending: false });
-      
+
       if (templates && templates.length > 0) {
         setPdfTemplates(templates);
         const defaultTemplate = templates.find(t => t.is_default);
@@ -1467,32 +1454,32 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
   const tmCalculation = useMemo(() => {
     const selectedTimeData = tmTimeEntries.filter(t => selectedTimeEntries.has(t.id));
     const selectedExpenseData = tmExpenses.filter(e => selectedExpenses.has(e.id));
-    
+
     const timeTotal = selectedTimeData.reduce((sum, t) => sum + ((t.hours || 0) * (t.hourly_rate || 0)), 0);
     const expenseTotal = selectedExpenseData.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalHours = selectedTimeData.reduce((sum, t) => sum + (t.hours || 0), 0);
-    
+
     // Calculate NTE warnings by task
     const taskBudgets = new Map<string, { name: string; budget: number; billed: number }>();
     selectedTimeData.forEach(t => {
       if (t.task_id && t.tasks) {
-        const existing = taskBudgets.get(t.task_id) || { 
-          name: t.tasks.name, 
-          budget: t.tasks.total_budget || t.tasks.estimated_fees || 0, 
-          billed: 0 
+        const existing = taskBudgets.get(t.task_id) || {
+          name: t.tasks.name,
+          budget: t.tasks.total_budget || t.tasks.estimated_fees || 0,
+          billed: 0
         };
         existing.billed += (t.hours || 0) * (t.hourly_rate || 0);
         taskBudgets.set(t.task_id, existing);
       }
     });
-    
+
     const nteWarnings: string[] = [];
     taskBudgets.forEach((info, taskId) => {
       if (info.budget > 0 && info.billed > info.budget) {
         nteWarnings.push(`"${info.name}" exceeds budget by ${formatCurrency(info.billed - info.budget)}`);
       }
     });
-    
+
     return { timeTotal, expenseTotal, totalHours, nteWarnings, taskBudgets };
   }, [tmTimeEntries, tmExpenses, selectedTimeEntries, selectedExpenses]);
 
@@ -1505,7 +1492,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
         if (task) {
           const totalBudget = task.total_budget || task.estimated_fees || 0;
           const remainingPercentage = 100 - (task.billed_percentage || 0);
-          
+
           if (selection.billingType === 'milestone') {
             // Bill remaining amount
             total += (totalBudget * remainingPercentage) / 100;
@@ -1548,19 +1535,19 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientId) return;
-    
+
     // For milestone/percentage, require task selection
     if ((calculatorType === 'milestone' || calculatorType === 'percentage') && selectedTasks.size === 0) {
       alert('Please select at least one task to bill');
       return;
     }
-    
+
     // Validate billing mode compatibility
     if (calculatorType === 'milestone' || calculatorType === 'percentage') {
-      const incompatibleTask = tasks.find(t => 
-        selectedTasks.has(t.id) && 
-        (t as any).billing_mode && 
-        (t as any).billing_mode !== 'unset' && 
+      const incompatibleTask = tasks.find(t =>
+        selectedTasks.has(t.id) &&
+        (t as any).billing_mode &&
+        (t as any).billing_mode !== 'unset' &&
         (t as any).billing_mode !== calculatorType
       );
       if (incompatibleTask) {
@@ -1579,10 +1566,10 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
           const task = tasks.find(t => t.id === taskId);
           const totalBudget = task?.total_budget || task?.estimated_fees || 0;
           const remainingPercentage = 100 - (task?.billed_percentage || 0);
-          
+
           let percentageToBill: number;
           let amountToBill: number;
-          
+
           if (selection.billingType === 'milestone') {
             percentageToBill = remainingPercentage;
             amountToBill = (totalBudget * remainingPercentage) / 100;
@@ -1752,11 +1739,10 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
               {CALCULATOR_OPTIONS.filter(c => enabledCalculators.includes(c.id)).map((calc) => (
                 <label
                   key={calc.id}
-                  className={`p-2.5 border rounded-lg cursor-pointer transition-colors ${
-                    calculatorType === calc.id 
-                      ? 'border-[#476E66] bg-[#476E66]/5 text-[#476E66]' 
-                      : 'border-neutral-200 hover:border-neutral-300'
-                  }`}
+                  className={`p-2.5 border rounded-lg cursor-pointer transition-colors ${calculatorType === calc.id
+                    ? 'border-[#476E66] bg-[#476E66]/5 text-[#476E66]'
+                    : 'border-neutral-200 hover:border-neutral-300'
+                    }`}
                   style={calculatorType !== calc.id ? { boxShadow: 'var(--shadow-sm)' } : undefined}
                 >
                   <input
@@ -1783,8 +1769,8 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
           </div>
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1.5">Project {(calculatorType === 'milestone' || calculatorType === 'percentage' || calculatorType === 'time_materials') && '*'}</label>
-            <select 
-              value={projectId} 
+            <select
+              value={projectId}
               onChange={(e) => { setProjectId(e.target.value); setSelectedTasks(new Map()); setSelectedTimeEntries(new Set()); setSelectedExpenses(new Set()); }}
               className="w-full h-11 px-3 py-2 rounded-lg border border-neutral-200 focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none text-sm"
               required={calculatorType === 'milestone' || calculatorType === 'percentage' || calculatorType === 'time_materials'}
@@ -1817,119 +1803,118 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
                 return availableTasks.length === 0 ? (
                   <div className="text-center py-4 bg-amber-50 rounded-lg border border-amber-200">
                     <p className="text-amber-700 text-sm font-medium">
-                      {allFullyBilled 
-                        ? '✓ All tasks have been fully billed (100%)' 
+                      {allFullyBilled
+                        ? '✓ All tasks have been fully billed (100%)'
                         : `Tasks are locked to a different billing mode`}
                     </p>
                     <p className="text-amber-600 text-xs mt-1">
-                      {allFullyBilled 
+                      {allFullyBilled
                         ? 'Create new tasks or use Manual Invoice for additional billing'
                         : `Switch to the matching billing type or use Manual Invoice`}
                     </p>
                   </div>
                 ) : (
-                <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ boxShadow: 'var(--shadow-card)' }}>
-                  <table className="w-full text-sm min-w-[500px]">
-                    <thead className="bg-neutral-50 border-b border-neutral-100">
-                      <tr>
-                        {calculatorType === 'milestone' && (
-                          <th className="text-center px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-8">
-                            <input type="checkbox" className="w-3.5 h-3.5 rounded border-neutral-300" disabled />
-                          </th>
-                        )}
-                        <th className="text-left px-1.5 py-1.5 text-xs font-medium text-neutral-600">Task</th>
-                        <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-20">Budget</th>
-                        <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-20">Billed</th>
-                        <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-24">Remain</th>
-                        {calculatorType === 'percentage' && (
-                          <th className="text-center px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-16">% to Bill</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-50">
-                      {tasks.map(task => {
-                        const totalBudget = task.total_budget || task.estimated_fees || 0;
-                        const billedPct = task.billed_percentage || 0;
-                        const remainingPct = 100 - billedPct;
-                        const remainingAmt = (totalBudget * remainingPct) / 100;
-                        const isSelected = selectedTasks.has(task.id);
-                        const selection = selectedTasks.get(task.id);
-                        const isFullyBilled = remainingPct <= 0;
-                        const taskMode = (task as any).billing_mode || 'unset';
-                        const isModeLocked = taskMode !== 'unset';
-                        const isModeIncompatible = isModeLocked && taskMode !== calculatorType;
-                        const isDisabled = isFullyBilled || isModeIncompatible;
+                  <div className="rounded-lg overflow-hidden overflow-x-auto" style={{ boxShadow: 'var(--shadow-card)' }}>
+                    <table className="w-full text-sm min-w-[500px]">
+                      <thead className="bg-neutral-50 border-b border-neutral-100">
+                        <tr>
+                          {calculatorType === 'milestone' && (
+                            <th className="text-center px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-8">
+                              <input type="checkbox" className="w-3.5 h-3.5 rounded border-neutral-300" disabled />
+                            </th>
+                          )}
+                          <th className="text-left px-1.5 py-1.5 text-xs font-medium text-neutral-600">Task</th>
+                          <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-20">Budget</th>
+                          <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-20">Billed</th>
+                          <th className="text-right px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-24">Remain</th>
+                          {calculatorType === 'percentage' && (
+                            <th className="text-center px-1.5 py-1.5 text-xs font-medium text-neutral-600 w-16">% to Bill</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-50">
+                        {tasks.map(task => {
+                          const totalBudget = task.total_budget || task.estimated_fees || 0;
+                          const billedPct = task.billed_percentage || 0;
+                          const remainingPct = 100 - billedPct;
+                          const remainingAmt = (totalBudget * remainingPct) / 100;
+                          const isSelected = selectedTasks.has(task.id);
+                          const selection = selectedTasks.get(task.id);
+                          const isFullyBilled = remainingPct <= 0;
+                          const taskMode = (task as any).billing_mode || 'unset';
+                          const isModeLocked = taskMode !== 'unset';
+                          const isModeIncompatible = isModeLocked && taskMode !== calculatorType;
+                          const isDisabled = isFullyBilled || isModeIncompatible;
 
-                        return (
-                          <tr 
-                            key={task.id} 
-                            className={`${isDisabled ? 'bg-neutral-50 opacity-50' : (calculatorType === 'milestone' ? isSelected : (selection?.percentageToBill || 0) > 0) ? 'bg-[#476E66]/5' : 'hover:bg-neutral-50/50'}`}
-                            title={isModeIncompatible ? `Task locked to ${taskMode} billing` : undefined}
-                          >
-                            {calculatorType === 'milestone' && (
-                              <td className="px-1.5 py-1.5 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  disabled={isDisabled}
-                                  onChange={() => toggleTaskSelection(task.id, 'milestone')}
-                                  className="w-3.5 h-3.5 text-[#476E66] rounded border-neutral-300 focus:ring-[#476E66]"
-                                />
-                              </td>
-                            )}
-                            <td className="px-1.5 py-1.5">
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs font-medium text-neutral-900 leading-tight">{task.name}</p>
-                                {isModeLocked && (
-                                  <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${
-                                    taskMode === 'time' ? 'bg-blue-100 text-blue-700' : 
-                                    taskMode === 'percentage' ? 'bg-purple-100 text-purple-700' : 
-                                    'bg-amber-100 text-amber-700'
-                                  }`}>
-                                    {taskMode === 'time' ? 'T&M' : taskMode === 'percentage' ? '%' : 'MS'}
-                                  </span>
-                                )}
-                              </div>
-                              {billedPct > 0 && (
-                                <p className="text-xs text-neutral-500 mt-0.5">{billedPct}% billed</p>
+                          return (
+                            <tr
+                              key={task.id}
+                              className={`${isDisabled ? 'bg-neutral-50 opacity-50' : (calculatorType === 'milestone' ? isSelected : (selection?.percentageToBill || 0) > 0) ? 'bg-[#476E66]/5' : 'hover:bg-neutral-50/50'}`}
+                              title={isModeIncompatible ? `Task locked to ${taskMode} billing` : undefined}
+                            >
+                              {calculatorType === 'milestone' && (
+                                <td className="px-1.5 py-1.5 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    disabled={isDisabled}
+                                    onChange={() => toggleTaskSelection(task.id, 'milestone')}
+                                    className="w-3.5 h-3.5 text-[#476E66] rounded border-neutral-300 focus:ring-[#476E66]"
+                                  />
+                                </td>
                               )}
-                            </td>
-                            <td className="px-1.5 py-1.5 text-right text-xs whitespace-nowrap">{formatCurrencyCompact(totalBudget)}</td>
-                            <td className="px-1.5 py-1.5 text-right text-xs text-neutral-500 whitespace-nowrap">{formatCurrencyCompact(task.billed_amount || 0)}</td>
-                            <td className="px-1.5 py-1.5 text-right">
-                              <div className="flex items-center justify-end gap-0.5">
-                                <span className="text-xs font-medium text-neutral-900 whitespace-nowrap">{formatCurrencyCompact(remainingAmt)}</span>
-                                <span className="text-xs text-neutral-400">({remainingPct}%)</span>
-                              </div>
-                            </td>
-                            {calculatorType === 'percentage' && (
-                              <td className="px-1.5 py-1.5 text-center">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={remainingPct}
-                                  value={selection?.percentageToBill || 0}
-                                  disabled={isDisabled}
-                                  onChange={(e) => {
-                                    const pct = Math.min(parseFloat(e.target.value) || 0, remainingPct);
-                                    if (pct > 0) {
-                                      setSelectedTasks(new Map(selectedTasks.set(task.id, { billingType: 'percentage', percentageToBill: pct })));
-                                    } else {
-                                      const newMap = new Map(selectedTasks);
-                                      newMap.delete(task.id);
-                                      setSelectedTasks(newMap);
-                                    }
-                                  }}
-                                  className="w-14 h-7 px-1 py-1 border border-neutral-200 rounded text-center text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
-                                />
+                              <td className="px-1.5 py-1.5">
+                                <div className="flex items-center gap-1">
+                                  <p className="text-xs font-medium text-neutral-900 leading-tight">{task.name}</p>
+                                  {isModeLocked && (
+                                    <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${taskMode === 'time' ? 'bg-blue-100 text-blue-700' :
+                                      taskMode === 'percentage' ? 'bg-purple-100 text-purple-700' :
+                                        'bg-amber-100 text-amber-700'
+                                      }`}>
+                                      {taskMode === 'time' ? 'T&M' : taskMode === 'percentage' ? '%' : 'MS'}
+                                    </span>
+                                  )}
+                                </div>
+                                {billedPct > 0 && (
+                                  <p className="text-xs text-neutral-500 mt-0.5">{billedPct}% billed</p>
+                                )}
                               </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              <td className="px-1.5 py-1.5 text-right text-xs whitespace-nowrap">{formatCurrencyCompact(totalBudget)}</td>
+                              <td className="px-1.5 py-1.5 text-right text-xs text-neutral-500 whitespace-nowrap">{formatCurrencyCompact(task.billed_amount || 0)}</td>
+                              <td className="px-1.5 py-1.5 text-right">
+                                <div className="flex items-center justify-end gap-0.5">
+                                  <span className="text-xs font-medium text-neutral-900 whitespace-nowrap">{formatCurrencyCompact(remainingAmt)}</span>
+                                  <span className="text-xs text-neutral-400">({remainingPct}%)</span>
+                                </div>
+                              </td>
+                              {calculatorType === 'percentage' && (
+                                <td className="px-1.5 py-1.5 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={remainingPct}
+                                    value={selection?.percentageToBill || 0}
+                                    disabled={isDisabled}
+                                    onChange={(e) => {
+                                      const pct = Math.min(parseFloat(e.target.value) || 0, remainingPct);
+                                      if (pct > 0) {
+                                        setSelectedTasks(new Map(selectedTasks.set(task.id, { billingType: 'percentage', percentageToBill: pct })));
+                                      } else {
+                                        const newMap = new Map(selectedTasks);
+                                        newMap.delete(task.id);
+                                        setSelectedTasks(newMap);
+                                      }
+                                    }}
+                                    className="w-14 h-7 px-1 py-1 border border-neutral-200 rounded text-center text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                                  />
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 );
               })()}
             </div>
@@ -1958,7 +1943,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
                       ))}
                     </div>
                   )}
-                  
+
                   {/* Time Entries */}
                   {tmTimeEntries.length > 0 && (
                     <div className="border border-neutral-200 rounded-lg overflow-hidden">
@@ -2128,9 +2113,9 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
           {pdfTemplates.length > 0 && (
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1.5">PDF Template</label>
-              <select 
-                value={pdfTemplateId} 
-                onChange={(e) => setPdfTemplateId(e.target.value)} 
+              <select
+                value={pdfTemplateId}
+                onChange={(e) => setPdfTemplateId(e.target.value)}
                 className="w-full h-11 px-3 py-2 rounded-lg border border-neutral-200 focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none text-sm"
               >
                 <option value="">Use default template</option>
@@ -2225,13 +2210,13 @@ interface PDFTemplateOption {
 }
 
 // Invoice Detail View Component - Full page view with tabs (matches Project Billing view)
-function PaymentReminderSection({ 
-  invoice, 
-  sentDate, 
-  formatCurrency 
-}: { 
-  invoice: Invoice; 
-  sentDate: string; 
+function PaymentReminderSection({
+  invoice,
+  sentDate,
+  formatCurrency
+}: {
+  invoice: Invoice;
+  sentDate: string;
   formatCurrency: (amount: number) => string;
 }) {
   const { showToast } = useToast();
@@ -2268,7 +2253,7 @@ function PaymentReminderSection({
         }, { onConflict: 'invoice_id' });
 
       if (error) throw error;
-      
+
       setReminderScheduled(true);
       setShowReminderModal(false);
       showToast(`Payment reminder scheduled for ${new Date(reminderDate).toLocaleDateString()}`, 'success');
@@ -2290,7 +2275,7 @@ function PaymentReminderSection({
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
       const res = await fetch(`${supabaseUrl}/functions/v1/send-payment-reminder`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`
         },
@@ -2327,9 +2312,9 @@ function PaymentReminderSection({
           <Bell className="w-4 h-4 text-amber-600" />
           <label className="block text-xs font-medium text-amber-700">Payment Reminder</label>
         </div>
-        
+
         <p className="text-xs text-amber-600">
-          {reminderScheduled 
+          {reminderScheduled
             ? `Reminder scheduled for ${new Date(reminderDate).toLocaleDateString()}`
             : 'Set up automatic reminder if payment not received'
           }
@@ -2364,7 +2349,7 @@ function PaymentReminderSection({
                 </button>
               </div>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div className="bg-neutral-50 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
@@ -2386,11 +2371,10 @@ function PaymentReminderSection({
                     <button
                       key={days}
                       onClick={() => setReminderDays(days)}
-                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        reminderDays === days
-                          ? 'bg-[#476E66] text-white'
-                          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                      }`}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${reminderDays === days
+                        ? 'bg-[#476E66] text-white'
+                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                        }`}
                     >
                       {days} days
                     </button>
@@ -2425,7 +2409,7 @@ function PaymentReminderSection({
                 </div>
               </div>
             </div>
-            
+
             <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
               <button
                 onClick={handleSendReminderNow}
@@ -2460,23 +2444,23 @@ function PaymentReminderSection({
   );
 }
 
-function InvoiceDetailView({ 
-  invoice, 
-  clients, 
-  projects, 
-  companyId, 
+function InvoiceDetailView({
+  invoice,
+  clients,
+  projects,
+  companyId,
   company,
-  onClose, 
+  onClose,
   onUpdate,
   getStatusColor,
-  formatCurrency 
-}: { 
-  invoice: Invoice; 
+  formatCurrency
+}: {
+  invoice: Invoice;
   clients: Client[];
   projects: Project[];
   companyId: string;
   company: { company_name?: string; logo_url?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string } | null;
-  onClose: () => void; 
+  onClose: () => void;
   onUpdate: () => void;
   getStatusColor: (status?: string) => string;
   formatCurrency: (amount?: number) => string;
@@ -2488,7 +2472,7 @@ function InvoiceDetailView({
   const [calculatorType, setCalculatorType] = useState(invoice.calculator_type || 'time_material');
   const [autoSave, setAutoSave] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   // Invoice details state
   const [invoiceNumber, setInvoiceNumber] = useState(invoice.invoice_number || '');
   const [poNumber, setPoNumber] = useState('');
@@ -2498,12 +2482,12 @@ function InvoiceDetailView({
   const [sentDate, setSentDate] = useState((invoice as any).sent_at ? new Date((invoice as any).sent_at).toISOString().split('T')[0] : '');
   const [dueDate, setDueDate] = useState(invoice.due_date ? invoice.due_date.split('T')[0] : '');
   const [notes, setNotes] = useState('');
-  
+
   // Send invoice modal state
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [emailContent, setEmailContent] = useState('');
-  
+
   // Initialize email content when modal opens
   useEffect(() => {
     if (showSendModal && invoice.client?.name) {
@@ -2511,7 +2495,7 @@ function InvoiceDetailView({
       setEmailContent(defaultContent);
     }
   }, [showSendModal, invoice, invoiceNumber, dueDate]);
-  
+
   // Calculate due date from sent date and terms
   useEffect(() => {
     if (sentDate && terms) {
@@ -2526,7 +2510,7 @@ function InvoiceDetailView({
       setDueDate(sent.toISOString().split('T')[0]);
     }
   }, [sentDate, terms]);
-  
+
   // Line items state - will be populated from tasks
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
   const [lineItemsLoaded, setLineItemsLoaded] = useState(false);
@@ -2534,11 +2518,11 @@ function InvoiceDetailView({
   // Time entries state
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
   const [timeTotal, setTimeTotal] = useState(0);
-  
+
   // Expenses state
   const [expenses, setExpenses] = useState<any[]>([]);
   const [expensesTotal, setExpensesTotal] = useState(0);
-  
+
   // Reminder history state
   const [reminderHistory, setReminderHistory] = useState<ReminderHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -2585,7 +2569,7 @@ function InvoiceDetailView({
         .from('invoice_line_items')
         .select('id, description, quantity, unit_price, amount, billing_type, billed_percentage, task_id')
         .eq('invoice_id', invoice.id);
-      
+
       if (savedLineItems && savedLineItems.length > 0) {
         // Get task budgets
         let taskMap: Record<string, any> = {};
@@ -2598,7 +2582,7 @@ function InvoiceDetailView({
             taskMap = Object.fromEntries(tasks.map(t => [t.id, t]));
           }
         }
-        
+
         // Get prior invoice line items (from invoices created BEFORE this one)
         const priorBilledMap: Record<string, number> = {};
         if (invoice.project_id && invoice.created_at) {
@@ -2608,7 +2592,7 @@ function InvoiceDetailView({
             .eq('invoices.project_id', invoice.project_id)
             .lt('invoices.created_at', invoice.created_at)
             .not('task_id', 'is', null);
-          
+
           if (priorLineItems) {
             // Sum up prior billing percentages for each task
             priorLineItems.forEach((item: any) => {
@@ -2618,14 +2602,14 @@ function InvoiceDetailView({
             });
           }
         }
-        
+
         // Use the saved line items with correct prior billing
         const items: InvoiceLineItem[] = savedLineItems.map(item => {
           const task = item.task_id ? taskMap[item.task_id] : null;
           const taskBudget = task?.total_budget || task?.estimated_fees || item.amount;
           const itemBilledPct = item.billed_percentage || (taskBudget > 0 ? (item.amount / taskBudget) * 100 : 0);
           const priorBilledPct = item.task_id ? (priorBilledMap[item.task_id] || 0) : 0;
-          
+
           return {
             id: item.id,
             description: item.description || 'Service',
@@ -2649,15 +2633,15 @@ function InvoiceDetailView({
           .from('tasks')
           .select('id, name, estimated_fees, estimated_hours, actual_hours, billing_unit')
           .eq('project_id', invoice.project_id);
-        
+
         if (tasks && tasks.length > 0) {
           const items: InvoiceLineItem[] = tasks.map(task => {
             // Use billing_unit field to determine if hour-based or unit-based
             const isHourBased = task.billing_unit !== 'unit';
-            const quantity = isHourBased 
+            const quantity = isHourBased
               ? (task.actual_hours || task.estimated_hours || 1)
               : 1;
-            const rate = isHourBased 
+            const rate = isHourBased
               ? (task.estimated_fees ? (task.estimated_fees / (task.estimated_hours || 1)) : 0)
               : (task.estimated_fees || 0);
             return {
@@ -2710,7 +2694,7 @@ function InvoiceDetailView({
         .select('id, name, is_default')
         .eq('company_id', companyId)
         .order('is_default', { ascending: false });
-      
+
       if (data) {
         setPdfTemplates(data);
         if (!selectedTemplateId && data.length > 0) {
@@ -2731,7 +2715,7 @@ function InvoiceDetailView({
           .select('*, profiles(full_name), tasks(name)')
           .eq('project_id', invoice.project_id)
           .eq('approval_status', 'approved');
-        
+
         if (data) {
           setTimeEntries(data);
           const total = data.reduce((sum, entry) => sum + (entry.billable_amount || 0), 0);
@@ -2751,7 +2735,7 @@ function InvoiceDetailView({
           .select('*')
           .eq('project_id', invoice.project_id)
           .eq('approval_status', 'approved');
-        
+
         if (data) {
           setExpenses(data);
           const total = data.reduce((sum, exp) => sum + (exp.amount || 0), 0);
@@ -2768,12 +2752,12 @@ function InvoiceDetailView({
   const total = subtotal + taxAmount;
 
   const addLineItem = () => {
-    setLineItems([...lineItems, { 
-      id: Date.now().toString(), 
-      description: '', 
-      quantity: 1, 
-      rate: 0, 
-      amount: 0 
+    setLineItems([...lineItems, {
+      id: Date.now().toString(),
+      description: '',
+      quantity: 1,
+      rate: 0,
+      amount: 0
     }]);
   };
 
@@ -2808,17 +2792,17 @@ function InvoiceDetailView({
         pdf_template_id: selectedTemplateId || null,
         calculator_type: calculatorType,
       });
-      
+
       // Save line items - delete existing and insert new ones
       const { error: deleteError } = await supabase
         .from('invoice_line_items')
         .delete()
         .eq('invoice_id', invoice.id);
-      
+
       if (deleteError) {
         console.error('Failed to delete old line items:', deleteError);
       }
-      
+
       // Insert new line items
       if (lineItems.length > 0) {
         const itemsToInsert = lineItems.map(item => ({
@@ -2831,16 +2815,16 @@ function InvoiceDetailView({
           billing_type: (item as any).billing_type || null,
           billed_percentage: item.billedPercentage || null,
         }));
-        
+
         const { error: insertError } = await supabase
           .from('invoice_line_items')
           .insert(itemsToInsert);
-        
+
         if (insertError) {
           console.error('Failed to save line items:', insertError);
         }
       }
-      
+
       onUpdate();
     } catch (err) {
       console.error('Failed to save invoice:', err);
@@ -2878,11 +2862,10 @@ function InvoiceDetailView({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-neutral-500 text-neutral-600'
-                    : 'border-transparent text-neutral-500 hover:text-neutral-700'
-                }`}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                  ? 'border-neutral-500 text-neutral-600'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -2893,11 +2876,11 @@ function InvoiceDetailView({
               <button className="p-2 hover:bg-neutral-100 rounded-lg text-neutral-500">
                 <RefreshCw className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={() => {
                   const client = clients.find(c => c.id === invoice.client_id);
                   const project = projects.find(p => p.id === invoice.project_id);
-                  
+
                   // Build line items HTML
                   let lineItemsHtml = '';
                   if (calculatorType === 'milestone' || calculatorType === 'percentage') {
@@ -2914,17 +2897,17 @@ function InvoiceDetailView({
                         </thead>
                         <tbody>
                           ${lineItems.map(item => {
-                            const priorPct = item.priorBilledPercentage || 0;
-                            const currPct = item.billedPercentage || 0;
-                            const budget = item.taskBudget || item.amount;
-                            return `<tr>
+                      const priorPct = item.priorBilledPercentage || 0;
+                      const currPct = item.billedPercentage || 0;
+                      const budget = item.taskBudget || item.amount;
+                      return `<tr>
                               <td>${item.description}</td>
                               <td style="text-align:center;">${priorPct}%</td>
                               <td style="text-align:center;color:#16a34a;font-weight:600;">${currPct}%</td>
                               <td style="text-align:right;">${formatCurrency(budget)}</td>
                               <td style="text-align:right;font-weight:600;">${formatCurrency(item.amount)}</td>
                             </tr>`;
-                          }).join('')}
+                    }).join('')}
                         </tbody>
                       </table>`;
                   } else {
@@ -3055,7 +3038,7 @@ function InvoiceDetailView({
               <button className="px-4 py-2 text-sm text-neutral-900 hover:bg-neutral-100 rounded-lg font-medium">Edit</button>
               <button className="px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50">Refresh</button>
               <button className="px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50">Snapshot</button>
-              <button 
+              <button
                 onClick={() => setShowSendModal(true)}
                 className="px-4 py-2 bg-[#476E66] text-white rounded-lg text-sm font-medium hover:bg-[#3a5b54] flex items-center gap-2"
               >
@@ -3106,7 +3089,7 @@ function InvoiceDetailView({
                     {[invoice.client.city, invoice.client.state, invoice.client.zip].filter(Boolean).join(', ')}
                   </p>
                 )}
-                
+
                 {invoice.client?.phone && <p className="text-neutral-600">{invoice.client.phone}</p>}
                 {invoice.client?.website && <p className="text-neutral-600">{invoice.client.website}</p>}
               </div>
@@ -3140,28 +3123,29 @@ function InvoiceDetailView({
                           const priorAmt = ((item.taskBudget || item.amount) * (item.priorBilledPercentage || 0)) / 100;
                           const currentAmt = ((item.taskBudget || item.amount) * (item.billedPercentage || 0)) / 100;
                           return (
-                          <tr key={item.id}>
-                            <td className="py-3">{item.description}</td>
-                            <td className="py-3 text-center">
-                              <div className="text-xs">
-                                <span className="inline-flex items-center justify-center w-14 h-5 bg-neutral-100 rounded font-medium text-neutral-500">
-                                  {item.priorBilledPercentage || 0}%
-                                </span>
-                                <p className="text-neutral-500 mt-0.5">{formatCurrency(priorAmt)}</p>
-                              </div>
-                            </td>
-                            <td className="py-3 text-center">
-                              <div className="text-xs">
-                                <span className="inline-flex items-center justify-center w-14 h-5 bg-green-100 rounded font-medium text-green-700">
-                                  {item.billedPercentage || 0}%
-                                </span>
-                                <p className="text-green-600 mt-0.5">{formatCurrency(currentAmt)}</p>
-                              </div>
-                            </td>
-                            <td className="py-3 text-right text-neutral-500">{formatCurrency(item.taskBudget || item.amount)}</td>
-                            <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
-                          </tr>
-                        );})}
+                            <tr key={item.id}>
+                              <td className="py-3">{item.description}</td>
+                              <td className="py-3 text-center">
+                                <div className="text-xs">
+                                  <span className="inline-flex items-center justify-center w-14 h-5 bg-neutral-100 rounded font-medium text-neutral-500">
+                                    {item.priorBilledPercentage || 0}%
+                                  </span>
+                                  <p className="text-neutral-500 mt-0.5">{formatCurrency(priorAmt)}</p>
+                                </div>
+                              </td>
+                              <td className="py-3 text-center">
+                                <div className="text-xs">
+                                  <span className="inline-flex items-center justify-center w-14 h-5 bg-green-100 rounded font-medium text-green-700">
+                                    {item.billedPercentage || 0}%
+                                  </span>
+                                  <p className="text-green-600 mt-0.5">{formatCurrency(currentAmt)}</p>
+                                </div>
+                              </td>
+                              <td className="py-3 text-right text-neutral-500">{formatCurrency(item.taskBudget || item.amount)}</td>
+                              <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                     {/* Billing Summary */}
@@ -3295,7 +3279,7 @@ function InvoiceDetailView({
           <div className="flex-1 flex flex-col lg:flex-row overflow-auto lg:overflow-hidden">
             {/* Invoice Details Sidebar - Shows first on mobile */}
             <div className="w-full lg:w-80 lg:order-2 shrink-0 bg-white lg:border-l border-neutral-200 p-3 sm:p-4 lg:overflow-auto space-y-3">
-              
+
               {/* Invoice Info Card */}
               <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-100">
@@ -3304,21 +3288,21 @@ function InvoiceDetailView({
                 <div className="p-4 space-y-3">
                   <div>
                     <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Invoice Number</label>
-                    <input 
-                      type="text" 
-                      value={invoiceNumber} 
-                      onChange={(e) => setInvoiceNumber(e.target.value)} 
-                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none" 
+                    <input
+                      type="text"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm font-medium bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none"
                     />
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">PO Number <span className="text-neutral-300">(Optional)</span></label>
-                    <input 
-                      type="text" 
-                      value={poNumber} 
-                      onChange={(e) => setPoNumber(e.target.value)} 
-                      placeholder="e.g. PO-12345" 
-                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none placeholder:text-neutral-300" 
+                    <input
+                      type="text"
+                      value={poNumber}
+                      onChange={(e) => setPoNumber(e.target.value)}
+                      placeholder="e.g. PO-12345"
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none placeholder:text-neutral-300"
                     />
                   </div>
                 </div>
@@ -3332,9 +3316,9 @@ function InvoiceDetailView({
                 <div className="p-4 space-y-3">
                   <div>
                     <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Payment Terms</label>
-                    <select 
-                      value={terms} 
-                      onChange={(e) => setTerms(e.target.value)} 
+                    <select
+                      value={terms}
+                      onChange={(e) => setTerms(e.target.value)}
                       className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none cursor-pointer"
                     >
                       <option value="Due on Receipt">Due on Receipt</option>
@@ -3346,11 +3330,11 @@ function InvoiceDetailView({
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Due Date</label>
-                    <input 
-                      type="date" 
-                      value={dueDate} 
-                      onChange={(e) => setDueDate(e.target.value)} 
-                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none" 
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none"
                     />
                   </div>
                 </div>
@@ -3363,26 +3347,25 @@ function InvoiceDetailView({
                 </div>
                 <div className="p-4 space-y-4">
                   <div className="flex items-center gap-3">
-                    <select 
-                      value={status} 
-                      onChange={(e) => setStatus(e.target.value)} 
-                      className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer ${
-                        status === 'draft' ? 'bg-neutral-100 text-neutral-700' :
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-sm font-medium border-0 outline-none cursor-pointer ${status === 'draft' ? 'bg-neutral-100 text-neutral-700' :
                         status === 'sent' ? 'bg-blue-50 text-blue-700' :
-                        status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
-                        'bg-neutral-100 text-neutral-700'
-                      }`}
+                          status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                            'bg-neutral-100 text-neutral-700'
+                        }`}
                     >
                       <option value="draft">Draft</option>
                       <option value="sent">Sent</option>
                       <option value="paid">Paid</option>
                     </select>
                     {status !== 'draft' && (
-                      <input 
-                        type="date" 
-                        value={sentDate} 
-                        onChange={(e) => setSentDate(e.target.value)} 
-                        className="w-32 px-2 py-2 border border-neutral-200 rounded-lg text-xs bg-white" 
+                      <input
+                        type="date"
+                        value={sentDate}
+                        onChange={(e) => setSentDate(e.target.value)}
+                        className="w-32 px-2 py-2 border border-neutral-200 rounded-lg text-xs bg-white"
                         title="Sent Date"
                       />
                     )}
@@ -3415,7 +3398,7 @@ function InvoiceDetailView({
               </div>
 
               {/* Payment Reminder Section */}
-              <PaymentReminderSection 
+              <PaymentReminderSection
                 invoice={invoice}
                 sentDate={sentDate}
                 formatCurrency={formatCurrency}
@@ -3761,7 +3744,7 @@ function InvoiceDetailView({
                         </div>
                       ))}
                     </div>
-                    
+
                     {/* Mobile total */}
                     <div className="border-t border-neutral-200 bg-neutral-50 p-3 flex justify-between items-center">
                       <span className="font-semibold text-sm text-neutral-900">TOTAL</span>
@@ -3799,9 +3782,8 @@ function InvoiceDetailView({
                     <div key={entry.id} className="p-4 hover:bg-neutral-50">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            entry.status === 'sent' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
-                          }`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${entry.status === 'sent' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
+                            }`}>
                             {entry.status === 'sent' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                           </div>
                           <div>
@@ -3818,9 +3800,8 @@ function InvoiceDetailView({
                             )}
                           </div>
                         </div>
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                          entry.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                        }`}>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${entry.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                          }`}>
                           {entry.status === 'sent' ? 'Sent' : 'Failed'}
                         </span>
                       </div>
@@ -3910,7 +3891,7 @@ function InvoiceDetailView({
                     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                     const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
                       method: 'POST',
-                      headers: { 
+                      headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${supabaseAnonKey}`
                       },

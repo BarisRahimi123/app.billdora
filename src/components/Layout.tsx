@@ -8,7 +8,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, Client, Invoice, Task, notificationsApi, Notification as AppNotification } from '../lib/api';
 import { DEFAULT_HOURLY_RATE, MIN_TIMER_SAVE_SECONDS, NOTIFICATIONS_LIMIT, SEARCH_RESULTS_PER_TYPE, SEARCH_DEBOUNCE_MS } from '../lib/constants';
 import { useDebounce } from '../hooks/useDebounce';
-import { 
+import {
   LayoutDashboard, Users, FolderKanban, Clock, FileText, Calendar, BarChart3, Settings, LogOut,
   Search, Bell, ChevronDown, ChevronRight, X, Play, Pause, Square, Menu, PieChart, ArrowLeft, Wallet, FileSpreadsheet, Camera
 } from 'lucide-react';
@@ -67,7 +67,7 @@ export default function Layout() {
     if (localStorage.getItem('onboarding_completed') === 'true') return false;
     return true; // Will be updated when profile loads
   });
-  
+
   // Update onboarding state when profile loads (check DB preference)
   useEffect(() => {
     if (profile?.onboarding_dismissed) {
@@ -81,13 +81,13 @@ export default function Layout() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const timerInterval = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Notifications state
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
-  
+
   // Search cache - loaded once, searched locally
   const [searchCache, setSearchCache] = useState<{
     projects: Project[];
@@ -139,7 +139,7 @@ export default function Layout() {
       handleMarkAsRead(notif.id);
     }
     setNotificationsOpen(false);
-    
+
     // Navigate based on reference type
     if (notif.reference_type === 'quote' && notif.reference_id) {
       if (notif.type?.includes('signed') || notif.type?.includes('approved') || notif.type?.includes('declined') || notif.type?.includes('response_submitted')) {
@@ -175,9 +175,9 @@ export default function Layout() {
       timerInterval.current = null;
     }
     // Cleanup function to prevent memory leaks
-    return () => { 
+    return () => {
       if (timerInterval.current) {
-        clearInterval(timerInterval.current); 
+        clearInterval(timerInterval.current);
         timerInterval.current = null;
       }
     };
@@ -188,7 +188,7 @@ export default function Layout() {
     if (timerProjectId && profile?.company_id) {
       api.getTasks(timerProjectId).then(tasks => {
         // Filter tasks: show only tasks user should work on
-        const filtered = tasks.filter(t => 
+        const filtered = tasks.filter(t =>
           !t.collaborator_company_id || // Main company's own tasks
           t.collaborator_company_id === profile.company_id // Collaborator's assigned tasks
         );
@@ -231,7 +231,7 @@ export default function Layout() {
   useEffect(() => {
     const loadSearchCache = async () => {
       if (!searchOpen || searchCache || !profile?.company_id) return;
-      
+
       try {
         const [projectsData, clientsData, invoicesData] = await Promise.all([
           api.getProjects(profile.company_id),
@@ -243,7 +243,7 @@ export default function Layout() {
         console.error('Failed to load search data:', error);
       }
     };
-    
+
     loadSearchCache();
   }, [searchOpen, profile?.company_id, searchCache]);
 
@@ -255,7 +255,7 @@ export default function Layout() {
   // Search locally from cache (instant, no network requests) - using debounced query
   const filteredSearchResults = useMemo(() => {
     if (!debouncedSearchQuery.trim() || !searchCache) return [];
-    
+
     const query = debouncedSearchQuery.toLowerCase();
     const results: SearchResult[] = [];
 
@@ -354,7 +354,7 @@ export default function Layout() {
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-page)' }}>
       {/* Mobile Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -366,33 +366,32 @@ export default function Layout() {
           ${sidebarExpanded ? 'lg:w-64' : 'lg:w-20'} 
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
           lg:translate-x-0
-          w-64 text-white transition-all duration-300 flex flex-col fixed h-full z-50
+          w-64 text-white transition-all duration-300 flex flex-col fixed h-full z-50 border-r border-white/10
         ` } style={{ backgroundColor: '#476E66' }}>
-          <div className="p-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
-            {(sidebarExpanded || sidebarOpen) && <img src="/billdora-logo.png" alt="Billdora" className="h-8" />}
-            {/* Only show toggle button on desktop (lg+) for expand/collapse, on mobile use X to close */}
-            <button 
+          <div className="h-16 flex items-center justify-between px-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            {(sidebarExpanded || sidebarOpen) && <img src="/billdora-logo.png" alt="Billdora" className="h-6 opacity-90" />}
+            {/* Toggle Button */}
+            <button
               onClick={() => {
                 if (window.innerWidth >= 1024) {
                   setSidebarExpanded(!sidebarExpanded);
                 } else {
                   setSidebarOpen(false);
                 }
-              }} 
-              className="p-2 hover:bg-white/20 rounded-lg lg:block hidden"
+              }}
+              className="p-1.5 hover:bg-white/10 rounded-md lg:block hidden transition-colors"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4 text-white/80" />
             </button>
-            {/* Mobile close button */}
-            <button 
-              onClick={() => setSidebarOpen(false)} 
-              className="p-2 hover:bg-white/20 rounded-lg lg:hidden"
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-1.5 hover:bg-white/10 rounded-md lg:hidden transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 text-white/80" />
             </button>
           </div>
 
-          <nav className="flex-1 py-4 overflow-y-auto">
+          <nav className="flex-1 py-6 px-3 overflow-y-auto space-y-1">
             {/* Main Nav Items */}
             {mainNavItems.filter(item => {
               if (!canViewFinancials && (item.path === '/invoicing' || item.path === '/sales')) return false;
@@ -403,53 +402,50 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-colors ${
-                    isActive ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${isActive ? 'bg-black/20 text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'
                   }`
                 }
               >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                {(sidebarExpanded || sidebarOpen) && <span className="text-sm font-medium">{item.label}</span>}
+                <item.icon className="w-4 h-4 flex-shrink-0 opacity-80 group-hover:opacity-100" />
+                {(sidebarExpanded || sidebarOpen) && <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>}
               </NavLink>
             ))}
 
             {/* Financials Section (Expandable) */}
             {isAdmin && (
-              <div className="mt-2">
+              <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={() => setFinancialsExpanded(!financialsExpanded)}
-                  className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-colors w-[calc(100%-1rem)] ${
-                    ['/financials', '/reports', '/receipts'].includes(location.pathname)
-                      ? 'bg-white/20 text-white'
-                      : 'text-white/70 hover:text-white hover:bg-white/10'
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all w-full group ${['/financials', '/reports', '/receipts'].includes(location.pathname)
+                    ? 'bg-black/20 text-white'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
                 >
-                  <BarChart3 className="w-5 h-5 flex-shrink-0" />
+                  <BarChart3 className="w-4 h-4 flex-shrink-0 opacity-80 group-hover:opacity-100" />
                   {(sidebarExpanded || sidebarOpen) && (
                     <>
-                      <span className="text-sm font-medium flex-1 text-left">Financials</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest flex-1 text-left">Financials</span>
                       {financialsExpanded ? (
-                        <ChevronDown className="w-4 h-4" />
+                        <ChevronDown className="w-3 h-3 opacity-70" />
                       ) : (
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-3 h-3 opacity-70" />
                       )}
                     </>
                   )}
                 </button>
                 {financialsExpanded && (sidebarExpanded || sidebarOpen) && (
-                  <div className="ml-4 mt-1">
+                  <div className="ml-3 mt-1 pl-3 border-l border-white/10 space-y-1">
                     {financialsSubItems.map((item) => (
                       <NavLink
                         key={item.path}
                         to={item.path}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-xl transition-colors ${
-                            isActive ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'
+                          `flex items-center gap-3 px-3 py-2 rounded-md transition-all group ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white hover:bg-white/5'
                           }`
                         }
                       >
-                        <item.icon className="w-4 h-4 flex-shrink-0" />
-                        <span className="text-sm">{item.label}</span>
+                        <item.icon className="w-3.5 h-3.5 flex-shrink-0 opacity-80" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
                       </NavLink>
                     ))}
                   </div>
@@ -458,26 +454,25 @@ export default function Layout() {
             )}
           </nav>
 
-          <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+          <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             {isAdmin && (
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>
-                  `flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-colors mb-2 ${
-                    isActive ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+                  `flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-all mb-1 group ${isActive ? 'bg-black/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'
                   }`
                 }
               >
-                <Settings className="w-5 h-5" />
-                {(sidebarExpanded || sidebarOpen) && <span className="text-sm font-medium">Settings</span>}
+                <Settings className="w-4 h-4 flex-shrink-0 opacity-80 group-hover:opacity-100" />
+                {(sidebarExpanded || sidebarOpen) && <span className="text-[10px] font-bold uppercase tracking-widest">Settings</span>}
               </NavLink>
             )}
             <button
               onClick={() => signOut()}
-              className="flex items-center gap-3 w-full px-4 py-3 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2.5 text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all group"
             >
-              <LogOut className="w-5 h-5" />
-              {(sidebarExpanded || sidebarOpen) && <span className="text-sm font-medium">Sign Out</span>}
+              <LogOut className="w-4 h-4 flex-shrink-0 opacity-80 group-hover:opacity-100" />
+              {(sidebarExpanded || sidebarOpen) && <span className="text-[10px] font-bold uppercase tracking-widest">Sign Out</span>}
             </button>
           </div>
         </aside>
@@ -490,14 +485,14 @@ export default function Layout() {
           <div className="flex items-center justify-between px-3 lg:px-5 py-1.5 lg:py-3">
             {/* Mobile menu button - Only show when sidebar is hidden (mobile/tablet portrait) */}
             {!hideSidebar && (
-              <button 
+              <button
                 onClick={() => setSidebarOpen(true)}
                 className="p-2 hover:bg-neutral-100 rounded-lg lg:hidden"
               >
                 <Menu className="w-5 h-5" />
               </button>
             )}
-            
+
             {/* Spacer when no mobile menu button */}
             {hideSidebar && <div className="w-9 lg:hidden" />}
 
@@ -577,7 +572,7 @@ export default function Layout() {
 
               {/* Notifications */}
               <div ref={notificationsRef} className="relative">
-                <button 
+                <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
                   className="relative p-1.5 hover:bg-neutral-100 rounded-lg transition-colors"
                 >
@@ -594,7 +589,7 @@ export default function Layout() {
                     <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
                       <h3 className="font-semibold text-neutral-900 text-sm">Notifications</h3>
                       {unreadCount > 0 && (
-                        <button 
+                        <button
                           onClick={handleMarkAllAsRead}
                           className="text-xs text-[#476E66] hover:underline"
                         >
@@ -609,7 +604,7 @@ export default function Layout() {
                         </div>
                       ) : (
                         notifications.map((notif) => (
-                          <div 
+                          <div
                             key={notif.id}
                             onClick={() => handleNotificationClick(notif)}
                             className={`p-3 border-b border-neutral-50 hover:bg-neutral-50 cursor-pointer ${!notif.is_read ? 'bg-blue-50/50' : ''}`}
@@ -661,13 +656,13 @@ export default function Layout() {
                       My Profile
                     </button>
                     {isAdmin && (
-                    <button
-                      onClick={() => { navigate('/settings'); setUserMenuOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Settings
-                    </button>
+                      <button
+                        onClick={() => { navigate('/settings'); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </button>
                     )}
                     <div className="my-1 border-t border-neutral-100"></div>
                     <button
