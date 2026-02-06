@@ -6355,3 +6355,431 @@ function NotificationsTab() {
     </div>
   );
 }
+
+// ============================================
+// IMPORT/EXPORT TAB
+// ============================================
+function ImportExportTab({ companyId, showToast }: { companyId: string; showToast: (msg: string, type: 'success' | 'error') => void }) {
+  const [importingProjects, setImportingProjects] = useState(false);
+  const [importingClients, setImportingClients] = useState(false);
+  const [importResults, setImportResults] = useState<{ success: number; errors: string[] } | null>(null);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const projectsCsvInputRef = useRef<HTMLInputElement>(null);
+  const clientsCsvInputRef = useRef<HTMLInputElement>(null);
+
+  // Load clients for matching
+  useEffect(() => {
+    api.getClients(companyId).then(data => {
+      setClients(data.map(c => ({ id: c.id, name: c.name })));
+    }).catch(console.error);
+  }, [companyId]);
+
+  // Download CSV Template for Projects
+  const downloadProjectsTemplate = () => {
+    const headers = ['project_name', 'client_name', 'description', 'status', 'budget', 'start_date', 'end_date', 'hourly_rate'];
+    const exampleRows = [
+      ['Website Redesign', 'Acme Corporation', 'Complete website overhaul with new design', 'active', '15000', '2026-02-01', '2026-04-30', '150'],
+      ['Mobile App Development', 'Acme Corporation', 'iOS and Android mobile application', 'active', '45000', '2026-03-01', '2026-08-31', '175'],
+      ['Brand Identity', 'TechStart Inc', 'Logo and brand guidelines', 'completed', '5000', '2025-11-01', '2025-12-15', '125'],
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'billdora_projects_template.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  // Download CSV Template for Clients
+  const downloadClientsTemplate = () => {
+    const headers = ['company_name', 'display_name', 'email', 'phone', 'address', 'city', 'state', 'zip', 'website', 'primary_contact_name', 'primary_contact_email', 'primary_contact_phone', 'billing_contact_name', 'billing_contact_email'];
+    const exampleRows = [
+      ['Acme Corporation', 'Acme', 'contact@acme.com', '(555) 123-4567', '123 Main St', 'New York', 'NY', '10001', 'https://acme.com', 'John Smith', 'john@acme.com', '(555) 123-4568', 'Jane Doe', 'billing@acme.com'],
+      ['TechStart Inc', 'TechStart', 'info@techstart.io', '(555) 987-6543', '456 Innovation Blvd', 'San Francisco', 'CA', '94102', 'https://techstart.io', 'Mike Johnson', 'mike@techstart.io', '(555) 987-6544', '', ''],
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'billdora_clients_template.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  // Parse CSV file
+  const parseCSV = (text: string): string[][] => {
+    const lines = text.split('\n').filter(line => line.trim());
+    return lines.map(line => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    });
+  };
+
+  // Import Projects from CSV
+  const handleProjectsImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingProjects(true);
+    setImportResults(null);
+
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      
+      if (rows.length < 2) {
+        throw new Error('CSV file must have a header row and at least one data row');
+      }
+
+      const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const dataRows = rows.slice(1);
+
+      // Map header indices
+      const indices = {
+        project_name: headers.indexOf('project_name'),
+        client_name: headers.indexOf('client_name'),
+        description: headers.indexOf('description'),
+        status: headers.indexOf('status'),
+        budget: headers.indexOf('budget'),
+        start_date: headers.indexOf('start_date'),
+        end_date: headers.indexOf('end_date'),
+        hourly_rate: headers.indexOf('hourly_rate'),
+      };
+
+      if (indices.project_name === -1) {
+        throw new Error('CSV must have a "project_name" column');
+      }
+
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const rowNum = i + 2; // +2 because of 0-index and header row
+
+        try {
+          const projectName = row[indices.project_name]?.trim();
+          if (!projectName) {
+            errors.push(`Row ${rowNum}: Missing project name`);
+            continue;
+          }
+
+          // Find client by name (case-insensitive)
+          const clientName = indices.client_name !== -1 ? row[indices.client_name]?.trim() : '';
+          let clientId: string | undefined;
+          
+          if (clientName) {
+            const matchedClient = clients.find(c => 
+              c.name.toLowerCase() === clientName.toLowerCase()
+            );
+            if (matchedClient) {
+              clientId = matchedClient.id;
+            } else {
+              errors.push(`Row ${rowNum}: Client "${clientName}" not found - project created without client`);
+            }
+          }
+
+          // Parse status
+          const statusRaw = indices.status !== -1 ? row[indices.status]?.trim().toLowerCase() : 'active';
+          const validStatuses = ['active', 'completed', 'on_hold', 'cancelled', 'in_progress'];
+          const status = validStatuses.includes(statusRaw) ? statusRaw : 'active';
+
+          // Create project
+          await api.createProject({
+            company_id: companyId,
+            client_id: clientId,
+            name: projectName,
+            description: indices.description !== -1 ? row[indices.description]?.trim() : undefined,
+            status,
+            budget: indices.budget !== -1 && row[indices.budget] ? parseFloat(row[indices.budget]) || undefined : undefined,
+            start_date: indices.start_date !== -1 ? row[indices.start_date]?.trim() : undefined,
+            end_date: indices.end_date !== -1 ? row[indices.end_date]?.trim() : undefined,
+            hourly_rate: indices.hourly_rate !== -1 && row[indices.hourly_rate] ? parseFloat(row[indices.hourly_rate]) || undefined : undefined,
+          });
+
+          successCount++;
+        } catch (err: any) {
+          errors.push(`Row ${rowNum}: ${err?.message || 'Failed to create project'}`);
+        }
+      }
+
+      setImportResults({ success: successCount, errors });
+      
+      if (successCount > 0) {
+        showToast(`Successfully imported ${successCount} project${successCount !== 1 ? 's' : ''}`, 'success');
+      }
+      if (errors.length > 0 && successCount === 0) {
+        showToast('Import failed - check errors below', 'error');
+      }
+
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to import projects', 'error');
+      setImportResults({ success: 0, errors: [err?.message || 'Unknown error'] });
+    } finally {
+      setImportingProjects(false);
+      // Reset file input
+      if (projectsCsvInputRef.current) {
+        projectsCsvInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Import Clients from CSV
+  const handleClientsImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportingClients(true);
+    setImportResults(null);
+
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      
+      if (rows.length < 2) {
+        throw new Error('CSV file must have a header row and at least one data row');
+      }
+
+      const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      const dataRows = rows.slice(1);
+
+      // Map header indices
+      const indices = {
+        company_name: headers.indexOf('company_name'),
+        display_name: headers.indexOf('display_name'),
+        email: headers.indexOf('email'),
+        phone: headers.indexOf('phone'),
+        address: headers.indexOf('address'),
+        city: headers.indexOf('city'),
+        state: headers.indexOf('state'),
+        zip: headers.indexOf('zip'),
+        website: headers.indexOf('website'),
+        primary_contact_name: headers.indexOf('primary_contact_name'),
+        primary_contact_email: headers.indexOf('primary_contact_email'),
+        primary_contact_phone: headers.indexOf('primary_contact_phone'),
+        billing_contact_name: headers.indexOf('billing_contact_name'),
+        billing_contact_email: headers.indexOf('billing_contact_email'),
+      };
+
+      if (indices.company_name === -1) {
+        throw new Error('CSV must have a "company_name" column');
+      }
+
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const rowNum = i + 2;
+
+        try {
+          const companyName = row[indices.company_name]?.trim();
+          if (!companyName) {
+            errors.push(`Row ${rowNum}: Missing company name`);
+            continue;
+          }
+
+          // Check for duplicate client
+          const existingClient = clients.find(c => c.name.toLowerCase() === companyName.toLowerCase());
+          if (existingClient) {
+            errors.push(`Row ${rowNum}: Client "${companyName}" already exists - skipped`);
+            continue;
+          }
+
+          const newClient = await api.createClient({
+            company_id: companyId,
+            name: companyName,
+            display_name: indices.display_name !== -1 ? row[indices.display_name]?.trim() || companyName : companyName,
+            email: indices.email !== -1 ? row[indices.email]?.trim() : undefined,
+            phone: indices.phone !== -1 ? row[indices.phone]?.trim() : undefined,
+            address: indices.address !== -1 ? row[indices.address]?.trim() : undefined,
+            city: indices.city !== -1 ? row[indices.city]?.trim() : undefined,
+            state: indices.state !== -1 ? row[indices.state]?.trim() : undefined,
+            zip: indices.zip !== -1 ? row[indices.zip]?.trim() : undefined,
+            website: indices.website !== -1 ? row[indices.website]?.trim() : undefined,
+            primary_contact_name: indices.primary_contact_name !== -1 ? row[indices.primary_contact_name]?.trim() : undefined,
+            primary_contact_email: indices.primary_contact_email !== -1 ? row[indices.primary_contact_email]?.trim() : undefined,
+            primary_contact_phone: indices.primary_contact_phone !== -1 ? row[indices.primary_contact_phone]?.trim() : undefined,
+            billing_contact_name: indices.billing_contact_name !== -1 ? row[indices.billing_contact_name]?.trim() : undefined,
+            billing_contact_email: indices.billing_contact_email !== -1 ? row[indices.billing_contact_email]?.trim() : undefined,
+          });
+
+          // Add to local clients list for project matching
+          setClients(prev => [...prev, { id: newClient.id, name: newClient.name }]);
+          successCount++;
+        } catch (err: any) {
+          errors.push(`Row ${rowNum}: ${err?.message || 'Failed to create client'}`);
+        }
+      }
+
+      setImportResults({ success: successCount, errors });
+      
+      if (successCount > 0) {
+        showToast(`Successfully imported ${successCount} client${successCount !== 1 ? 's' : ''}`, 'success');
+      }
+      if (errors.length > 0 && successCount === 0) {
+        showToast('Import failed - check errors below', 'error');
+      }
+
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to import clients', 'error');
+      setImportResults({ success: 0, errors: [err?.message || 'Unknown error'] });
+    } finally {
+      setImportingClients(false);
+      if (clientsCsvInputRef.current) {
+        clientsCsvInputRef.current.value = '';
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-8 max-w-3xl">
+      <div>
+        <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-1">Import / Export</h2>
+        <p className="text-neutral-500 text-xs">Bulk import clients and projects using CSV files</p>
+      </div>
+
+      {/* Import Results */}
+      {importResults && (
+        <div className={`p-4 rounded-lg border ${importResults.success > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            {importResults.success > 0 ? (
+              <Check className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            )}
+            <span className={`font-medium ${importResults.success > 0 ? 'text-green-800' : 'text-red-800'}`}>
+              {importResults.success > 0 ? `${importResults.success} items imported successfully` : 'Import failed'}
+            </span>
+          </div>
+          {importResults.errors.length > 0 && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs font-medium text-neutral-700">Errors:</p>
+              <div className="max-h-32 overflow-y-auto">
+                {importResults.errors.map((err, i) => (
+                  <p key={i} className="text-xs text-red-700">{err}</p>
+                ))}
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => setImportResults(null)}
+            className="mt-3 text-xs text-neutral-500 hover:text-neutral-700"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Import Clients */}
+      <div className="bg-white border border-neutral-200 rounded-lg p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Users className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-neutral-900">Import Clients</h3>
+            <p className="text-xs text-neutral-500 mt-1 mb-4">
+              Upload a CSV file to bulk import clients. Download the template to see the required format.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadClientsTemplate}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </button>
+              <label className={`flex items-center gap-2 px-3 py-2 text-xs font-medium text-white bg-[#476E66] rounded-lg hover:bg-[#3A5B54] transition-colors cursor-pointer ${importingClients ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <Upload className="w-4 h-4" />
+                {importingClients ? 'Importing...' : 'Upload CSV'}
+                <input
+                  ref={clientsCsvInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleClientsImport}
+                  disabled={importingClients}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Import Projects */}
+      <div className="bg-white border border-neutral-200 rounded-lg p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <FileSpreadsheet className="w-5 h-5 text-purple-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-neutral-900">Import Projects</h3>
+            <p className="text-xs text-neutral-500 mt-1 mb-4">
+              Upload a CSV file to bulk import projects. Use the client name to automatically link projects to clients.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={downloadProjectsTemplate}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </button>
+              <label className={`flex items-center gap-2 px-3 py-2 text-xs font-medium text-white bg-[#476E66] rounded-lg hover:bg-[#3A5B54] transition-colors cursor-pointer ${importingProjects ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <Upload className="w-4 h-4" />
+                {importingProjects ? 'Importing...' : 'Upload CSV'}
+                <input
+                  ref={projectsCsvInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleProjectsImport}
+                  disabled={importingProjects}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tips */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">Import Tips</h4>
+        <ul className="text-xs text-amber-700 space-y-1.5">
+          <li>• <strong>Import clients first</strong> before importing projects so they can be linked automatically</li>
+          <li>• The <strong>client_name</strong> in projects must exactly match an existing client name</li>
+          <li>• Dates should be in <strong>YYYY-MM-DD</strong> format (e.g., 2026-02-15)</li>
+          <li>• Status options: <strong>active, completed, on_hold, cancelled, in_progress</strong></li>
+          <li>• Duplicate clients (same name) will be skipped during import</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
