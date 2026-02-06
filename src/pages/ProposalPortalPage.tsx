@@ -950,21 +950,24 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                     const width = (item.estimated_days / timelineRange) * 100;
 
                                     return (
-                                      <div key={item.id} className="relative h-12 flex items-center mb-4">
-                                        {/* Background Track */}
-                                        <div className="absolute inset-0 w-full h-full bg-neutral-50 rounded-lg overflow-hidden">
-                                          {/* Colored Bar */}
+                                      <div key={item.id} className="relative h-12 flex items-center border-b border-neutral-50 mb-4">
+                                        {/* Background Guide Line */}
+                                        <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
+
+                                        {/* The Active Bar - Thinner and Centered */}
+                                        <div className="absolute inset-0 w-full h-full">
                                           <div
-                                            className={`absolute top-0 bottom-0 h-full opacity-20 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
+                                            className={`absolute top-1/2 -translate-y-1/2 h-8 rounded ${item.description.startsWith('[') ? 'bg-amber-100' : 'bg-neutral-200'}`}
                                             style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                          ></div>
-                                          <div
-                                            className={`absolute bottom-0 h-1 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
-                                            style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                          ></div>
+                                          >
+                                            {/* Collaborate Stripe */}
+                                            {item.description.startsWith('[') && (
+                                              <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
+                                            )}
+                                          </div>
                                         </div>
 
-                                        {/* Text */}
+                                        {/* Text Content */}
                                         <div className="relative z-10 w-full px-4 flex justify-between items-center text-sm">
                                           <span className="font-medium text-neutral-900 truncate pr-4">{item.description}</span>
                                           <span className="text-xs text-neutral-500 font-medium whitespace-nowrap">{item.estimated_days} Days</span>
@@ -984,17 +987,19 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       )}
                     </div>
 
-                    {/* Footer */}
-                    <div className="mt-auto pt-8 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400 font-medium uppercase tracking-wider flex-shrink-0">
-                      <div className="flex gap-4">
-                        <span>{company?.company_name}</span>
-                        <span>|</span>
-                        <span>{company?.website}</span>
-                      </div>
-                      <div className="flex gap-4">
-                        <span>Proposal #{quote?.quote_number}</span>
-                        <span>•</span>
-                        <span>Page {idx + 2}</span>
+                    {/* Footer - Stick to bottom */}
+                    <div className="absolute bottom-0 left-0 right-0 px-12 py-8 border-t border-neutral-100/50 bg-white">
+                      <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
+                        <div className="flex items-center gap-4">
+                          <span>{company?.company_name}</span>
+                          <span className="text-neutral-300">|</span>
+                          <span>{company?.website}</span>
+                        </div>
+                        <div className="flex gap-4">
+                          <span>Proposal #{quote?.quote_number}</span>
+                          <span className="text-neutral-300">•</span>
+                          <span>Page {idx + 2}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1040,19 +1045,21 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                 const width = (item.estimated_days / timelineRange) * 100;
 
                                 return (
-                                  <div key={item.id} className="relative h-12 flex items-center">
-                                    {/* The Timeline Bar (Background Layer) */}
-                                    <div className="absolute inset-0 w-full h-full bg-neutral-50 rounded-lg overflow-hidden">
-                                      {/* Colored Duration Segment */}
+                                  <div key={item.id} className="relative h-12 flex items-center border-b border-neutral-50">
+                                    {/* Background Guide Line */}
+                                    <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
+
+                                    {/* The Active Bar - Thinner and Centered */}
+                                    <div className="absolute inset-0 w-full h-full">
                                       <div
-                                        className={`absolute top-0 bottom-0 h-full opacity-20 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
+                                        className={`absolute top-1/2 -translate-y-1/2 h-8 rounded ${item.description.startsWith('[') ? 'bg-amber-100' : 'bg-neutral-200'}`}
                                         style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                      ></div>
-                                      {/* Darker Line for visibility */}
-                                      <div
-                                        className={`absolute bottom-0 h-1 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
-                                        style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                      ></div>
+                                      >
+                                        {/* Collaborate Stripe */}
+                                        {item.description.startsWith('[') && (
+                                          <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
+                                        )}
+                                      </div>
                                     </div>
 
                                     {/* Text Content (Foreground Layer) - Full Width */}

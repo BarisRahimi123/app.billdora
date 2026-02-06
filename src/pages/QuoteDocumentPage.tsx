@@ -5632,18 +5632,21 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                       const isCollaboratorTask = item.description.startsWith('[');
 
                                       return (
-                                        <div key={item.id} className="relative h-12 flex items-center mb-4">
-                                          {/* Background Track */}
-                                          <div className="absolute inset-0 w-full h-full bg-neutral-50 rounded-lg overflow-hidden">
-                                            {/* Colored Bar */}
+                                        <div key={item.id} className="relative h-12 flex items-center mb-4 border-b border-neutral-50">
+                                          {/* Background Guide Line */}
+                                          <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
+
+                                          {/* Active Bar - Thinner */}
+                                          <div className="absolute inset-0 w-full h-full">
                                             <div
-                                              className={`absolute top-0 bottom-0 h-full opacity-20 ${isCollaboratorTask ? 'bg-amber-500' : 'bg-neutral-900'}`}
+                                              className={`absolute top-1/2 -translate-y-1/2 h-8 rounded ${isCollaboratorTask ? 'bg-amber-100' : 'bg-neutral-200'}`}
                                               style={{ left: `${leftPercent}%`, width: `${Math.max(widthPercent, 1)}%` }}
-                                            ></div>
-                                            <div
-                                              className={`absolute bottom-0 h-1 ${isCollaboratorTask ? 'bg-amber-500' : 'bg-neutral-900'}`}
-                                              style={{ left: `${leftPercent}%`, width: `${Math.max(widthPercent, 1)}%` }}
-                                            ></div>
+                                            >
+                                              {/* Collaborate Stripe */}
+                                              {isCollaboratorTask && (
+                                                <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
+                                              )}
+                                            </div>
                                           </div>
 
                                           {/* Text */}
@@ -5682,7 +5685,6 @@ Our team is dedicated to delivering high-quality results that meet your specific
                         </div>
                       )}
                     </div>
-                    <PageFooter pageNum={visiblePages.indexOf('scope') + 1} />
                   </div>
                 )}
 
