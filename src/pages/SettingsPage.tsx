@@ -4928,8 +4928,9 @@ function BigTimeIntegrationCard({ companyId }: { companyId: string }) {
   const [importClients, setImportClients] = useState(true);
   const [importProjects, setImportProjects] = useState(true);
   const [importTasks, setImportTasks] = useState(true);
-  const [importStaff, setImportStaff] = useState(true);
+  const [importStaff, setImportStaff] = useState(false);
   const [importTimeEntries, setImportTimeEntries] = useState(false);
+  const [importExpenses, setImportExpenses] = useState(false);
 
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -5018,12 +5019,14 @@ function BigTimeIntegrationCard({ companyId }: { companyId: string }) {
   }
 
   async function handleStartImport() {
+    // Order matters: clients first, then projects (links to clients), then tasks (links to projects)
     const selectedTypes = [];
     if (importClients) selectedTypes.push('clients');
     if (importProjects) selectedTypes.push('projects');
     if (importTasks) selectedTypes.push('tasks');
     if (importStaff) selectedTypes.push('staff');
     if (importTimeEntries) selectedTypes.push('time_entries');
+    if (importExpenses) selectedTypes.push('expenses');
 
     if (selectedTypes.length === 0) {
       showToast('Please select at least one data type to import', 'error');
@@ -5130,8 +5133,9 @@ function BigTimeIntegrationCard({ companyId }: { companyId: string }) {
                     { id: 'clients', label: 'Clients', checked: importClients, onChange: setImportClients },
                     { id: 'projects', label: 'Projects', checked: importProjects, onChange: setImportProjects },
                     { id: 'tasks', label: 'Tasks', checked: importTasks, onChange: setImportTasks },
-                    { id: 'staff', label: 'Staff', checked: importStaff, onChange: setImportStaff },
-                    { id: 'timeEntries', label: 'Time', checked: importTimeEntries, onChange: setImportTimeEntries },
+                    { id: 'staff', label: 'Staff (view only)', checked: importStaff, onChange: setImportStaff },
+                    { id: 'timeEntries', label: 'Time (90 days)', checked: importTimeEntries, onChange: setImportTimeEntries },
+                    { id: 'expenses', label: 'Expenses (90 days)', checked: importExpenses, onChange: setImportExpenses },
                   ].map(opt => (
                     <label key={opt.id} className="flex items-center gap-1.5 cursor-pointer">
                       <input

@@ -954,7 +954,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
             if (!hasScope && !hasTimeline) return null;
 
             const scopeContent = quote?.scope_of_work || '';
-            const scopePages = hasScope ? paginateText(scopeContent, 2000) : [];
+            const scopePages = hasScope ? paginateText(scopeContent, 2600) : [];
             // If no scope but we have timeline, treat as 1 empty scope page to render timeline
             if (scopePages.length === 0 && hasTimeline) scopePages.push('');
 
@@ -966,7 +966,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
               const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
 
               return (
-                <div key={`scope-${idx}`} className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+                <div key={`scope-${idx}`} className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px' }}>
                   <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
                     {/* Header */}
                     <div className="flex items-center gap-4 mb-8 flex-shrink-0">
