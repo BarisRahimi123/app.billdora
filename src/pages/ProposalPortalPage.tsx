@@ -932,43 +932,50 @@ Our team is dedicated to delivering high-quality results that meet your specific
                             if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
 
                             return (
-                              <div className="space-y-4">
-                                {/* Header with Day Markers */}
-                                <div className="flex items-center text-[10px] text-neutral-400 mb-2">
-                                  <div className="w-48 text-xs font-medium text-neutral-500 uppercase tracking-wider">Phase</div>
-                                  <div className="flex-1 relative h-4 flex items-center">
-                                    <span className="text-neutral-400">Start</span>
-                                    <div className="flex-1 mx-4 h-px bg-neutral-200"></div>
-                                    <span className="text-neutral-400">W{Math.ceil(maxEnd / 7)}</span>
+                              <div className="flex-1 flex flex-col pt-8">
+                                {/* Header */}
+                                <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100 mb-6">
+                                  <span className="w-32">PROJECT SCHEDULE</span>
+                                  <div className="flex-1 relative h-4">
+                                    <span className="absolute left-0">Start (Day 1)</span>
+                                    <span className="absolute right-0">Completion (Day {totalDays})</span>
                                   </div>
                                 </div>
 
-                                {/* Timeline bars */}
-                                <div className="space-y-3">
+                                {/* Timeline Rows */}
+                                <div className="space-y-6">
                                   {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
                                     const start = computedOffsets.get(item.id) || 0;
                                     const left = ((start - minStart) / timelineRange) * 100;
                                     const width = (item.estimated_days / timelineRange) * 100;
+
                                     return (
-                                      <div key={item.id} className="flex items-center gap-4">
-                                        <div className="w-48 flex-shrink-0">
-                                          <span className="text-sm text-neutral-900 truncate block">{item.description}</span>
-                                        </div>
-                                        <div className="flex-1 h-6 bg-neutral-50 rounded relative">
+                                      <div key={item.id} className="relative h-12 flex items-center mb-4">
+                                        {/* Background Track */}
+                                        <div className="absolute inset-0 w-full h-full bg-neutral-50 rounded-lg overflow-hidden">
+                                          {/* Colored Bar */}
                                           <div
-                                            className={`absolute h-full rounded flex items-center justify-end pr-2 text-white text-[10px] font-medium ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`}
-                                            style={{ left: `${left}%`, width: `${Math.max(width, 3)}%` }}
-                                          >
-                                            {width > 8 && `${item.estimated_days}d`}
-                                          </div>
+                                            className={`absolute top-0 bottom-0 h-full opacity-20 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
+                                            style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
+                                          ></div>
+                                          <div
+                                            className={`absolute bottom-0 h-1 ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-900'}`}
+                                            style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
+                                          ></div>
+                                        </div>
+
+                                        {/* Text */}
+                                        <div className="relative z-10 w-full px-4 flex justify-between items-center text-sm">
+                                          <span className="font-medium text-neutral-900 truncate pr-4">{item.description}</span>
+                                          <span className="text-xs text-neutral-500 font-medium whitespace-nowrap">{item.estimated_days} Days</span>
                                         </div>
                                       </div>
                                     );
                                   })}
                                 </div>
-                                <div className="flex justify-between items-center pt-4 mt-2">
-                                  <span className="text-xs text-neutral-400">Visualization excludes non-working days</span>
-                                  <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
+
+                                <div className="flex justify-end pt-4 mt-2 border-t border-neutral-100">
+                                  <div className="text-sm font-bold text-neutral-900">Total Project Duration: {totalDays} Days</div>
                                 </div>
                               </div>
                             );
