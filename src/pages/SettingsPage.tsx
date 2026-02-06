@@ -288,10 +288,6 @@ export default function SettingsPage() {
     );
   }
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showMoreTabs, setShowMoreTabs] = useState(false);
-
-  // Split tabs: first 6 visible, rest in dropdown (on mobile)
   return (
     <div className="min-h-screen">
       {/* Page Header */}
