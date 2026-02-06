@@ -4,7 +4,7 @@ import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
-import { api, Client, Quote, Lead, leadsApi, clientPortalApi, ProposalTemplate, collaborationApi, ProposalCollaboration, leadFormsApi } from '../lib/api';
+import { api, Client, ClientContact, ClientContactRole, Quote, Lead, leadsApi, clientPortalApi, ProposalTemplate, collaborationApi, ProposalCollaboration, leadFormsApi } from '../lib/api';
 import { NotificationService } from '../lib/notificationService';
 import { useToast } from '../components/Toast';
 import { FieldError } from '../components/ErrorBoundary';
@@ -2502,6 +2502,13 @@ function InlineClientEditor({ client, companyId, onClose, onSave, onDelete, isAd
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalCopied, setPortalCopied] = useState(false);
   const portalCopiedTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Additional contacts state
+  const [additionalContacts, setAdditionalContacts] = useState<ClientContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState<Partial<ClientContact>>({ name: '', email: '', title: '', phone: '', role: 'project_manager' });
+  const [savingContact, setSavingContact] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -2528,6 +2535,24 @@ function InlineClientEditor({ client, companyId, onClose, onSave, onDelete, isAd
     }
     return () => { mounted = false; };
   }, [client?.id, companyId]);
+
+  // Load additional contacts when client changes
+  useEffect(() => {
+    let mounted = true;
+    if (client?.id) {
+      setLoadingContacts(true);
+      api.getClientContacts(client.id).then((contacts) => {
+        if (mounted) {
+          setAdditionalContacts(contacts || []);
+        }
+      }).catch(console.error).finally(() => {
+        if (mounted) setLoadingContacts(false);
+      });
+    } else {
+      setAdditionalContacts([]);
+    }
+    return () => { mounted = false; };
+  }, [client?.id]);
 
   const loadPortalToken = async () => {
     if (!client?.id) return;
@@ -2561,6 +2586,70 @@ function InlineClientEditor({ client, companyId, onClose, onSave, onDelete, isAd
     if (portalCopiedTimeoutRef.current) clearTimeout(portalCopiedTimeoutRef.current);
     setPortalCopied(true);
     portalCopiedTimeoutRef.current = setTimeout(() => setPortalCopied(false), 2000);
+  };
+
+  // Additional contacts handlers
+  const handleAddContact = async () => {
+    if (!client?.id || !newContact.name?.trim() || !newContact.email?.trim()) return;
+    setSavingContact(true);
+    try {
+      const created = await api.createClientContact({
+        client_id: client.id,
+        company_id: companyId,
+        name: newContact.name.trim(),
+        email: newContact.email.trim(),
+        title: newContact.title?.trim() || undefined,
+        phone: newContact.phone?.trim() || undefined,
+        role: newContact.role as ClientContactRole || 'project_manager',
+      });
+      setAdditionalContacts(prev => [...prev, created]);
+      setNewContact({ name: '', email: '', title: '', phone: '', role: 'project_manager' });
+      setShowAddContact(false);
+    } catch (err) {
+      console.error('Failed to add contact:', err);
+    } finally {
+      setSavingContact(false);
+    }
+  };
+
+  const handleUpdateContact = async (contactId: string, updates: Partial<ClientContact>) => {
+    try {
+      const updated = await api.updateClientContact(contactId, updates);
+      setAdditionalContacts(prev => prev.map(c => c.id === contactId ? updated : c));
+      setEditingContactId(null);
+    } catch (err) {
+      console.error('Failed to update contact:', err);
+    }
+  };
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!confirm('Delete this contact?')) return;
+    try {
+      await api.deleteClientContact(contactId);
+      setAdditionalContacts(prev => prev.filter(c => c.id !== contactId));
+    } catch (err) {
+      console.error('Failed to delete contact:', err);
+    }
+  };
+
+  const getContactRoleLabel = (role: ClientContactRole) => {
+    switch (role) {
+      case 'primary': return 'Primary';
+      case 'billing': return 'Billing';
+      case 'project_manager': return 'Project Manager';
+      case 'other': return 'Other';
+      default: return role;
+    }
+  };
+
+  const getContactRoleColor = (role: ClientContactRole) => {
+    switch (role) {
+      case 'primary': return 'bg-blue-100 text-blue-700';
+      case 'billing': return 'bg-green-100 text-green-700';
+      case 'project_manager': return 'bg-purple-100 text-purple-700';
+      case 'other': return 'bg-neutral-100 text-neutral-600';
+      default: return 'bg-neutral-100 text-neutral-600';
+    }
   };
 
   const [formData, setFormData] = useState({
@@ -2935,6 +3024,141 @@ function InlineClientEditor({ client, companyId, onClose, onSave, onDelete, isAd
                   <p className="text-xs text-neutral-600">{client?.billing_contact_phone || '-'}</p>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Additional Contacts Section - For Project Managers and other contacts */}
+      {!isNew && (
+        <div className="bg-white border border-neutral-200 rounded-lg p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-neutral-900">Project Contacts</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">Add project managers and other contacts for this company</p>
+            </div>
+            <button
+              onClick={() => setShowAddContact(!showAddContact)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Contact
+            </button>
+          </div>
+
+          {/* Add New Contact Form */}
+          {showAddContact && (
+            <div className="mb-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={newContact.name || ''}
+                    onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                    placeholder="John Smith"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Email *</label>
+                  <input
+                    type="email"
+                    value={newContact.email || ''}
+                    onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                    placeholder="john@company.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={newContact.title || ''}
+                    onChange={(e) => setNewContact({ ...newContact, title: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                    placeholder="Project Manager"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Role</label>
+                  <select
+                    value={newContact.role || 'project_manager'}
+                    onChange={(e) => setNewContact({ ...newContact, role: e.target.value as ClientContactRole })}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-white"
+                  >
+                    <option value="project_manager">Project Manager</option>
+                    <option value="primary">Primary Contact</option>
+                    <option value="billing">Billing Contact</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newContact.phone || ''}
+                    onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => { setShowAddContact(false); setNewContact({ name: '', email: '', title: '', phone: '', role: 'project_manager' }); }}
+                  className="px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddContact}
+                  disabled={savingContact || !newContact.name?.trim() || !newContact.email?.trim()}
+                  className="px-3 py-1.5 text-xs font-medium bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
+                >
+                  {savingContact ? 'Adding...' : 'Add Contact'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Contacts List */}
+          {loadingContacts ? (
+            <div className="text-center py-6 text-sm text-neutral-400">Loading contacts...</div>
+          ) : additionalContacts.length === 0 ? (
+            <div className="text-center py-6">
+              <Users className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
+              <p className="text-sm text-neutral-400">No project contacts added yet</p>
+              <p className="text-xs text-neutral-400 mt-1">Add project managers to send proposals directly to them</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {additionalContacts.map((contact) => (
+                <div key={contact.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg border border-neutral-100 hover:border-neutral-200 transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
+                    <User className="w-4 h-4 text-[#476E66]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-neutral-900 truncate">{contact.name}</p>
+                      <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getContactRoleColor(contact.role)}`}>
+                        {getContactRoleLabel(contact.role)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 truncate">{contact.email}</p>
+                    {contact.title && <p className="text-xs text-neutral-400">{contact.title}</p>}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleDeleteContact(contact.id)}
+                      className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete contact"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

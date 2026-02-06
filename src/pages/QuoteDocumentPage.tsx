@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature, Timer, Layout, Link, ArrowRight, User, CheckCircle2, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { api, Quote, Client, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
+import { api, Quote, Client, ClientContact, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notificationService';
 import SaveAsTemplateModal from '../components/SaveAsTemplateModal';
@@ -80,6 +80,9 @@ export default function QuoteDocumentPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [recipientType, setRecipientType] = useState<'client' | 'lead' | null>(null);
+  // Client contacts for recipient selection
+  const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
+  const [selectedContactId, setSelectedContactId] = useState<string>(''); // '' = use primary contact
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showTemplatePickerModal, setShowTemplatePickerModal] = useState(false);
@@ -1068,9 +1071,17 @@ export default function QuoteDocumentPage() {
     if (selectedClientId) {
       const foundClient = clients.find(c => c.id === selectedClientId);
       setClient(foundClient || null);
-      if (foundClient) setRecipientType('client');
+      if (foundClient) {
+        setRecipientType('client');
+        // Load contacts for this client
+        api.getClientContacts(selectedClientId).then(contacts => {
+          setClientContacts(contacts || []);
+        }).catch(console.error);
+      }
     } else {
       setClient(null);
+      setClientContacts([]);
+      setSelectedContactId('');
     }
   }, [selectedClientId, clients]);
 
@@ -1804,10 +1815,24 @@ export default function QuoteDocumentPage() {
   };
 
   const sendProposalEmail = async () => {
-    const recipientEmail = recipientType === 'lead' ? selectedLead?.email : client?.email;
-    const recipientName = recipientType === 'lead'
-      ? (selectedLead?.company_name || selectedLead?.name || 'Lead')
-      : (client?.name || 'Client');
+    // If a specific contact is selected, use their email; otherwise use primary contact or client email
+    const selectedContact = selectedContactId ? clientContacts.find(c => c.id === selectedContactId) : null;
+    
+    let recipientEmail: string | undefined;
+    let recipientName: string;
+    
+    if (recipientType === 'lead') {
+      recipientEmail = selectedLead?.email;
+      recipientName = selectedLead?.company_name || selectedLead?.name || 'Lead';
+    } else if (selectedContact) {
+      // Use selected contact
+      recipientEmail = selectedContact.email;
+      recipientName = selectedContact.name || client?.name || 'Client';
+    } else {
+      // Use primary contact or client email
+      recipientEmail = client?.primary_contact_email || client?.email;
+      recipientName = client?.primary_contact_name || client?.name || 'Client';
+    }
 
     if (!quote || !recipientEmail) return;
 
@@ -6195,8 +6220,46 @@ Our team is dedicated to delivering high-quality results that meet your specific
                             <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Client</span>
                           )}
                         </div>
-                        <p className="font-medium text-neutral-900">{displayClientName}</p>
-                        <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : client?.email}</p>
+                        
+                        {/* Contact Selector for Clients with multiple contacts */}
+                        {recipientType === 'client' && clientContacts.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="font-medium text-neutral-900">{client?.name}</p>
+                            <div>
+                              <label className="block text-xs text-neutral-500 mb-1">Select Recipient</label>
+                              <select
+                                value={selectedContactId}
+                                onChange={(e) => setSelectedContactId(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] bg-white"
+                              >
+                                <option value="">
+                                  {client?.primary_contact_name || 'Primary Contact'} - {client?.primary_contact_email || client?.email}
+                                </option>
+                                {clientContacts.map(contact => (
+                                  <option key={contact.id} value={contact.id}>
+                                    {contact.name} ({contact.role === 'project_manager' ? 'PM' : contact.role}) - {contact.email}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            {selectedContactId && (() => {
+                              const contact = clientContacts.find(c => c.id === selectedContactId);
+                              return contact ? (
+                                <div className="mt-2 p-2 bg-purple-50 rounded-lg">
+                                  <p className="text-sm font-medium text-purple-900">{contact.name}</p>
+                                  {contact.title && <p className="text-xs text-purple-600">{contact.title}</p>}
+                                  <p className="text-xs text-purple-700">{contact.email}</p>
+                                </div>
+                              ) : null;
+                            })()}
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-medium text-neutral-900">{displayClientName}</p>
+                            <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : (client?.primary_contact_email || client?.email)}</p>
+                          </>
+                        )}
+                        
                         {/* Show billing contact CC if exists and no custom CC */}
                         {recipientType === 'client' && client?.billing_contact_email && !ccEmail.trim() && !showCcInput && (
                           <div className="mt-2 pt-2 border-t border-neutral-200">

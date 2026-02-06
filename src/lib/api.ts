@@ -45,16 +45,35 @@ export interface Client {
   lifecycle_stage?: string;
   is_archived?: boolean;
   created_at?: string;
-  // Primary Contact
+  // Primary Contact (legacy - kept for backwards compatibility)
   primary_contact_name?: string;
   primary_contact_title?: string;
   primary_contact_email?: string;
   primary_contact_phone?: string;
-  // Billing Contact
+  // Billing Contact (legacy - kept for backwards compatibility)
   billing_contact_name?: string;
   billing_contact_title?: string;
   billing_contact_email?: string;
   billing_contact_phone?: string;
+  // Multiple contacts support
+  contacts?: ClientContact[];
+}
+
+export type ClientContactRole = 'primary' | 'billing' | 'project_manager' | 'other';
+
+export interface ClientContact {
+  id: string;
+  client_id: string;
+  company_id: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  role: ClientContactRole;
+  is_default?: boolean;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Project {
@@ -415,6 +434,69 @@ export const api = {
     return apiCall(async () => {
       const { error } = await supabase.from('clients')
         .update({ is_archived: true })
+        .eq('id', id);
+      if (error) throw error;
+    });
+  },
+
+  // Client Contacts
+  async getClientContacts(clientId: string) {
+    return apiCall(async () => {
+      const { data, error } = await supabase.from('client_contacts')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('role', { ascending: true })
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data as ClientContact[];
+    });
+  },
+
+  async getClientWithContacts(clientId: string) {
+    return apiCall(async () => {
+      const { data: client, error: clientError } = await supabase.from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .single();
+      if (clientError) throw clientError;
+
+      const { data: contacts, error: contactsError } = await supabase.from('client_contacts')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('role', { ascending: true });
+      if (contactsError) throw contactsError;
+
+      return { ...client, contacts: contacts || [] } as Client;
+    });
+  },
+
+  async createClientContact(contact: Partial<ClientContact>) {
+    return apiCall(async () => {
+      const { data, error } = await supabase.from('client_contacts')
+        .insert(contact)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ClientContact;
+    });
+  },
+
+  async updateClientContact(id: string, updates: Partial<ClientContact>) {
+    return apiCall(async () => {
+      const { data, error } = await supabase.from('client_contacts')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ClientContact;
+    });
+  },
+
+  async deleteClientContact(id: string) {
+    return apiCall(async () => {
+      const { error } = await supabase.from('client_contacts')
+        .delete()
         .eq('id', id);
       if (error) throw error;
     });
