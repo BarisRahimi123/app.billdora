@@ -5681,834 +5681,838 @@ Our team is dedicated to delivering high-quality results that meet your specific
                           </div>
                         </div>
                       )}
+                    </div>
+                    <PageFooter pageNum={visiblePages.indexOf('scope') + 1} />
+                  </div>
+                )}
 
-                      {/* Quote Details Page */}
-                      {showSections.quoteDetails && (
-                        <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
-                          <div className="pb-20">
-                            {/* Header */}
-                            <div className="p-8 border-b border-neutral-200">
-                              <div className="flex justify-between">
-                                <div className="flex gap-6">
-                                  {companyInfo.logo ? (
-                                    <img src={companyInfo.logo} alt={companyInfo.name} className="w-16 h-16 object-contain rounded-xl bg-neutral-100" />
-                                  ) : (
-                                    <div className="w-16 h-16 bg-neutral-100 rounded-xl flex items-center justify-center text-2xl font-bold text-neutral-700">
-                                      {companyInfo.name?.charAt(0) || 'C'}
-                                    </div>
-                                  )}
-                                  <div>
-                                    <h2 className="text-2xl font-bold text-neutral-900">{companyInfo.name}</h2>
-                                    <p className="text-neutral-600">{companyInfo.address}</p>
-                                    <p className="text-neutral-600">{companyInfo.city}, {companyInfo.state} {companyInfo.zip}</p>
-                                    <p className="text-neutral-500 text-sm mt-1">{companyInfo.website} | {companyInfo.phone}</p>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-sm">
-                                    <table className="text-left">
-                                      <tbody>
-                                        <tr><td className="pr-4 py-1 text-neutral-500">DATE:</td><td className="font-medium text-neutral-900">{formatDate(quote?.created_at)}</td></tr>
-                                        <tr><td className="pr-4 py-1 text-neutral-500">QUOTE #:</td><td className="font-medium text-neutral-900">{quote?.quote_number || 'New'}</td></tr>
-                                        <tr><td className="pr-4 py-1 text-neutral-500">VALID UNTIL:</td><td className="font-medium text-neutral-900">{validUntil ? formatDate(validUntil) : '-'}</td></tr>
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
+                {/* Quote Details Page */}
+                {showSections.quoteDetails && (
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                    <div className="pb-20">
+                      {/* Header */}
+                      <div className="p-8 border-b border-neutral-200">
+                        <div className="flex justify-between">
+                          <div className="flex gap-6">
+                            {companyInfo.logo ? (
+                              <img src={companyInfo.logo} alt={companyInfo.name} className="w-16 h-16 object-contain rounded-xl bg-neutral-100" />
+                            ) : (
+                              <div className="w-16 h-16 bg-neutral-100 rounded-xl flex items-center justify-center text-2xl font-bold text-neutral-700">
+                                {companyInfo.name?.charAt(0) || 'C'}
                               </div>
-                            </div>
-
-                            {/* Customer */}
-                            <div className="px-8 py-4">
-                              <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Customer</h3>
-                              <div className="border border-neutral-200 rounded-lg p-5">
-                                {client && (
-                                  <div className="space-y-1">
-                                    <p className="font-semibold text-neutral-900">{client.name}</p>
-                                    {client.display_name && client.display_name !== client.name && <p className="text-neutral-600 text-sm">{client.display_name}</p>}
-                                    {client.email && <p className="text-neutral-500 text-sm">{client.email}</p>}
-                                    {client.phone && <p className="text-neutral-500 text-sm">{client.phone}</p>}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Line Items */}
-                            <div className="px-8 py-4">
-                              <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Line Items</h3>
-                              <div className="border border-neutral-200 rounded-lg overflow-hidden">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="bg-neutral-50 border-b border-neutral-200">
-                                      <th className="text-left px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider">Description</th>
-                                      <th className="text-right px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Unit Price</th>
-                                      <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-16">Unit</th>
-                                      <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-12">Qty</th>
-                                      <th className="text-right px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Amount</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-neutral-100">
-                                    {lineItems.filter(item => item.description.trim()).map((item) => (
-                                      <tr key={item.id}>
-                                        <td className="px-5 py-3 text-neutral-900">{item.description}</td>
-                                        <td className="px-4 py-3 text-right text-neutral-900">{formatCurrency(item.unitPrice)}</td>
-                                        <td className="px-4 py-3 text-center text-neutral-500 text-xs">{item.unit}</td>
-                                        <td className="px-4 py-3 text-center text-neutral-900">{item.qty}</td>
-                                        <td className="px-5 py-3 text-right font-medium text-neutral-900">{formatCurrency(item.unitPrice * item.qty)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-
-                            {/* Totals */}
-                            <div className="px-8 py-4 flex justify-end">
-                              <div className="w-72 space-y-2 text-sm">
-                                <div className="flex justify-between py-1"><span className="text-neutral-600">Subtotal:</span><span className="font-medium">{formatCurrency(subtotal)}</span></div>
-                                <div className="flex justify-between py-1"><span className="text-neutral-600">Tax ({taxRate}%):</span><span>{formatCurrency(taxDue)}</span></div>
-                                {otherCharges > 0 && <div className="flex justify-between py-1"><span className="text-neutral-600">Other:</span><span>{formatCurrency(otherCharges)}</span></div>}
-                                <div className="flex justify-between py-2 border-t-2 border-neutral-900 mt-2">
-                                  <span className="text-lg font-bold">TOTAL:</span>
-                                  <span className="text-lg font-bold">{formatCurrency(total)}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Terms */}
-                            {showSections.terms && (
-                              <>
-                                <div className="px-8 py-4">
-                                  <h3 className="font-bold text-neutral-900 mb-2">TERMS AND CONDITIONS</h3>
-                                  <div className="text-sm text-neutral-700 whitespace-pre-line">{terms}</div>
-                                </div>
-
-                                {/* Signature */}
-                                {/* Signature Layout */}
-                                <div className="px-8 py-16 border-t border-neutral-100 mt-8">
-                                  <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
-                                  <p className="text-sm text-neutral-600 mb-12 max-w-2xl font-light">
-                                    By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {companyInfo.name} to proceed with the scope of work defined within.
-                                  </p>
-
-                                  <div className="grid grid-cols-2 gap-x-20 gap-y-16">
-
-                                    {/* Signature */}
-                                    <div className="relative group">
-                                      {mergeCollaboration?.owner_signed_at ? (
-                                        <>
-                                          <div className="absolute bottom-3 left-0 text-emerald-800 font-serif text-3xl italic select-none">
-                                            {mergeCollaboration.owner_profile?.full_name || 'Signed'}
-                                          </div>
-                                          <div className="border-b border-neutral-300 h-10 w-full"></div>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <div className="absolute bottom-3 left-0 text-neutral-900 font-serif text-4xl opacity-[0.08] select-none">X</div>
-                                          <div className="border-b border-neutral-300 h-10 w-full"></div>
-                                        </>
-                                      )}
-                                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Signature</p>
-                                    </div>
-
-                                    {/* Printed Name */}
-                                    <div>
-                                      <div className="border-b border-neutral-300 h-10 w-full flex items-end pb-1">
-                                        <span className="font-medium text-neutral-900 text-sm">
-                                          {mergeCollaboration?.owner_profile?.full_name || ''}
-                                        </span>
-                                      </div>
-                                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Printed Name</p>
-                                    </div>
-
-                                    {/* Title */}
-                                    <div>
-                                      <div className="border-b border-neutral-300 h-8 w-full"></div>
-                                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Title</p>
-                                    </div>
-
-                                    {/* Date */}
-                                    <div>
-                                      <div className="border-b border-neutral-300 h-8 w-full flex items-end pb-1">
-                                        {mergeCollaboration?.owner_signed_at && (
-                                          <span className="font-medium text-neutral-900 text-sm">
-                                            {new Date(mergeCollaboration.owner_signed_at).toLocaleDateString()}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Date</p>
-                                    </div>
-
-                                  </div>
-                                </div>
-                              </>
                             )}
+                            <div>
+                              <h2 className="text-2xl font-bold text-neutral-900">{companyInfo.name}</h2>
+                              <p className="text-neutral-600">{companyInfo.address}</p>
+                              <p className="text-neutral-600">{companyInfo.city}, {companyInfo.state} {companyInfo.zip}</p>
+                              <p className="text-neutral-500 text-sm mt-1">{companyInfo.website} | {companyInfo.phone}</p>
+                            </div>
                           </div>
-                          <PageFooter pageNum={visiblePages.indexOf('details') + 1} />
-                        </div>
-                      )}
-
-                      {/* Additional Offerings Page */}
-                      {showSections.additionalOfferings && services.length > 0 && (
-                        <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
-                          <div className="p-12 pb-32">
-                            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Additional Offerings</h2>
-                            <p className="text-neutral-600 mb-8">Explore our complete range of professional services:</p>
-
-                            {/* Services Table */}
-                            <div className="border border-neutral-200 rounded-lg overflow-hidden">
-                              <table className="w-full">
-                                <thead>
-                                  <tr className="bg-neutral-50 border-b border-neutral-200">
-                                    <th className="text-left px-6 py-4 font-semibold text-neutral-900">Service / Product</th>
-                                    <th className="text-right px-6 py-4 font-semibold text-neutral-900 w-40">Unit Cost</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-100">
-                                  {services.map((service) => (
-                                    <tr key={service.id}>
-                                      <td className="px-6 py-4">
-                                        <p className="font-medium text-neutral-900">{service.name}</p>
-                                        {service.description && (
-                                          <p className="text-sm text-neutral-500 mt-0.5">{service.description}</p>
-                                        )}
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        {service.pricing_type === 'per_sqft' && service.min_rate && service.max_rate ? (
-                                          <span className="text-neutral-900">${service.min_rate} - ${service.max_rate}</span>
-                                        ) : service.base_rate ? (
-                                          <span className="text-neutral-900">${service.base_rate}</span>
-                                        ) : (
-                                          <span className="text-neutral-500">Contact us</span>
-                                        )}
-                                        {service.unit_label && (
-                                          <p className="text-xs text-neutral-500">per {service.unit_label}</p>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
+                          <div className="text-right">
+                            <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 text-sm">
+                              <table className="text-left">
+                                <tbody>
+                                  <tr><td className="pr-4 py-1 text-neutral-500">DATE:</td><td className="font-medium text-neutral-900">{formatDate(quote?.created_at)}</td></tr>
+                                  <tr><td className="pr-4 py-1 text-neutral-500">QUOTE #:</td><td className="font-medium text-neutral-900">{quote?.quote_number || 'New'}</td></tr>
+                                  <tr><td className="pr-4 py-1 text-neutral-500">VALID UNTIL:</td><td className="font-medium text-neutral-900">{validUntil ? formatDate(validUntil) : '-'}</td></tr>
                                 </tbody>
                               </table>
                             </div>
+                          </div>
+                        </div>
+                      </div>
 
-                            {/* Thank You Message */}
-                            <div className="mt-12 text-center">
-                              <p className="text-lg font-semibold text-neutral-900">Thank you and looking forward to doing business with you again!</p>
-                              <p className="text-neutral-500 mt-2">{companyInfo.phone} | {companyInfo.website}</p>
+                      {/* Customer */}
+                      <div className="px-8 py-4">
+                        <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Customer</h3>
+                        <div className="border border-neutral-200 rounded-lg p-5">
+                          {client && (
+                            <div className="space-y-1">
+                              <p className="font-semibold text-neutral-900">{client.name}</p>
+                              {client.display_name && client.display_name !== client.name && <p className="text-neutral-600 text-sm">{client.display_name}</p>}
+                              {client.email && <p className="text-neutral-500 text-sm">{client.email}</p>}
+                              {client.phone && <p className="text-neutral-500 text-sm">{client.phone}</p>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Line Items */}
+                      <div className="px-8 py-4">
+                        <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Line Items</h3>
+                        <div className="border border-neutral-200 rounded-lg overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-neutral-50 border-b border-neutral-200">
+                                <th className="text-left px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider">Description</th>
+                                <th className="text-right px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Unit Price</th>
+                                <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-16">Unit</th>
+                                <th className="text-center px-4 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-12">Qty</th>
+                                <th className="text-right px-5 py-3 font-medium text-neutral-600 text-xs uppercase tracking-wider w-24">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-100">
+                              {lineItems.filter(item => item.description.trim()).map((item) => (
+                                <tr key={item.id}>
+                                  <td className="px-5 py-3 text-neutral-900">{item.description}</td>
+                                  <td className="px-4 py-3 text-right text-neutral-900">{formatCurrency(item.unitPrice)}</td>
+                                  <td className="px-4 py-3 text-center text-neutral-500 text-xs">{item.unit}</td>
+                                  <td className="px-4 py-3 text-center text-neutral-900">{item.qty}</td>
+                                  <td className="px-5 py-3 text-right font-medium text-neutral-900">{formatCurrency(item.unitPrice * item.qty)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Totals */}
+                      <div className="px-8 py-4 flex justify-end">
+                        <div className="w-72 space-y-2 text-sm">
+                          <div className="flex justify-between py-1"><span className="text-neutral-600">Subtotal:</span><span className="font-medium">{formatCurrency(subtotal)}</span></div>
+                          <div className="flex justify-between py-1"><span className="text-neutral-600">Tax ({taxRate}%):</span><span>{formatCurrency(taxDue)}</span></div>
+                          {otherCharges > 0 && <div className="flex justify-between py-1"><span className="text-neutral-600">Other:</span><span>{formatCurrency(otherCharges)}</span></div>}
+                          <div className="flex justify-between py-2 border-t-2 border-neutral-900 mt-2">
+                            <span className="text-lg font-bold">TOTAL:</span>
+                            <span className="text-lg font-bold">{formatCurrency(total)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Terms */}
+                      {showSections.terms && (
+                        <>
+                          <div className="px-8 py-4">
+                            <h3 className="font-bold text-neutral-900 mb-2">TERMS AND CONDITIONS</h3>
+                            <div className="text-sm text-neutral-700 whitespace-pre-line">{terms}</div>
+                          </div>
+
+                          {/* Signature */}
+                          {/* Signature Layout */}
+                          <div className="px-8 py-16 border-t border-neutral-100 mt-8">
+                            <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-8">Authorization</h3>
+                            <p className="text-sm text-neutral-600 mb-12 max-w-2xl font-light">
+                              By signing below, the Client agrees to the terms outlined in this proposal along with the payment schedule, and authorizes {companyInfo.name} to proceed with the scope of work defined within.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-x-20 gap-y-16">
+
+                              {/* Signature */}
+                              <div className="relative group">
+                                {mergeCollaboration?.owner_signed_at ? (
+                                  <>
+                                    <div className="absolute bottom-3 left-0 text-emerald-800 font-serif text-3xl italic select-none">
+                                      {mergeCollaboration.owner_profile?.full_name || 'Signed'}
+                                    </div>
+                                    <div className="border-b border-neutral-300 h-10 w-full"></div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="absolute bottom-3 left-0 text-neutral-900 font-serif text-4xl opacity-[0.08] select-none">X</div>
+                                    <div className="border-b border-neutral-300 h-10 w-full"></div>
+                                  </>
+                                )}
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Signature</p>
+                              </div>
+
+                              {/* Printed Name */}
+                              <div>
+                                <div className="border-b border-neutral-300 h-10 w-full flex items-end pb-1">
+                                  <span className="font-medium text-neutral-900 text-sm">
+                                    {mergeCollaboration?.owner_profile?.full_name || ''}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Printed Name</p>
+                              </div>
+
+                              {/* Title */}
+                              <div>
+                                <div className="border-b border-neutral-300 h-8 w-full"></div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Title</p>
+                              </div>
+
+                              {/* Date */}
+                              <div>
+                                <div className="border-b border-neutral-300 h-8 w-full flex items-end pb-1">
+                                  {mergeCollaboration?.owner_signed_at && (
+                                    <span className="font-medium text-neutral-900 text-sm">
+                                      {new Date(mergeCollaboration.owner_signed_at).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mt-3">Date</p>
+                              </div>
+
                             </div>
                           </div>
-                          <PageFooter pageNum={visiblePages.indexOf('offerings') + 1} />
-                        </div>
+                        </>
                       )}
-
                     </div>
+                    <PageFooter pageNum={visiblePages.indexOf('details') + 1} />
                   </div>
-                );
+                )}
+
+                {/* Additional Offerings Page */}
+                {showSections.additionalOfferings && services.length > 0 && (
+                  <div className="old-export-page w-[850px] bg-white shadow-xl print:shadow-none print:w-full relative" style={{ minHeight: '1100px' }}>
+                    <div className="p-12 pb-32">
+                      <h2 className="text-2xl font-bold text-neutral-900 mb-2">Additional Offerings</h2>
+                      <p className="text-neutral-600 mb-8">Explore our complete range of professional services:</p>
+
+                      {/* Services Table */}
+                      <div className="border border-neutral-200 rounded-lg overflow-hidden">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="bg-neutral-50 border-b border-neutral-200">
+                              <th className="text-left px-6 py-4 font-semibold text-neutral-900">Service / Product</th>
+                              <th className="text-right px-6 py-4 font-semibold text-neutral-900 w-40">Unit Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-100">
+                            {services.map((service) => (
+                              <tr key={service.id}>
+                                <td className="px-6 py-4">
+                                  <p className="font-medium text-neutral-900">{service.name}</p>
+                                  {service.description && (
+                                    <p className="text-sm text-neutral-500 mt-0.5">{service.description}</p>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  {service.pricing_type === 'per_sqft' && service.min_rate && service.max_rate ? (
+                                    <span className="text-neutral-900">${service.min_rate} - ${service.max_rate}</span>
+                                  ) : service.base_rate ? (
+                                    <span className="text-neutral-900">${service.base_rate}</span>
+                                  ) : (
+                                    <span className="text-neutral-500">Contact us</span>
+                                  )}
+                                  {service.unit_label && (
+                                    <p className="text-xs text-neutral-500">per {service.unit_label}</p>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Thank You Message */}
+                      <div className="mt-12 text-center">
+                        <p className="text-lg font-semibold text-neutral-900">Thank you and looking forward to doing business with you again!</p>
+                        <p className="text-neutral-500 mt-2">{companyInfo.phone} | {companyInfo.website}</p>
+                      </div>
+                    </div>
+                    <PageFooter pageNum={visiblePages.indexOf('offerings') + 1} />
+                  </div>
+                )}
+
+              </div>
+            </div>
+          );
         })()
       }
 
-                {/* Services Modal - Multi-Select Design */}
-                {
-                  showServicesModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-xl w-full max-w-md mx-4 max-h-[70vh] overflow-hidden flex flex-col shadow-2xl">
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
-                          <h2 className="text-base font-medium text-neutral-900">Add from Services</h2>
-                          <button onClick={() => { setShowServicesModal(false); setSelectedServices(new Set()); }} className="p-1.5 hover:bg-neutral-100 rounded-full text-neutral-400 hover:text-neutral-600">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div className="overflow-y-auto flex-1">
-                          {services.length === 0 ? (
-                            <p className="text-neutral-500 text-center py-8 text-sm">No services available. Add services in Settings.</p>
-                          ) : (
-                            <div className="divide-y divide-neutral-100">
-                              {services.map((service) => {
-                                const isAlreadyAdded = lineItems.some(item =>
-                                  item.description.startsWith(service.name)
-                                );
-                                const isSelected = selectedServices.has(service.id);
-                                return (
-                                  <button
-                                    key={service.id}
-                                    disabled={isAlreadyAdded}
-                                    onClick={() => {
-                                      if (isAlreadyAdded) return;
-                                      const newSelected = new Set(selectedServices);
-                                      if (isSelected) {
-                                        newSelected.delete(service.id);
-                                      } else {
-                                        newSelected.add(service.id);
-                                      }
-                                      setSelectedServices(newSelected);
-                                    }}
-                                    className={`w-full text-left px-5 py-3 flex justify-between items-center transition-colors ${isAlreadyAdded
-                                      ? 'opacity-40 cursor-not-allowed bg-neutral-50'
-                                      : isSelected
-                                        ? 'bg-[#476E66]/10'
-                                        : 'hover:bg-neutral-50'
-                                      }`}
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-[#476E66] border-[#476E66]' : 'border-neutral-300'
-                                        }`}>
-                                        {isSelected && <Check className="w-3 h-3 text-white" />}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="font-medium text-neutral-900 text-sm truncate">{service.name}</p>
-                                        <p className="text-xs text-neutral-400">{service.category}</p>
-                                      </div>
-                                    </div>
-                                    <div className="text-right ml-4 flex-shrink-0">
-                                      <p className="font-medium text-neutral-900 text-sm">
-                                        {service.pricing_type === 'per_sqft' && service.min_rate && service.max_rate
-                                          ? `$${service.min_rate} - $${service.max_rate}`
-                                          : service.base_rate ? `$${service.base_rate}` : '-'}
-                                      </p>
-                                      <p className="text-xs text-neutral-400">per {service.unit_label}</p>
-                                    </div>
-                                    {isAlreadyAdded && (
-                                      <Check className="w-4 h-4 text-neutral-400 ml-3" />
-                                    )}
-                                  </button>
-                                );
-                              })}
+      {/* Services Modal - Multi-Select Design */}
+      {
+        showServicesModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-full max-w-md mx-4 max-h-[70vh] overflow-hidden flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+                <h2 className="text-base font-medium text-neutral-900">Add from Services</h2>
+                <button onClick={() => { setShowServicesModal(false); setSelectedServices(new Set()); }} className="p-1.5 hover:bg-neutral-100 rounded-full text-neutral-400 hover:text-neutral-600">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                {services.length === 0 ? (
+                  <p className="text-neutral-500 text-center py-8 text-sm">No services available. Add services in Settings.</p>
+                ) : (
+                  <div className="divide-y divide-neutral-100">
+                    {services.map((service) => {
+                      const isAlreadyAdded = lineItems.some(item =>
+                        item.description.startsWith(service.name)
+                      );
+                      const isSelected = selectedServices.has(service.id);
+                      return (
+                        <button
+                          key={service.id}
+                          disabled={isAlreadyAdded}
+                          onClick={() => {
+                            if (isAlreadyAdded) return;
+                            const newSelected = new Set(selectedServices);
+                            if (isSelected) {
+                              newSelected.delete(service.id);
+                            } else {
+                              newSelected.add(service.id);
+                            }
+                            setSelectedServices(newSelected);
+                          }}
+                          className={`w-full text-left px-5 py-3 flex justify-between items-center transition-colors ${isAlreadyAdded
+                            ? 'opacity-40 cursor-not-allowed bg-neutral-50'
+                            : isSelected
+                              ? 'bg-[#476E66]/10'
+                              : 'hover:bg-neutral-50'
+                            }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-[#476E66] border-[#476E66]' : 'border-neutral-300'
+                              }`}>
+                              {isSelected && <Check className="w-3 h-3 text-white" />}
                             </div>
-                          )}
-                        </div>
-                        {selectedServices.size > 0 && (
-                          <div className="px-5 py-4 border-t border-neutral-100 bg-neutral-50">
-                            <button
-                              onClick={() => {
-                                const newItems: LineItem[] = [];
-                                services.filter(s => selectedServices.has(s.id)).forEach((service, index) => {
-                                  const rate = service.pricing_type === 'per_sqft'
-                                    ? (service.min_rate || 0)
-                                    : (service.base_rate || 0);
-                                  const unit = service.pricing_type === 'per_sqft' ? 'sq ft'
-                                    : service.pricing_type === 'hourly' ? 'hour'
-                                      : service.pricing_type === 'fixed' ? 'project'
-                                        : 'each';
-                                  newItems.push({
-                                    id: crypto.randomUUID(),
-                                    description: service.name + (service.description ? ` - ${service.description}` : ''),
-                                    unitPrice: rate,
-                                    qty: 1,
-                                    unit,
-                                    taxed: false,
-                                    estimatedDays: 1,
-                                    startOffset: 0,
-                                    dependsOn: '',
-                                    startType: 'parallel',
-                                    overlapDays: 0
-                                  });
-                                });
-                                const filteredItems = lineItems.filter(item => item.description.trim() !== '');
-                                setLineItems([...filteredItems, ...newItems]);
-                                setHasUnsavedChanges(true);
-                                setSelectedServices(new Set());
-                                setShowServicesModal(false);
-                              }}
-                              className="w-full py-2.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3a5b54] transition-colors font-medium text-sm"
-                            >
-                              Add {selectedServices.size} Service{selectedServices.size > 1 ? 's' : ''}
-                            </button>
+                            <div className="min-w-0">
+                              <p className="font-medium text-neutral-900 text-sm truncate">{service.name}</p>
+                              <p className="text-xs text-neutral-400">{service.category}</p>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                }
+                          <div className="text-right ml-4 flex-shrink-0">
+                            <p className="font-medium text-neutral-900 text-sm">
+                              {service.pricing_type === 'per_sqft' && service.min_rate && service.max_rate
+                                ? `$${service.min_rate} - $${service.max_rate}`
+                                : service.base_rate ? `$${service.base_rate}` : '-'}
+                            </p>
+                            <p className="text-xs text-neutral-400">per {service.unit_label}</p>
+                          </div>
+                          {isAlreadyAdded && (
+                            <Check className="w-4 h-4 text-neutral-400 ml-3" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {selectedServices.size > 0 && (
+                <div className="px-5 py-4 border-t border-neutral-100 bg-neutral-50">
+                  <button
+                    onClick={() => {
+                      const newItems: LineItem[] = [];
+                      services.filter(s => selectedServices.has(s.id)).forEach((service, index) => {
+                        const rate = service.pricing_type === 'per_sqft'
+                          ? (service.min_rate || 0)
+                          : (service.base_rate || 0);
+                        const unit = service.pricing_type === 'per_sqft' ? 'sq ft'
+                          : service.pricing_type === 'hourly' ? 'hour'
+                            : service.pricing_type === 'fixed' ? 'project'
+                              : 'each';
+                        newItems.push({
+                          id: crypto.randomUUID(),
+                          description: service.name + (service.description ? ` - ${service.description}` : ''),
+                          unitPrice: rate,
+                          qty: 1,
+                          unit,
+                          taxed: false,
+                          estimatedDays: 1,
+                          startOffset: 0,
+                          dependsOn: '',
+                          startType: 'parallel',
+                          overlapDays: 0
+                        });
+                      });
+                      const filteredItems = lineItems.filter(item => item.description.trim() !== '');
+                      setLineItems([...filteredItems, ...newItems]);
+                      setHasUnsavedChanges(true);
+                      setSelectedServices(new Set());
+                      setShowServicesModal(false);
+                    }}
+                    className="w-full py-2.5 bg-[#476E66] text-white rounded-lg hover:bg-[#3a5b54] transition-colors font-medium text-sm"
+                  >
+                    Add {selectedServices.size} Service{selectedServices.size > 1 ? 's' : ''}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }
 
-                {/* New Client Modal */}
-                {
-                  showNewClientModal && (
-                    <NewClientModal
-                      companyId={profile?.company_id || ''}
-                      onClose={() => setShowNewClientModal(false)}
-                      onSave={async (newClient) => {
-                        setClients([...clients, newClient]);
-                        setSelectedClientId(newClient.id);
-                        setClient(newClient);
-                        setHasUnsavedChanges(true);
-                        setShowNewClientModal(false);
+      {/* New Client Modal */}
+      {
+        showNewClientModal && (
+          <NewClientModal
+            companyId={profile?.company_id || ''}
+            onClose={() => setShowNewClientModal(false)}
+            onSave={async (newClient) => {
+              setClients([...clients, newClient]);
+              setSelectedClientId(newClient.id);
+              setClient(newClient);
+              setHasUnsavedChanges(true);
+              setShowNewClientModal(false);
+            }}
+          />
+        )
+      }
+
+      {/* Invite Configuration Modal */}
+      {
+        showInviteConfigModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-neutral-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-bold text-neutral-900">Send Partner Invites</h3>
+                  <p className="text-sm text-neutral-500">You are inviting {pendingCollaborators.length} partner{pendingCollaborators.length !== 1 ? 's' : ''}</p>
+                </div>
+                <button
+                  onClick={() => setShowInviteConfigModal(false)}
+                  className="p-1 hover:bg-neutral-100 rounded-full text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Due Date Config */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-neutral-700">Response Deadline</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="date"
+                      className="w-full pl-10 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:border-neutral-900 outline-none transition-colors"
+                      defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        // Update all pending collaborators with this new deadline
+                        setPendingCollaborators(prev => prev.map(c => ({ ...c, deadline: e.target.value })));
                       }}
                     />
-                  )
-                }
+                  </div>
+                  <p className="text-xs text-neutral-400">Partners will see this as the due date for their proposal.</p>
+                </div>
 
-                {/* Invite Configuration Modal */}
-                {
-                  showInviteConfigModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-neutral-100 flex justify-between items-center">
-                          <div>
-                            <h3 className="text-lg font-bold text-neutral-900">Send Partner Invites</h3>
-                            <p className="text-sm text-neutral-500">You are inviting {pendingCollaborators.length} partner{pendingCollaborators.length !== 1 ? 's' : ''}</p>
-                          </div>
-                          <button
-                            onClick={() => setShowInviteConfigModal(false)}
-                            className="p-1 hover:bg-neutral-100 rounded-full text-neutral-400 hover:text-neutral-600 transition-colors"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
+                {/* Global Message */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-neutral-700">Message to Partners</label>
+                  <textarea
+                    className="w-full h-32 p-3 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:border-neutral-900 outline-none resize-none transition-colors placeholder:text-neutral-400"
+                    placeholder="e.g. Please review the scope regarding the electrical work and provide your estimate..."
+                    onChange={(e) => {
+                      // Update all with this message
+                      setPendingCollaborators(prev => prev.map(c => ({ ...c, message: e.target.value })));
+                    }}
+                  />
+                </div>
+              </div>
 
-                        <div className="p-6 space-y-6">
-                          {/* Due Date Config */}
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-neutral-700">Response Deadline</label>
-                            <div className="relative">
-                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                              <input
-                                type="date"
-                                className="w-full pl-10 pr-4 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:border-neutral-900 outline-none transition-colors"
-                                defaultValue={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                                onChange={(e) => {
-                                  // Update all pending collaborators with this new deadline
-                                  setPendingCollaborators(prev => prev.map(c => ({ ...c, deadline: e.target.value })));
-                                }}
-                              />
-                            </div>
-                            <p className="text-xs text-neutral-400">Partners will see this as the due date for their proposal.</p>
-                          </div>
+              <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
+                <button
+                  onClick={() => setShowInviteConfigModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-white border border-neutral-200 text-neutral-700 font-medium rounded-xl hover:bg-neutral-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowInviteConfigModal(false);
+                    sendCollaboratorInvitations();
+                  }}
+                  disabled={invitingCollaborators}
+                  className="flex-1 px-4 py-2.5 bg-neutral-900 text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
+                >
+                  {invitingCollaborators ? 'Sending...' : 'Send Invites'}
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-                          {/* Global Message */}
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-neutral-700">Message to Partners</label>
-                            <textarea
-                              className="w-full h-32 p-3 bg-neutral-50 border border-neutral-200 rounded-lg text-sm focus:border-neutral-900 outline-none resize-none transition-colors placeholder:text-neutral-400"
-                              placeholder="e.g. Please review the scope regarding the electrical work and provide your estimate..."
-                              onChange={(e) => {
-                                // Update all with this message
-                                setPendingCollaborators(prev => prev.map(c => ({ ...c, message: e.target.value })));
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
-                          <button
-                            onClick={() => setShowInviteConfigModal(false)}
-                            className="flex-1 px-4 py-2.5 bg-white border border-neutral-200 text-neutral-700 font-medium rounded-xl hover:bg-neutral-50 transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowInviteConfigModal(false);
-                              sendCollaboratorInvitations();
-                            }}
-                            disabled={invitingCollaborators}
-                            className="flex-1 px-4 py-2.5 bg-neutral-900 text-white font-medium rounded-xl hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
-                          >
-                            {invitingCollaborators ? 'Sending...' : 'Send Invites'}
-                            <Send className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+      {/* Send Proposal Modal */}
+      {
+        showSendModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`bg-white rounded-2xl shadow-2xl ${showEmailPreview ? 'max-w-2xl' : 'max-w-md'} w-full overflow-hidden`}>
+              {!sentAccessCode ? (
+                showEmailPreview ? (
+                  <>
+                    <div className="p-6 border-b">
+                      <h2 className="text-xl font-semibold text-neutral-900">Email Preview</h2>
+                      <p className="text-sm text-neutral-500 mt-1">This is what your client will receive</p>
                     </div>
-                  )
-                }
-
-                {/* Send Proposal Modal */}
-                {
-                  showSendModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                      <div className={`bg-white rounded-2xl shadow-2xl ${showEmailPreview ? 'max-w-2xl' : 'max-w-md'} w-full overflow-hidden`}>
-                        {!sentAccessCode ? (
-                          showEmailPreview ? (
-                            <>
-                              <div className="p-6 border-b">
-                                <h2 className="text-xl font-semibold text-neutral-900">Email Preview</h2>
-                                <p className="text-sm text-neutral-500 mt-1">This is what your client will receive</p>
-                              </div>
-                              <div className="p-4 bg-neutral-100">
-                                <iframe
-                                  srcDoc={getEmailPreviewHtml()}
-                                  title="Email Preview"
-                                  className="w-full h-[400px] bg-white rounded-lg border"
-                                  sandbox=""
-                                />
-                              </div>
-                              <div className="p-6 bg-neutral-50 flex gap-3">
-                                <button
-                                  onClick={() => setShowEmailPreview(false)}
-                                  className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
-                                >
-                                  Back
-                                </button>
-                                <button
-                                  onClick={sendProposalEmail}
-                                  disabled={sendingProposal}
-                                  className="flex-1 px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                                >
-                                  {sendingProposal ? (
-                                    <>
-                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                      Sending...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Send className="w-4 h-4" />
-                                      Send Proposal
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="p-6 border-b">
-                                <h2 className="text-xl font-semibold text-neutral-900">
-                                  {quote?.status === 'sent' ? 'Send Reminder' : 'Send Proposal'}
-                                </h2>
-                                <p className="text-sm text-neutral-500 mt-1">
-                                  {quote?.status === 'sent'
-                                    ? 'Send a reminder email to your recipient'
-                                    : `Send this proposal to your ${recipientType || 'recipient'} via email`}
-                                </p>
-                              </div>
-                              <div className="p-6 space-y-4">
-                                <div className="bg-neutral-50 rounded-xl p-4">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <p className="text-sm text-neutral-500">Sending to</p>
-                                    {recipientType === 'lead' && (
-                                      <span className="px-2 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-500 rounded-full">Lead</span>
-                                    )}
-                                    {recipientType === 'client' && (
-                                      <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Client</span>
-                                    )}
-                                  </div>
-                                  <p className="font-medium text-neutral-900">{displayClientName}</p>
-                                  <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : client?.email}</p>
-                                  {recipientType === 'client' && client?.billing_contact_email && (
-                                    <div className="mt-2 pt-2 border-t border-neutral-200">
-                                      <p className="text-xs text-neutral-400">CC: Billing Contact</p>
-                                      <p className="text-sm text-neutral-600">{client.billing_contact_name || 'Billing'} - {client.billing_contact_email}</p>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="bg-neutral-50 rounded-xl p-4">
-                                  <p className="text-sm text-neutral-500 mb-1">Proposal</p>
-                                  <p className="font-medium text-neutral-900">{projectName || documentTitle}</p>
-                                  <p className="text-sm text-neutral-600">Total: {formatCurrency(total)}</p>
-                                </div>
-                                <p className="text-xs text-neutral-500">
-                                  The client will receive an email with a secure link and 4-digit access code to view and respond to this proposal.
-                                </p>
-                              </div>
-                              <div className="p-6 bg-neutral-50 space-y-3">
-                                <div className="flex gap-3">
-                                  <button
-                                    onClick={() => setShowSendModal(false)}
-                                    className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => setShowEmailPreview(true)}
-                                    className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors flex items-center justify-center gap-2"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                    Preview
-                                  </button>
-                                </div>
-                                <button
-                                  onClick={sendProposalEmail}
-                                  disabled={sendingProposal}
-                                  className="w-full px-4 py-3 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
-                                >
-                                  {sendingProposal ? (
-                                    <>
-                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                      Sending...
-                                    </>
-                                  ) : (
-                                    <>
-                                      {quote?.status === 'sent' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                                      {quote?.status === 'sent' ? 'Send Reminder Now' : 'Send Proposal Now'}
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </>
-                          )
+                    <div className="p-4 bg-neutral-100">
+                      <iframe
+                        srcDoc={getEmailPreviewHtml()}
+                        title="Email Preview"
+                        className="w-full h-[400px] bg-white rounded-lg border"
+                        sandbox=""
+                      />
+                    </div>
+                    <div className="p-6 bg-neutral-50 flex gap-3">
+                      <button
+                        onClick={() => setShowEmailPreview(false)}
+                        className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={sendProposalEmail}
+                        disabled={sendingProposal}
+                        className="flex-1 px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {sendingProposal ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Sending...
+                          </>
                         ) : (
                           <>
-                            <div className="p-6 text-center">
-                              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Check className="w-8 h-8 text-green-600" />
-                              </div>
-                              <h2 className="text-xl font-semibold text-neutral-900 mb-2">Proposal Sent!</h2>
-                              <p className="text-neutral-600 mb-6">
-                                Your proposal has been sent to {client?.email}
-                              </p>
-                              <div className="bg-neutral-100 rounded-xl p-4 mb-4">
-                                <p className="text-sm text-neutral-500 mb-1">Access Code</p>
-                                <p className="text-3xl font-bold tracking-widest text-neutral-900">{sentAccessCode}</p>
-                              </div>
-                              <p className="text-xs text-neutral-500 mb-6">
-                                The access code was included in the email. You can also share it manually if needed.
-                              </p>
-                            </div>
-                            <div className="p-6 bg-neutral-50 space-y-3">
-                              <button
-                                onClick={() => { setShowSendModal(false); setSentAccessCode(''); setShowEmailPreview(false); }}
-                                className="w-full px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors"
-                              >
-                                Done
-                              </button>
-                              <button
-                                onClick={() => navigate('/quotes')}
-                                className="w-full px-4 py-2.5 border border-neutral-300 text-neutral-700 rounded-xl hover:bg-neutral-100 transition-colors"
-                              >
-                                Back to Proposals
-                              </button>
-                            </div>
+                            <Send className="w-4 h-4" />
+                            Send Proposal
                           </>
                         )}
-                      </div>
+                      </button>
                     </div>
-                  )
-                }
-
-                {/* Save as Template Modal */}
-                {
-                  showSaveAsTemplateModal && profile?.company_id && (
-                    <SaveAsTemplateModal
-                      companyId={profile.company_id}
-                      templateData={{
-                        title: documentTitle,
-                        description: description,
-                        scope_of_work: scopeOfWork,
-                        cover_background_url: coverBgUrl,
-                        line_items: lineItems.filter(i => i.description.trim() && !i.id.startsWith('collab-') && !i.description.startsWith('[')).map(item => ({
-                          description: item.description,
-                          unit_price: item.unitPrice,
-                          quantity: item.qty,
-                          unit: item.unit,
-                          taxed: item.taxed,
-                          estimated_days: item.estimatedDays,
-                          start_offset: item.startOffset,
-                          start_type: item.startType,
-                          depends_on: item.dependsOn,
-                          overlap_days: item.overlapDays
-                        }))
-                      }}
-                      onSave={(template) => {
-                        showToast(`Template "${template.name}" saved!`, 'success');
-                        setShowSaveAsTemplateModal(false);
-                      }}
-                      onClose={() => setShowSaveAsTemplateModal(false)}
-                    />
-                  )
-                }
-
-                {/* Template Picker Modal */}
-                {
-                  showTemplatePickerModal && profile?.company_id && (
-                    <TemplatePickerModal
-                      companyId={profile.company_id}
-                      onSelect={applyTemplate}
-                      onClose={() => setShowTemplatePickerModal(false)}
-                    />
-                  )
-                }
-
-
-                {/* Sticky Bottom Actions */}
-                {
-                  !invitationsSent && (
-                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-100 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
-                      <div className="max-w-[1000px] mx-auto flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-neutral-400 uppercase font-medium">Total Estimate</p>
-                          <p className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</p>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          {currentStep > 1 && (
-                            <button
-                              onClick={() => setCurrentStep((currentStep - 1) as WizardStep)}
-                              className="px-6 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50 rounded-xl transition-colors"
-                            >
-                              Back
-                            </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-6 border-b">
+                      <h2 className="text-xl font-semibold text-neutral-900">
+                        {quote?.status === 'sent' ? 'Send Reminder' : 'Send Proposal'}
+                      </h2>
+                      <p className="text-sm text-neutral-500 mt-1">
+                        {quote?.status === 'sent'
+                          ? 'Send a reminder email to your recipient'
+                          : `Send this proposal to your ${recipientType || 'recipient'} via email`}
+                      </p>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      <div className="bg-neutral-50 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <p className="text-sm text-neutral-500">Sending to</p>
+                          {recipientType === 'lead' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-500 rounded-full">Lead</span>
                           )}
-                          {currentStep < 5 && !ownerSigningMode ? (
-                            currentStep === 4 && pendingCollaborators.length > 0 && !invitationsSent ? (
-                              <button
-                                onClick={() => setShowInviteConfigModal(true)}
-                                className="px-8 py-3 text-sm font-medium bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-all shadow-lg shadow-[#476E66]/20 flex items-center gap-2"
-                              >
-                                Send Invites & Continue
-                                <Send className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
-                                className="px-8 py-3 text-sm font-medium bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-all shadow-lg shadow-neutral-900/20"
-                              >
-                                Next Step
-                              </button>
-                            )
-                          ) : (
-                            <button
-                              onClick={async () => {
-                                if (ownerSigningMode) {
-                                  const collaborationId = searchParams.get('collaboration_id');
-                                  if (!collaborationId) {
-                                    alert('Missing collaboration ID');
-                                    return;
-                                  }
-                                  try {
-                                    await api.signCollaborationProposal(collaborationId, quoteId || '');
-                                    alert('Successfully signed! The collaborator has been notified and a project was created for them.');
-                                    navigate('/sales');
-                                  } catch (err: any) {
-                                    console.error('Signing error:', err);
-                                    alert(err.message || 'An error occurred while signing.');
-                                  }
-                                } else {
-                                  handleSendToCustomer();
-                                }
-                              }}
-                              disabled={sendingProposal}
-                              className="px-8 py-3 text-sm font-medium bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-all shadow-lg shadow-neutral-900/20 flex items-center gap-2"
-                            >
-                              {sendingProposal ? 'Sending...' : ownerSigningMode ? 'Approve & Sign' : 'Send Proposal'}
-                              {!sendingProposal && <Send className="w-4 h-4" />}
-                            </button>
+                          {recipientType === 'client' && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">Client</span>
                           )}
                         </div>
+                        <p className="font-medium text-neutral-900">{displayClientName}</p>
+                        <p className="text-sm text-neutral-600">{recipientType === 'lead' ? selectedLead?.email : client?.email}</p>
+                        {recipientType === 'client' && client?.billing_contact_email && (
+                          <div className="mt-2 pt-2 border-t border-neutral-200">
+                            <p className="text-xs text-neutral-400">CC: Billing Contact</p>
+                            <p className="text-sm text-neutral-600">{client.billing_contact_name || 'Billing'} - {client.billing_contact_email}</p>
+                          </div>
+                        )}
                       </div>
+                      <div className="bg-neutral-50 rounded-xl p-4">
+                        <p className="text-sm text-neutral-500 mb-1">Proposal</p>
+                        <p className="font-medium text-neutral-900">{projectName || documentTitle}</p>
+                        <p className="text-sm text-neutral-600">Total: {formatCurrency(total)}</p>
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        The client will receive an email with a secure link and 4-digit access code to view and respond to this proposal.
+                      </p>
                     </div>
+                    <div className="p-6 bg-neutral-50 space-y-3">
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setShowSendModal(false)}
+                          className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => setShowEmailPreview(true)}
+                          className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Preview
+                        </button>
+                      </div>
+                      <button
+                        onClick={sendProposalEmail}
+                        disabled={sendingProposal}
+                        className="w-full px-4 py-3 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+                      >
+                        {sendingProposal ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            {quote?.status === 'sent' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                            {quote?.status === 'sent' ? 'Send Reminder Now' : 'Send Proposal Now'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="p-6 text-center">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Check className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-neutral-900 mb-2">Proposal Sent!</h2>
+                    <p className="text-neutral-600 mb-6">
+                      Your proposal has been sent to {client?.email}
+                    </p>
+                    <div className="bg-neutral-100 rounded-xl p-4 mb-4">
+                      <p className="text-sm text-neutral-500 mb-1">Access Code</p>
+                      <p className="text-3xl font-bold tracking-widest text-neutral-900">{sentAccessCode}</p>
+                    </div>
+                    <p className="text-xs text-neutral-500 mb-6">
+                      The access code was included in the email. You can also share it manually if needed.
+                    </p>
+                  </div>
+                  <div className="p-6 bg-neutral-50 space-y-3">
+                    <button
+                      onClick={() => { setShowSendModal(false); setSentAccessCode(''); setShowEmailPreview(false); }}
+                      className="w-full px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors"
+                    >
+                      Done
+                    </button>
+                    <button
+                      onClick={() => navigate('/quotes')}
+                      className="w-full px-4 py-2.5 border border-neutral-300 text-neutral-700 rounded-xl hover:bg-neutral-100 transition-colors"
+                    >
+                      Back to Proposals
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      {/* Save as Template Modal */}
+      {
+        showSaveAsTemplateModal && profile?.company_id && (
+          <SaveAsTemplateModal
+            companyId={profile.company_id}
+            templateData={{
+              title: documentTitle,
+              description: description,
+              scope_of_work: scopeOfWork,
+              cover_background_url: coverBgUrl,
+              line_items: lineItems.filter(i => i.description.trim() && !i.id.startsWith('collab-') && !i.description.startsWith('[')).map(item => ({
+                description: item.description,
+                unit_price: item.unitPrice,
+                quantity: item.qty,
+                unit: item.unit,
+                taxed: item.taxed,
+                estimated_days: item.estimatedDays,
+                start_offset: item.startOffset,
+                start_type: item.startType,
+                depends_on: item.dependsOn,
+                overlap_days: item.overlapDays
+              }))
+            }}
+            onSave={(template) => {
+              showToast(`Template "${template.name}" saved!`, 'success');
+              setShowSaveAsTemplateModal(false);
+            }}
+            onClose={() => setShowSaveAsTemplateModal(false)}
+          />
+        )
+      }
+
+      {/* Template Picker Modal */}
+      {
+        showTemplatePickerModal && profile?.company_id && (
+          <TemplatePickerModal
+            companyId={profile.company_id}
+            onSelect={applyTemplate}
+            onClose={() => setShowTemplatePickerModal(false)}
+          />
+        )
+      }
+
+
+      {/* Sticky Bottom Actions */}
+      {
+        !invitationsSent && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-100 p-4 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
+            <div className="max-w-[1000px] mx-auto flex items-center justify-between">
+              <div>
+                <p className="text-xs text-neutral-400 uppercase font-medium">Total Estimate</p>
+                <p className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {currentStep > 1 && (
+                  <button
+                    onClick={() => setCurrentStep((currentStep - 1) as WizardStep)}
+                    className="px-6 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50 rounded-xl transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
+                {currentStep < 5 && !ownerSigningMode ? (
+                  currentStep === 4 && pendingCollaborators.length > 0 && !invitationsSent ? (
+                    <button
+                      onClick={() => setShowInviteConfigModal(true)}
+                      className="px-8 py-3 text-sm font-medium bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-all shadow-lg shadow-[#476E66]/20 flex items-center gap-2"
+                    >
+                      Send Invites & Continue
+                      <Send className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setCurrentStep((currentStep + 1) as WizardStep)}
+                      className="px-8 py-3 text-sm font-medium bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-all shadow-lg shadow-neutral-900/20"
+                    >
+                      Next Step
+                    </button>
                   )
-                }
+                ) : (
+                  <button
+                    onClick={async () => {
+                      if (ownerSigningMode) {
+                        const collaborationId = searchParams.get('collaboration_id');
+                        if (!collaborationId) {
+                          alert('Missing collaboration ID');
+                          return;
+                        }
+                        try {
+                          await api.signCollaborationProposal(collaborationId, quoteId || '');
+                          alert('Successfully signed! The collaborator has been notified and a project was created for them.');
+                          navigate('/sales');
+                        } catch (err: any) {
+                          console.error('Signing error:', err);
+                          alert(err.message || 'An error occurred while signing.');
+                        }
+                      } else {
+                        handleSendToCustomer();
+                      }
+                    }}
+                    disabled={sendingProposal}
+                    className="px-8 py-3 text-sm font-medium bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-all shadow-lg shadow-neutral-900/20 flex items-center gap-2"
+                  >
+                    {sendingProposal ? 'Sending...' : ownerSigningMode ? 'Approve & Sign' : 'Send Proposal'}
+                    {!sendingProposal && <Send className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-              </div >
-              );
-        }
+    </div >
+  );
+}
 
-              function NewClientModal({companyId, onClose, onSave}: {
-                companyId: string;
+function NewClientModal({ companyId, onClose, onSave }: {
+  companyId: string;
   onClose: () => void;
   onSave: (client: Client) => void;
 }) {
   const [name, setName] = useState('');
-              const [displayName, setDisplayName] = useState('');
-              const [email, setEmail] = useState('');
-              const [phone, setPhone] = useState('');
-              const [saving, setSaving] = useState(false);
-              const [error, setError] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-                e.preventDefault();
-              if (!name.trim()) {
-                setError('Client name is required');
-              return;
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Client name is required');
+      return;
     }
 
-              setSaving(true);
-              setError(null);
+    setSaving(true);
+    setError(null);
 
-              try {
+    try {
       const newClient = await api.createClient({
-                company_id: companyId,
-              name: name.trim(),
-              display_name: displayName.trim() || name.trim(),
-              email: email.trim() || undefined,
-              phone: phone.trim() || undefined,
+        company_id: companyId,
+        name: name.trim(),
+        display_name: displayName.trim() || name.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
       });
-              onSave(newClient);
+      onSave(newClient);
     } catch (err: any) {
-                console.error('Failed to create client:', err);
-              setError(err?.message || 'Failed to create client');
+      console.error('Failed to create client:', err);
+      setError(err?.message || 'Failed to create client');
     } finally {
-                setSaving(false);
+      setSaving(false);
     }
   };
 
-              return (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl w-full max-w-md p-6 mx-4">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold text-neutral-900">New Client</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl w-full max-w-md p-6 mx-4">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-neutral-900">New Client</h2>
+          <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    {error && (
-                      <div className="p-3 bg-neutral-100 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
-                    )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-neutral-100 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
+          )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Client Name *</label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
-                        placeholder="e.g., Acme Corporation"
-                        required
-                      />
-                    </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Client Name *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
+              placeholder="e.g., Acme Corporation"
+              required
+            />
+          </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Display Name</label>
-                      <input
-                        type="text"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
-                        placeholder="Optional short name"
-                      />
-                    </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Display Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
+              placeholder="Optional short name"
+            />
+          </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Email</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
-                        placeholder="client@example.com"
-                      />
-                    </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
+              placeholder="client@example.com"
+            />
+          </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1.5">Phone</label>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
-                        placeholder="(555) 123-4567"
-                      />
-                    </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">Phone</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-neutral-400 focus:border-transparent outline-none"
+              placeholder="(555) 123-4567"
+            />
+          </div>
 
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
-                      >
-                        {saving ? 'Creating...' : 'Create Client'}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-              );
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Creating...' : 'Create Client'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }

@@ -1088,8 +1088,8 @@ Our team is dedicated to delivering high-quality results that meet your specific
                     </div>
                   </div>
                 </div>
-              )
-          })
+              )] : []
+            )
           })()}
 
           {/* PAGE 4: Investment Breakdown */}
