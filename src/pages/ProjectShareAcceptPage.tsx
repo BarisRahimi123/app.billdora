@@ -137,8 +137,7 @@ export default function ProjectShareAcceptPage() {
         const newClient = await api.createClient({
           company_id: profile.company_id,
           name: newClientName.trim(),
-          email: newClientEmail.trim() || undefined,
-          status: 'active'
+          email: newClientEmail.trim() || undefined
         });
         clientId = newClient.id;
         clientName = newClient.name;
