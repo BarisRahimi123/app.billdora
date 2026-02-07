@@ -1544,23 +1544,155 @@ export default function SalesPage() {
                 ? 'hidden lg:block lg:w-80 lg:flex-shrink-0'
                 : 'flex-1'
                 }`} style={{ boxShadow: '0 4px 20px -2px rgba(0,0,0,0.02)' }}>
+                
+                {/* Table Header - Show when extra columns selected */}
+                {visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient && (
+                  <div className="hidden sm:grid gap-4 px-4 py-3 bg-neutral-50 border-b border-neutral-100 text-[9px] font-bold uppercase tracking-widest text-neutral-500"
+                    style={{ gridTemplateColumns: `auto 44px ${visibleClientColumns.filter(c => c !== 'name').map(() => '1fr').join(' ')} 80px` }}
+                  >
+                    <span>Client</span>
+                    <span></span>
+                    {visibleClientColumns.filter(c => c !== 'name').map(col => (
+                      <span key={col}>{ALL_CLIENT_COLUMNS.find(c => c.key === col)?.label || col}</span>
+                    ))}
+                    <span className="text-right">Actions</span>
+                  </div>
+                )}
+                
                 {/* Favorites Section Header */}
                 {sortedClients.filter(c => c.is_favorite).length > 0 && filteredClients.some(c => c.is_favorite) && clientTypeFilter !== 'favorites' && (
                   <div className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50/50 border-b border-amber-100/50">
                     ⭐ Favorites
                   </div>
                 )}
-                <div className="max-h-[calc(100vh-320px)] overflow-y-auto p-2 space-y-1">
+                <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
                   {filteredClients.map((client, idx) => {
                     const favoriteClients = filteredClients.filter(c => c.is_favorite);
                     const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
                     const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
+                    const isSelected = selectedClient?.id === client.id;
+                    
+                    // Helper to get column value
+                    const getColumnValue = (col: string) => {
+                      switch (col) {
+                        case 'name': return client.name;
+                        case 'contact': return client.primary_contact_name || '-';
+                        case 'email': return client.email || client.primary_contact_email || '-';
+                        case 'phone': return client.phone || client.primary_contact_phone || '-';
+                        case 'status': return client.is_archived ? 'Archived' : 'Active';
+                        case 'type': return client.type || '-';
+                        case 'lifecycle_stage': return client.lifecycle_stage || '-';
+                        case 'address': return client.address || '-';
+                        case 'city': return client.city || '-';
+                        case 'state': return client.state || '-';
+                        case 'website': return client.website || '-';
+                        case 'billing_contact': return client.billing_contact_name || '-';
+                        case 'billing_email': return client.billing_contact_email || '-';
+                        case 'created_at': return client.created_at ? new Date(client.created_at).toLocaleDateString() : '-';
+                        default: return '-';
+                      }
+                    };
                     
                     return (
                       <React.Fragment key={client.id}>
+                        {/* Table Row View (when extra columns selected and no client selected) */}
+                        {visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient ? (
+                          <div
+                            onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
+                            className="hidden sm:grid gap-4 px-4 py-3 border-b border-neutral-50 cursor-pointer hover:bg-neutral-50 transition-colors items-center group"
+                            style={{ gridTemplateColumns: `auto 44px ${visibleClientColumns.filter(c => c !== 'name').map(() => '1fr').join(' ')} 80px` }}
+                          >
+                            {/* Client Name with Avatar */}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-neutral-100 text-neutral-500 group-hover:bg-white group-hover:shadow-sm">
+                                {client.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm truncate text-neutral-900">{client.name}</p>
+                              </div>
+                            </div>
+                            
+                            {/* Favorite Star */}
+                            <button
+                              onClick={(e) => toggleClientFavorite(client.id, e)}
+                              className="flex-shrink-0 p-1.5 rounded-full hover:bg-amber-100 transition-colors"
+                              title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                              <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-neutral-300 hover:text-amber-400'}`} />
+                            </button>
+                            
+                            {/* Dynamic Columns */}
+                            {visibleClientColumns.filter(c => c !== 'name').map(col => (
+                              <div key={col} className="text-xs text-neutral-600 truncate">
+                                {col === 'status' ? (
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                    client.is_archived 
+                                      ? 'bg-neutral-100 text-neutral-500' 
+                                      : 'bg-emerald-50 text-emerald-600'
+                                  }`}>
+                                    {getColumnValue(col)}
+                                  </span>
+                                ) : col === 'website' && client.website ? (
+                                  <a 
+                                    href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[#476E66] hover:underline flex items-center gap-1"
+                                  >
+                                    <Globe className="w-3 h-3" />
+                                    <span className="truncate">{client.website.replace(/^https?:\/\//, '')}</span>
+                                  </a>
+                                ) : col === 'email' && (client.email || client.primary_contact_email) ? (
+                                  <a 
+                                    href={`mailto:${client.email || client.primary_contact_email}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-[#476E66] hover:underline flex items-center gap-1"
+                                  >
+                                    <Mail className="w-3 h-3" />
+                                    <span className="truncate">{getColumnValue(col)}</span>
+                                  </a>
+                                ) : col === 'phone' && (client.phone || client.primary_contact_phone) ? (
+                                  <a 
+                                    href={`tel:${client.phone || client.primary_contact_phone}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-neutral-600 hover:text-[#476E66] flex items-center gap-1"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                    <span className="truncate">{getColumnValue(col)}</span>
+                                  </a>
+                                ) : col === 'address' || col === 'city' || col === 'state' ? (
+                                  <span className="flex items-center gap-1">
+                                    {col === 'address' && <MapPin className="w-3 h-3 text-neutral-400 flex-shrink-0" />}
+                                    <span className="truncate">{getColumnValue(col)}</span>
+                                  </span>
+                                ) : (
+                                  <span className="truncate">{getColumnValue(col)}</span>
+                                )}
+                              </div>
+                            ))}
+                            
+                            {/* Actions */}
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/quotes/new/document?client_id=${client.id}`);
+                                }}
+                                className="p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Create Proposal"
+                              >
+                                <FilePlus className="w-3.5 h-3.5" />
+                              </button>
+                              <div className={`w-1.5 h-1.5 rounded-full ${client.lifecycle_stage === 'lead' ? 'bg-blue-400' : 'bg-emerald-400'} shadow-[0_0_8px_rgba(52,211,153,0.4)]`}></div>
+                            </div>
+                          </div>
+                        ) : null}
+                        
+                        {/* Card View (default or when client selected, or on mobile) */}
                         <div
                           onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
-                          className={`group flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${selectedClient?.id === client.id
+                          className={`${visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient ? 'sm:hidden' : ''} group flex items-center gap-3 px-4 py-3 mx-2 my-1 rounded-xl cursor-pointer transition-all duration-200 ${isSelected
                             ? 'bg-neutral-900 shadow-lg shadow-neutral-900/10'
                             : 'hover:bg-neutral-50 hover:scale-[1.01]'
                             }`}
@@ -1569,7 +1701,7 @@ export default function SalesPage() {
                           <button
                             onClick={(e) => toggleClientFavorite(client.id, e)}
                             className={`flex-shrink-0 p-1 rounded-full transition-colors ${
-                              selectedClient?.id === client.id 
+                              isSelected 
                                 ? 'hover:bg-white/10' 
                                 : 'hover:bg-amber-100'
                             }`}
@@ -1579,7 +1711,7 @@ export default function SalesPage() {
                               className={`w-4 h-4 ${
                                 client.is_favorite 
                                   ? 'text-amber-500 fill-amber-500' 
-                                  : selectedClient?.id === client.id 
+                                  : isSelected 
                                     ? 'text-white/30 hover:text-amber-400' 
                                     : 'text-neutral-300 hover:text-amber-400'
                               }`} 
@@ -1587,7 +1719,7 @@ export default function SalesPage() {
                           </button>
                           
                           {/* Avatar */}
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${selectedClient?.id === client.id
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${isSelected
                             ? 'bg-white/20 text-white'
                             : 'bg-neutral-100 text-neutral-500 group-hover:bg-white group-hover:shadow-sm group-hover:text-neutral-700'
                             }`}>
@@ -1597,7 +1729,7 @@ export default function SalesPage() {
                           {/* Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center mb-0.5">
-                              <p className={`font-semibold text-sm truncate ${selectedClient?.id === client.id ? 'text-white' : 'text-neutral-900'}`}>
+                              <p className={`font-semibold text-sm truncate ${isSelected ? 'text-white' : 'text-neutral-900'}`}>
                                 {client.name}
                               </p>
                               {(!selectedClient && !isAddingNewClient) && (
@@ -1619,7 +1751,7 @@ export default function SalesPage() {
                                 </div>
                               )}
                             </div>
-                            <p className={`text-xs truncate ${selectedClient?.id === client.id ? 'text-white/60' : 'text-neutral-400'}`}>
+                            <p className={`text-xs truncate ${isSelected ? 'text-white/60' : 'text-neutral-400'}`}>
                               {client.primary_contact_name || client.email || 'No contact info'}
                             </p>
                           </div>
