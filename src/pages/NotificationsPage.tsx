@@ -251,8 +251,11 @@ export default function NotificationsPage() {
       } else if (notification.type?.includes('merged')) {
         // Collaborator: their work was merged - go to Inbox to see status
         navigate('/sales?tab=proposals&subtab=inbox');
+      } else if (notification.type === 'collaboration_invited') {
+        // Project collaboration invitation - go to accept page
+        navigate(`/project-share/${notification.reference_id}`);
       } else if (notification.type?.includes('invited')) {
-        // Collaborator: new invitation - go to Inbox
+        // Proposal collaboration invitation - go to Inbox
         navigate('/sales?tab=proposals&subtab=inbox');
       } else if (notification.type?.includes('accepted')) {
         // Owner: collaborator accepted - go to Sent tab

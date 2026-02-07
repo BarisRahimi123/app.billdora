@@ -243,6 +243,55 @@ Deno.serve(async (req) => {
           </p>
         </div>
       `;
+    } else if (type === 'project_collaboration_invite') {
+      const { inviterName, companyName, projectName, role, acceptUrl, permissions } = data || {};
+      const permissionsList = [];
+      if (permissions?.can_comment) permissionsList.push('Comment on project');
+      if (permissions?.can_view_financials) permissionsList.push('View financials');
+      if (permissions?.can_view_time_entries) permissionsList.push('View time entries');
+      if (permissions?.can_edit_tasks) permissionsList.push('Edit tasks');
+      
+      htmlContent = `
+        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background: #ffffff;">
+          <div style="text-align: center; margin-bottom: 40px;">
+            <div style="display: inline-block; width: 48px; height: 48px; background: #476E66; color: white; font-size: 24px; font-weight: bold; line-height: 48px; border-radius: 12px;">B</div>
+            <h1 style="margin: 16px 0 0; font-size: 24px; color: #111827;">Billdora</h1>
+          </div>
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; background: #E0E7FF; color: #3730A3; padding: 8px 20px; border-radius: 20px; font-weight: 600;">
+              🤝 Project Collaboration Invite
+            </div>
+          </div>
+          <h2 style="color: #111827; font-size: 20px; margin-bottom: 24px;">You've been invited to collaborate!</h2>
+          <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
+            <strong>${inviterName || 'Someone'}</strong> from <strong>${companyName || 'a company'}</strong> has invited you to collaborate on a project.
+          </p>
+          <div style="background: #F9FAFB; border-radius: 12px; padding: 20px; margin: 24px 0;">
+            <p style="margin: 0 0 8px; color: #6B7280; font-size: 14px;">Project</p>
+            <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">${projectName || 'Untitled Project'}</p>
+            <p style="margin: 12px 0 0; color: #6B7280; font-size: 14px;">Your role: <strong style="color: #111827; text-transform: capitalize;">${role || 'Collaborator'}</strong></p>
+          </div>
+          ${permissionsList.length > 0 ? `
+          <div style="margin: 24px 0;">
+            <p style="margin: 0 0 12px; color: #6B7280; font-size: 14px;">You'll be able to:</p>
+            <ul style="margin: 0; padding-left: 20px; color: #4B5563;">
+              ${permissionsList.map(p => `<li style="margin-bottom: 8px;">${p}</li>`).join('')}
+            </ul>
+          </div>
+          ` : ''}
+          <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
+            Click the button below to accept or decline this invitation:
+          </p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${acceptUrl || '#'}" style="display: inline-block; background: #476E66; color: white; text-decoration: none; padding: 14px 32px; font-size: 14px; font-weight: 600; border-radius: 8px;">
+              View Invitation
+            </a>
+          </div>
+          <p style="color: #9CA3AF; font-size: 14px; margin-top: 40px;">
+            If you didn't expect this invitation, you can safely ignore this email.
+          </p>
+        </div>
+      `;
     } else if (type === 'collaborator_proposal_approved') {
       const { projectName, ownerName, signedDate, viewUrl } = data || {};
       htmlContent = `

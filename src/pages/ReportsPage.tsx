@@ -15,10 +15,10 @@ interface ReportData {
 }
 
 // Time by User Report Component
-function TimeByUserReport({ timeEntries, profiles, formatCurrency }: { 
-  timeEntries: TimeEntry[]; 
+function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
+  timeEntries: TimeEntry[];
   profiles: { id: string; full_name?: string; email?: string }[];
-  formatCurrency: (amount: number) => string 
+  formatCurrency: (amount: number) => string
 }) {
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
@@ -524,11 +524,10 @@ export default function ReportsPage() {
           <button
             key={report.id}
             onClick={() => setActiveReport(report.id)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              activeReport === report.id
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeReport === report.id
                 ? 'bg-[#476E66] text-white'
                 : 'bg-white text-neutral-700 hover:bg-neutral-50'
-            }`}
+              }`}
             style={activeReport === report.id ? {} : { boxShadow: 'var(--shadow-sm)' }}
           >
             <report.icon className="w-3 h-3" />

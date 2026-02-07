@@ -1896,7 +1896,7 @@ export default function TimeExpensePage() {
         <div className="space-y-3 sm:space-y-4">
           {/* Date Range Picker */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-            <h2 className="text-base sm:text-lg font-semibold text-neutral-900">Approved History</h2>
+            <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">Approved History</h2>
             <DateRangePicker
               startDate={dateRange.startDate}
               endDate={dateRange.endDate}
@@ -1907,9 +1907,9 @@ export default function TimeExpensePage() {
           {/* Approved Time Entries - Collapsible by Project then User */}
           <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
             <div className="px-4 py-4 border-b border-neutral-100">
-              <h3 className="text-base font-semibold text-neutral-900">Approved Time Entries</h3>
-              <p className="text-sm text-neutral-500 mt-1">
-                Total: {approvedTimeEntries.reduce((sum, e) => sum + Number(e.hours), 0).toFixed(1)} hours across {
+              <h3 className="text-neutral-500 text-[10px] uppercase tracking-wider font-semibold">Approved Time Entries</h3>
+              <p className="text-[10px] text-neutral-400 mt-1 font-mono">
+                Total: <span className="text-neutral-700 font-medium">{approvedTimeEntries.reduce((sum, e) => sum + Number(e.hours), 0).toFixed(1)}h</span> across {
                   new Set(approvedTimeEntries.map(e => e.project?.id)).size
                 } projects
               </p>
@@ -1960,11 +1960,11 @@ export default function TimeExpensePage() {
                         <div className="flex items-center gap-3">
                           <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isProjectExpanded ? '' : '-rotate-90'}`} />
                           <div className="text-left">
-                            <span className="font-semibold text-neutral-900">{project.name}</span>
-                            <p className="text-xs text-neutral-500 mt-0.5">{userCount} team member{userCount !== 1 ? 's' : ''} • {entryCount} entries</p>
+                            <span className="text-xs font-medium text-neutral-700">{project.name}</span>
+                            <p className="text-[10px] text-neutral-400 mt-0.5 font-mono">{userCount} team member{userCount !== 1 ? 's' : ''} • {entryCount} entries</p>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{projectTotalHours.toFixed(1)}h</span>
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full font-mono">{projectTotalHours.toFixed(1)}h</span>
                       </button>
 
                       {/* Users under project - Collapsible */}
@@ -1992,10 +1992,10 @@ export default function TimeExpensePage() {
                                 >
                                   <div className="flex items-center gap-2">
                                     <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isUserExpanded ? '' : '-rotate-90'}`} />
-                                    <span className="font-medium text-neutral-800">{user.name}</span>
-                                    <span className="text-xs text-neutral-500">({user.entries.length} entries)</span>
+                                    <span className="text-xs font-medium text-neutral-700">{user.name}</span>
+                                    <span className="text-[10px] text-neutral-400 font-mono">({user.entries.length} entries)</span>
                                   </div>
-                                  <span className="text-sm font-medium text-emerald-600">{userTotalHours.toFixed(2)}h</span>
+                                  <span className="text-xs font-medium text-emerald-600 font-mono">{userTotalHours.toFixed(2)}h</span>
                                 </button>
 
                                 {/* Entries Table - Collapsible */}
@@ -2040,9 +2040,9 @@ export default function TimeExpensePage() {
           {/* Approved Expenses - Collapsible by Project then User */}
           <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
             <div className="px-4 py-4 border-b border-neutral-100">
-              <h3 className="text-base font-semibold text-neutral-900">Approved Expenses</h3>
-              <p className="text-sm text-neutral-500 mt-1">
-                Total: {formatCurrency(approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0))} across {
+              <h3 className="text-neutral-500 text-[10px] uppercase tracking-wider font-semibold">Approved Expenses</h3>
+              <p className="text-[10px] text-neutral-400 mt-1 font-mono">
+                Total: <span className="text-neutral-700 font-medium">{formatCurrency(approvedExpenses.reduce((sum, e) => sum + Number(e.amount), 0))}</span> across {
                   new Set(approvedExpenses.map(e => e.project?.id)).size
                 } projects
               </p>
@@ -2092,11 +2092,11 @@ export default function TimeExpensePage() {
                         <div className="flex items-center gap-3">
                           <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isProjectExpanded ? '' : '-rotate-90'}`} />
                           <div className="text-left">
-                            <span className="font-semibold text-neutral-900">{project.name}</span>
-                            <p className="text-xs text-neutral-500 mt-0.5">{userCount} team member{userCount !== 1 ? 's' : ''} • {expenseCount} expenses</p>
+                            <span className="text-xs font-medium text-neutral-700">{project.name}</span>
+                            <p className="text-[10px] text-neutral-400 mt-0.5 font-mono">{userCount} team member{userCount !== 1 ? 's' : ''} • {expenseCount} expenses</p>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-neutral-900 bg-white px-3 py-1 rounded-full">{formatCurrency(projectTotal)}</span>
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full font-mono">{formatCurrency(projectTotal)}</span>
                       </button>
 
                       {/* Users under project - Collapsible */}
@@ -2124,10 +2124,10 @@ export default function TimeExpensePage() {
                                 >
                                   <div className="flex items-center gap-2">
                                     <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${isUserExpanded ? '' : '-rotate-90'}`} />
-                                    <span className="font-medium text-neutral-800">{user.name}</span>
-                                    <span className="text-xs text-neutral-500">({user.expenses.length} expenses)</span>
+                                    <span className="text-xs font-medium text-neutral-700">{user.name}</span>
+                                    <span className="text-[10px] text-neutral-400 font-mono">({user.expenses.length} expenses)</span>
                                   </div>
-                                  <span className="text-sm font-medium text-[#476E66]">{formatCurrency(userTotal)}</span>
+                                  <span className="text-xs font-medium text-[#476E66] font-mono">{formatCurrency(userTotal)}</span>
                                 </button>
 
                                 {/* Expenses - Collapsible */}

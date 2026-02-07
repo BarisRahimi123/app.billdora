@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Fragment } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -889,9 +889,9 @@ export default function InvoicingPage() {
                     {activeTab !== 'aging' && <td className="px-2 py-3 hidden md:table-cell">
                       <div className="flex items-center gap-1.5">
                         <span className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest border ${invoice.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                            invoice.status === 'sent' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                              invoice.status === 'overdue' ? 'bg-red-50 text-red-700 border-red-100' :
-                                'bg-neutral-100 text-neutral-600 border-neutral-200'
+                          invoice.status === 'sent' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                            invoice.status === 'overdue' ? 'bg-red-50 text-red-700 border-red-100' :
+                              'bg-neutral-100 text-neutral-600 border-neutral-200'
                           }`}>
                           {invoice.status || 'draft'}
                         </span>
@@ -1947,61 +1947,84 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
                   {/* Time Entries */}
                   {tmTimeEntries.length > 0 && (
                     <div className="border border-neutral-200 rounded-lg overflow-hidden">
-                      <div className="bg-neutral-50 px-2.5 py-1.5 border-b border-neutral-200 flex items-center justify-between">
-                        <span className="text-xs font-medium text-neutral-700">Time Entries ({tmTimeEntries.length})</span>
+                      <div className="bg-neutral-50 px-3 py-2 border-b border-neutral-200 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-neutral-900 uppercase tracking-wide mb-0.5">
+                            {projects.find(p => p.id === projectId)?.name || 'Project'}
+                          </p>
+                          <p className="text-[10px] font-medium text-neutral-500">
+                            Time Entries ({tmTimeEntries.length})
+                          </p>
+                        </div>
                         <span className="text-xs font-medium text-[#476E66]">{formatCurrency(tmCalculation.timeTotal)}</span>
                       </div>
-                      <div className="max-h-36 overflow-y-auto">
+                      <div className="max-h-60 overflow-y-auto">
                         <table className="w-full text-xs">
-                          <thead className="bg-neutral-50 sticky top-0">
+                          <thead className="bg-white sticky top-0 z-10 shadow-sm border-b border-neutral-100">
                             <tr>
-                              <th className="text-left px-2 py-1.5 font-medium text-neutral-600 w-8">
+                              <th className="text-left px-3 py-2 font-medium text-neutral-600 w-8">
                                 <input
                                   type="checkbox"
                                   checked={selectedTimeEntries.size === tmTimeEntries.length}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setSelectedTimeEntries(new Set(tmTimeEntries.map(t => t.id)));
+                                      setSelectedTimeEntries(new Set(tmTimeEntries.map((t: any) => t.id)));
                                     } else {
                                       setSelectedTimeEntries(new Set());
                                     }
                                   }}
-                                  className="w-3 h-3 text-[#476E66] rounded border-neutral-300"
+                                  className="w-3.5 h-3.5 text-[#476E66] rounded border-neutral-300 focus:ring-[#476E66]"
                                 />
                               </th>
-                              <th className="text-left px-2 py-1.5 font-medium text-neutral-600">Date</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-neutral-600">Person</th>
-                              <th className="text-left px-2 py-1.5 font-medium text-neutral-600">Task</th>
-                              <th className="text-right px-2 py-1.5 font-medium text-neutral-600">Hours</th>
-                              <th className="text-right px-2 py-1.5 font-medium text-neutral-600">Rate</th>
-                              <th className="text-right px-2 py-1.5 font-medium text-neutral-600">Amount</th>
+                              <th className="text-left px-2 py-2 font-medium text-neutral-600">Details</th>
+                              <th className="text-right px-3 py-2 font-medium text-neutral-600">Hours</th>
+                              <th className="text-right px-3 py-2 font-medium text-neutral-600">Rate</th>
+                              <th className="text-right px-3 py-2 font-medium text-neutral-600">Amount</th>
                             </tr>
                           </thead>
-                          <tbody>
-                            {tmTimeEntries.map((entry) => (
-                              <tr key={entry.id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                                <td className="px-2 py-1.5">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedTimeEntries.has(entry.id)}
-                                    onChange={() => {
-                                      const newSet = new Set(selectedTimeEntries);
-                                      if (newSet.has(entry.id)) newSet.delete(entry.id);
-                                      else newSet.add(entry.id);
-                                      setSelectedTimeEntries(newSet);
-                                    }}
-                                    className="w-3 h-3 text-[#476E66] rounded border-neutral-300"
-                                  />
+                          {Object.entries(tmTimeEntries.reduce((acc: Record<string, any[]>, entry: any) => {
+                            const taskName = entry.tasks?.name || 'General Tasks';
+                            if (!acc[taskName]) acc[taskName] = [];
+                            acc[taskName].push(entry);
+                            return acc;
+                          }, {})).map(([taskName, entries]: [string, any[]]) => (
+                            <tbody key={taskName} className="border-b border-neutral-50 last:border-0">
+                              <tr className="bg-neutral-50/30">
+                                <td colSpan={5} className="px-3 py-1.5">
+                                  <div className="flex items-center gap-2 pl-8">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-300"></div>
+                                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                                      {taskName}
+                                    </span>
+                                  </div>
                                 </td>
-                                <td className="px-2 py-1.5 text-neutral-600">{new Date(entry.date).toLocaleDateString()}</td>
-                                <td className="px-2 py-1.5">{entry.profiles?.full_name || 'Unknown'}</td>
-                                <td className="px-2 py-1.5 truncate max-w-[120px]">{entry.tasks?.name || '-'}</td>
-                                <td className="px-2 py-1.5 text-right">{entry.hours}</td>
-                                <td className="px-2 py-1.5 text-right">${entry.hourly_rate || 0}</td>
-                                <td className="px-2 py-1.5 text-right font-medium">{formatCurrency((entry.hours || 0) * (entry.hourly_rate || 0))}</td>
                               </tr>
-                            ))}
-                          </tbody>
+                              {entries.map((entry: any) => (
+                                <tr key={entry.id} className="hover:bg-neutral-50 group transition-colors">
+                                  <td className="px-3 py-2 align-top">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedTimeEntries.has(entry.id)}
+                                      onChange={() => {
+                                        const newSet = new Set(selectedTimeEntries);
+                                        if (newSet.has(entry.id)) newSet.delete(entry.id);
+                                        else newSet.add(entry.id);
+                                        setSelectedTimeEntries(newSet);
+                                      }}
+                                      className="w-3.5 h-3.5 text-[#476E66] rounded border-neutral-300 focus:ring-[#476E66] mt-0.5"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-2 align-top">
+                                    <div className="font-medium text-neutral-900">{entry.profiles?.full_name || 'Unknown'}</div>
+                                    <div className="text-[10px] text-neutral-500">{new Date(entry.date).toLocaleDateString()}</div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right align-top">{entry.hours}</td>
+                                  <td className="px-3 py-2 text-right text-neutral-500 align-top">${entry.hourly_rate || 0}</td>
+                                  <td className="px-3 py-2 text-right font-medium align-top">{formatCurrency((entry.hours || 0) * (entry.hourly_rate || 0))}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          ))}
                         </table>
                       </div>
                     </div>
@@ -2200,6 +2223,8 @@ interface InvoiceLineItem {
   billedPercentage?: number; // Percentage billed with this invoice
   priorBilledPercentage?: number; // Cumulative prior billing percentage
   taskBudget?: number; // Total task budget
+  taskName?: string;
+  projectName?: string;
 }
 
 // PDF Template type for detail view
@@ -2571,9 +2596,20 @@ function InvoiceDetailView({
         .eq('invoice_id', invoice.id);
 
       if (savedLineItems && savedLineItems.length > 0) {
-        // Get task budgets
+        // Get task details with project info
         let taskMap: Record<string, any> = {};
-        if (invoice.project_id) {
+        const taskIds = Array.from(new Set(savedLineItems.map(i => i.task_id).filter(Boolean)));
+
+        if (taskIds.length > 0) {
+          const { data: tasks } = await supabase
+            .from('tasks')
+            .select('id, name, total_budget, estimated_fees, projects(name)')
+            .in('id', taskIds);
+
+          if (tasks) {
+            taskMap = Object.fromEntries(tasks.map(t => [t.id, t]));
+          }
+        } else if (invoice.project_id) {
           const { data: tasks } = await supabase
             .from('tasks')
             .select('id, name, total_budget, estimated_fees')
@@ -2616,10 +2652,12 @@ function InvoiceDetailView({
             quantity: item.quantity || 1,
             rate: item.unit_price || item.amount || 0,
             amount: item.amount || 0,
-            unit: 'unit',
+            unit: 'unit', // basic fallback, usually we'd infer from rate/qty or description
             billedPercentage: Math.round(itemBilledPct),
             priorBilledPercentage: Math.round(priorBilledPct),
-            taskBudget: taskBudget
+            taskBudget: taskBudget,
+            taskName: task?.name || (item.description && item.description.includes(':') ? item.description.split(':')[1].trim() : undefined),
+            projectName: task?.projects?.name || (invoice.project?.name) || (item.description && item.description.includes(':') ? item.description.split(':')[0].trim() : undefined)
           };
         });
         setLineItems(items);
@@ -2708,22 +2746,29 @@ function InvoiceDetailView({
   }
 
   async function loadTimeEntries() {
-    if (invoice.project_id) {
-      try {
-        const { data } = await supabase
-          .from('time_entries')
-          .select('*, profiles(full_name), tasks(name)')
-          .eq('project_id', invoice.project_id)
-          .eq('approval_status', 'approved');
+    try {
+      let query = supabase
+        .from('time_entries')
+        .select('*, profiles(full_name), tasks(name)');
 
-        if (data) {
-          setTimeEntries(data);
-          const total = data.reduce((sum, entry) => sum + (entry.billable_amount || 0), 0);
-          setTimeTotal(total);
-        }
-      } catch (err) {
-        console.error('Failed to load time entries:', err);
+      // If invoice exists, fetch entries linked to it. Otherwise fetch by project.
+      if (invoice.id) {
+        query = query.eq('invoice_id', invoice.id);
+      } else if (invoice.project_id) {
+        query = query.eq('project_id', invoice.project_id).eq('approval_status', 'approved');
+      } else {
+        return;
       }
+
+      const { data } = await query;
+
+      if (data) {
+        setTimeEntries(data);
+        const total = data.reduce((sum, entry) => sum + (entry.billable_amount || 0), 0);
+        setTimeTotal(total);
+      }
+    } catch (err) {
+      console.error('Failed to load time entries:', err);
     }
   }
 
@@ -3175,42 +3220,69 @@ function InvoiceDetailView({
                     </div>
                   </>
                 ) : calculatorType === 'time_material' ? (
-                  /* Time & Material - Detailed breakdown with hours */
+                  /* Time & Material - Grouped by Project, List of Tasks */
                   <>
                     <h4 className="font-semibold text-neutral-900 mb-4 text-lg">Time & Material Details</h4>
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-neutral-500 text-sm border-b border-neutral-200">
-                          <th className="pb-3 font-medium">Description</th>
-                          <th className="pb-3 font-medium text-center w-24">Hours</th>
-                          <th className="pb-3 font-medium text-right w-32">Rate</th>
-                          <th className="pb-3 font-medium text-right w-32">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100">
-                        {lineItems.map(item => (
-                          <tr key={item.id}>
-                            <td className="py-3">{item.description || 'Service'}</td>
-                            <td className="py-3 text-center">{item.quantity}{item.unit === 'hr' ? 'h' : ''}</td>
-                            <td className="py-3 text-right">{formatCurrency(item.rate)}{item.unit === 'hr' ? '/hr' : '/unit'}</td>
-                            <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {timeEntries.length > 0 && (
-                      <div className="mt-6 pt-4 border-t border-neutral-100">
-                        <p className="text-sm text-neutral-500 mb-2 font-medium">Time Entries Included:</p>
-                        <div className="text-sm text-neutral-600 space-y-1 max-h-32 overflow-y-auto">
-                          {timeEntries.map((entry: any) => (
-                            <p key={entry.id} className="flex justify-between">
-                              <span>• {entry.description || 'Time entry'} ({new Date(entry.date).toLocaleDateString()})</span>
-                              <span className="font-medium">{Number(entry.hours || 0).toFixed(1)}h</span>
-                            </p>
-                          ))}
+
+                    {Object.entries(lineItems.reduce((acc, item) => {
+                      const proj = item.projectName || 'Professional Services';
+                      if (!acc[proj]) acc[proj] = [];
+                      acc[proj].push(item);
+                      return acc;
+                    }, {} as Record<string, InvoiceLineItem[]>)).map(([projName, items]) => (
+                      <div key={projName} className="mb-8 break-inside-avoid">
+                        {/* Project Header */}
+                        <div className="border-b-2 border-[#476E66] mb-3 pb-1">
+                          <h3 className="text-lg font-bold text-[#476E66] uppercase tracking-wide">{projName}</h3>
                         </div>
+
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-xs font-bold text-neutral-500 uppercase border-b border-neutral-200 bg-neutral-50/30">
+                              <th className="text-left py-2 px-2 w-32">Task</th>
+                              <th className="text-left py-2 px-2">Description</th>
+                              <th className="text-center py-2 px-2 w-20">Hours</th>
+                              <th className="text-right py-2 px-2 w-24">Rate</th>
+                              <th className="text-right py-2 px-2 w-24">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-100">
+                            {items.map(item => (
+                              <tr key={item.id} className="hover:bg-neutral-50">
+                                <td className="py-2.5 px-2 font-bold text-neutral-800 align-top">
+                                  {item.taskName || 'Service'}
+                                </td>
+                                <td className="py-2.5 px-2 text-neutral-600 align-top">
+                                  {item.description && item.description.includes(':')
+                                    ? item.description.split(':').pop()?.trim()
+                                    : item.description || 'No description'}
+                                </td>
+                                <td className="py-2.5 px-2 text-center text-neutral-700 font-medium align-top">
+                                  {item.quantity}
+                                </td>
+                                <td className="py-2.5 px-2 text-right text-neutral-500 align-top">
+                                  {formatCurrency(item.rate)}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-bold text-neutral-900 align-top">
+                                  {formatCurrency(item.amount)}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Project Subtotal */}
+                            <tr className="bg-neutral-50 font-bold border-t border-neutral-200">
+                              <td colSpan={4} className="py-2 px-2 text-right text-xs uppercase text-neutral-500 tracking-wider">
+                                Total {projName}
+                              </td>
+                              <td className="py-2 px-2 text-right text-[#476E66]">
+                                {formatCurrency(items.reduce((sum, i) => sum + i.amount, 0))}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
-                    )}
+                    ))}
+
+                    {lineItems.length === 0 && <p className="text-neutral-500 italic">No time entries found.</p>}
                   </>
                 ) : (
                   /* Fixed Fee - Simple line items without hourly breakdown */
@@ -3834,113 +3906,115 @@ function InvoiceDetailView({
       </div>
 
       {/* Send Invoice Modal */}
-      {showSendModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
-            <div className="p-6 border-b border-neutral-100">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-semibold">Send Invoice</h3>
-                <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-neutral-100 rounded-lg">
-                  <X className="w-5 h-5" />
+      {
+        showSendModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
+              <div className="p-6 border-b border-neutral-100">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">Send Invoice</h3>
+                  <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-neutral-100 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Recipient</label>
+                  <div className="px-4 py-3 bg-neutral-50 rounded-lg">
+                    <p className="font-medium">{invoice.client?.name}</p>
+                    <p className="text-sm text-neutral-500">{invoice.client?.email || 'No email on file'}</p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Invoice Details</label>
+                  <div className="px-4 py-3 bg-neutral-50 rounded-lg flex justify-between items-center">
+                    <span className="text-neutral-600">Invoice {invoiceNumber}</span>
+                    <span className="font-semibold text-lg">{formatCurrency(invoice.total)}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Email Message</label>
+                  <textarea
+                    value={emailContent}
+                    onChange={(e) => setEmailContent(e.target.value)}
+                    rows={6}
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
+                    placeholder="Enter your email message..."
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">You can customize this message before sending.</p>
+                </div>
+              </div>
+              <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
+                <button
+                  onClick={() => setShowSendModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!invoice.client?.email) {
+                      alert('Client does not have an email address on file.');
+                      return;
+                    }
+                    setSendingInvoice(true);
+                    try {
+                      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                      const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${supabaseAnonKey}`
+                        },
+                        body: JSON.stringify({
+                          invoiceId: invoice.id,
+                          clientEmail: invoice.client.email,
+                          clientName: invoice.client.name,
+                          invoiceNumber: invoiceNumber,
+                          projectName: invoice.project?.name || '',
+                          companyName: profile?.full_name || 'Billdora',
+                          senderName: profile?.full_name || 'Billdora',
+                          totalAmount: formatCurrency(invoice.total),
+                          dueDate: dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+                          emailContent,
+                          portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`
+                        })
+                      });
+                      const data = await res.json();
+                      if (data.error) throw new Error(data.error);
+                      setShowSendModal(false);
+                      setStatus('sent');
+                      setSentDate(new Date().toISOString().split('T')[0]);
+                      onUpdate();
+                      alert('Invoice sent successfully!');
+                    } catch (error: any) {
+                      console.error('Failed to send invoice:', error);
+                      alert(error?.message || 'Failed to send invoice');
+                    }
+                    setSendingInvoice(false);
+                  }}
+                  disabled={sendingInvoice || !invoice.client?.email}
+                  className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3a5b54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {sendingInvoice ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Invoice
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Recipient</label>
-                <div className="px-4 py-3 bg-neutral-50 rounded-lg">
-                  <p className="font-medium">{invoice.client?.name}</p>
-                  <p className="text-sm text-neutral-500">{invoice.client?.email || 'No email on file'}</p>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Invoice Details</label>
-                <div className="px-4 py-3 bg-neutral-50 rounded-lg flex justify-between items-center">
-                  <span className="text-neutral-600">Invoice {invoiceNumber}</span>
-                  <span className="font-semibold text-lg">{formatCurrency(invoice.total)}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Email Message</label>
-                <textarea
-                  value={emailContent}
-                  onChange={(e) => setEmailContent(e.target.value)}
-                  rows={6}
-                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
-                  placeholder="Enter your email message..."
-                />
-                <p className="text-xs text-neutral-500 mt-1">You can customize this message before sending.</p>
-              </div>
-            </div>
-            <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
-              <button
-                onClick={() => setShowSendModal(false)}
-                className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (!invoice.client?.email) {
-                    alert('Client does not have an email address on file.');
-                    return;
-                  }
-                  setSendingInvoice(true);
-                  try {
-                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-                    const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseAnonKey}`
-                      },
-                      body: JSON.stringify({
-                        invoiceId: invoice.id,
-                        clientEmail: invoice.client.email,
-                        clientName: invoice.client.name,
-                        invoiceNumber: invoiceNumber,
-                        projectName: invoice.project?.name || '',
-                        companyName: profile?.full_name || 'Billdora',
-                        senderName: profile?.full_name || 'Billdora',
-                        totalAmount: formatCurrency(invoice.total),
-                        dueDate: dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
-                        emailContent,
-                        portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`
-                      })
-                    });
-                    const data = await res.json();
-                    if (data.error) throw new Error(data.error);
-                    setShowSendModal(false);
-                    setStatus('sent');
-                    setSentDate(new Date().toISOString().split('T')[0]);
-                    onUpdate();
-                    alert('Invoice sent successfully!');
-                  } catch (error: any) {
-                    console.error('Failed to send invoice:', error);
-                    alert(error?.message || 'Failed to send invoice');
-                  }
-                  setSendingInvoice(false);
-                }}
-                disabled={sendingInvoice || !invoice.client?.email}
-                className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3a5b54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {sendingInvoice ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    Send Invoice
-                  </>
-                )}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

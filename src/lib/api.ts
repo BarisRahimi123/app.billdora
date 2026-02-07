@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { withRetry, formatApiError, ensureValidSession } from './apiUtils';
+import { NotificationService } from './notificationService';
 
 // Wrapper for API calls with retry logic and session validation
 async function apiCall<T>(fn: () => Promise<T>): Promise<T> {
@@ -45,6 +46,7 @@ export interface Client {
   lifecycle_stage?: string;
   is_archived?: boolean;
   is_favorite?: boolean;
+  priority?: number; // 1 = highest, 2 = medium, 3 = lower priority
   created_at?: string;
   // Primary Contact (legacy - kept for backwards compatibility)
   primary_contact_name?: string;
@@ -112,6 +114,8 @@ export interface Project {
   retainer_stripe_payment_id?: string;
   total_project_amount?: number;
   retainer_percentage?: number;
+  is_favorite?: boolean;
+  priority?: number; // 1 = highest, 2 = medium, 3 = lower priority
 }
 
 export interface Task {
@@ -149,6 +153,61 @@ export interface Task {
   // Collaborator fields
   collaborator_company_id?: string;
   collaborator_company_name?: string;
+}
+
+export interface ProjectComment {
+  id: string;
+  project_id: string;
+  company_id: string;
+  author_id: string;
+  author_name?: string;
+  author_email?: string;
+  content: string;
+  visibility: 'all' | 'internal' | 'owner_only';
+  parent_id?: string;
+  is_resolved?: boolean;
+  attachments?: Array<{
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }>;
+  mentions?: string[];
+  created_at?: string;
+  updated_at?: string;
+  // Nested replies
+  replies?: ProjectComment[];
+}
+
+export interface ProjectCollaborator {
+  id: string;
+  project_id: string;
+  invited_email: string;
+  invited_user_id?: string;
+  invited_company_id?: string;
+  invited_by_user_id: string;
+  invited_by_company_id: string;
+  role: 'client' | 'collaborator' | 'viewer';
+  relationship?: 'my_client' | 'subcontractor' | 'partner';
+  their_client_id?: string;
+  their_client_name?: string;
+  status: 'pending' | 'accepted' | 'declined';
+  can_view_financials: boolean;
+  can_view_time_entries: boolean;
+  can_comment: boolean;
+  can_invite_others: boolean;
+  can_edit_tasks: boolean;
+  invited_at?: string;
+  accepted_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Joined data
+  project?: Project;
+  invited_by_profile?: { full_name: string; email: string };
+  invited_by_company?: { company_name: string };
+  invited_company?: { name: string };  // Company of the invited user (when accepted)
+  invited_user_name?: string;  // Name of the invited user (when accepted)
+  replies?: ProjectComment[];
 }
 
 export interface TaskBillingSelection {
@@ -244,6 +303,11 @@ export interface Invoice {
   consolidated_from?: string[]; // Array of invoice IDs that were merged into this invoice
   client?: Client;
   project?: Project;
+  invoice_line_items?: {
+    task?: {
+      project_id: string;
+    };
+  }[];
 }
 
 export interface Quote {
@@ -3466,5 +3530,480 @@ export const retainerApi = {
       .eq('id', quoteId);
 
     if (error) throw error;
+  }
+};
+
+// Project Comments API
+export const projectCommentsApi = {
+  async getByProject(projectId: string): Promise<ProjectComment[]> {
+    const { data, error } = await supabase
+      .from('project_comments')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    // Organize into threaded structure
+    const comments = data || [];
+    const topLevel = comments.filter(c => !c.parent_id);
+    const replies = comments.filter(c => c.parent_id);
+
+    // Attach replies to their parent comments
+    return topLevel.map(comment => ({
+      ...comment,
+      replies: replies.filter(r => r.parent_id === comment.id)
+    }));
+  },
+
+  async create(comment: {
+    project_id: string;
+    company_id: string;
+    author_id: string;
+    author_name?: string;
+    author_email?: string;
+    content: string;
+    visibility?: 'all' | 'internal' | 'owner_only';
+    parent_id?: string;
+    mentions?: string[];
+  }): Promise<ProjectComment> {
+    const { data, error } = await supabase
+      .from('project_comments')
+      .insert({
+        ...comment,
+        visibility: comment.visibility || 'all'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async update(id: string, updates: {
+    content?: string;
+    visibility?: 'all' | 'internal' | 'owner_only';
+    is_resolved?: boolean;
+  }): Promise<ProjectComment> {
+    const { data, error } = await supabase
+      .from('project_comments')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('project_comments')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  async toggleResolved(id: string, isResolved: boolean): Promise<ProjectComment> {
+    return this.update(id, { is_resolved: isResolved });
+  }
+};
+
+// Project Collaborators API
+export const projectCollaboratorsApi = {
+  // Get all collaborators for a project
+  async getByProject(projectId: string): Promise<ProjectCollaborator[]> {
+    try {
+      const { data, error } = await supabase
+        .from('project_collaborators')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[projectCollaboratorsApi] getByProject error:', error);
+        return [];
+      }
+
+      if (!data || data.length === 0) return [];
+
+      // Fetch company names and user names for accepted collaborators
+      const acceptedWithCompanies = data.filter(d => d.status === 'accepted' && d.invited_company_id);
+      const companyIds = [...new Set(acceptedWithCompanies.map(d => d.invited_company_id).filter(Boolean))];
+      const userIds = [...new Set(acceptedWithCompanies.map(d => d.invited_user_id).filter(Boolean))];
+
+      let companyMap: Record<string, string> = {};
+      let userMap: Record<string, string> = {};
+
+      if (companyIds.length > 0) {
+        const { data: companies } = await supabase
+          .from('companies')
+          .select('id, name')
+          .in('id', companyIds);
+        
+        companyMap = (companies || []).reduce((acc, c) => {
+          acc[c.id] = c.name;
+          return acc;
+        }, {} as Record<string, string>);
+      }
+
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
+        
+        userMap = (profiles || []).reduce((acc, p) => {
+          acc[p.id] = p.full_name || '';
+          return acc;
+        }, {} as Record<string, string>);
+      }
+
+      // Enrich collaborators with company and user names
+      return data.map(collab => ({
+        ...collab,
+        invited_company: collab.invited_company_id && companyMap[collab.invited_company_id] 
+          ? { name: companyMap[collab.invited_company_id] } 
+          : undefined,
+        invited_user_name: collab.invited_user_id ? userMap[collab.invited_user_id] : undefined
+      }));
+    } catch (err) {
+      console.error('[projectCollaboratorsApi] getByProject exception:', err);
+      return [];
+    }
+  },
+
+  // Get all invitations for the current user (by email or user_id)
+  async getMyInvitations(userEmail: string, userId?: string): Promise<ProjectCollaborator[]> {
+    try {
+      console.log('[projectCollaboratorsApi] getMyInvitations called for:', userEmail);
+      
+      // Use RPC function that includes project and company details (bypasses RLS)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_my_project_invitations', {
+        target_email: userEmail
+      });
+
+      console.log('[projectCollaboratorsApi] RPC result:', { data: rpcData, error: rpcError });
+
+      if (rpcError) {
+        console.error('[projectCollaboratorsApi] getMyInvitations RPC error:', rpcError);
+        return [];
+      }
+
+      if (!rpcData || rpcData.length === 0) {
+        return [];
+      }
+
+      // Transform RPC response to include nested project and company objects
+      return rpcData.map((d: any) => ({
+        ...d,
+        project: d.project_name ? { 
+          id: d.project_id, 
+          name: d.project_name, 
+          status: d.project_status 
+        } : null,
+        invited_by_company: d.invited_by_company_name ? { 
+          company_name: d.invited_by_company_name 
+        } : null
+      }));
+    } catch (err) {
+      console.error('[projectCollaboratorsApi] getMyInvitations exception:', err);
+      return [];
+    }
+  },
+
+  // Get projects shared with the current user (accepted invitations)
+  async getSharedProjects(userEmail: string, userId?: string): Promise<ProjectCollaborator[]> {
+    try {
+      console.log('[projectCollaboratorsApi] getSharedProjects called:', { userEmail, userId });
+      
+      // Use RPC function that bypasses RLS for reliable fetching
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_my_shared_projects', {
+        target_email: userEmail.toLowerCase(),
+        target_user_id: userId || null
+      });
+
+      console.log('[projectCollaboratorsApi] getSharedProjects RPC result:', { data: rpcData, error: rpcError });
+
+      if (rpcError) {
+        console.error('[projectCollaboratorsApi] getSharedProjects RPC error:', rpcError);
+        return [];
+      }
+
+      if (!rpcData || rpcData.length === 0) {
+        console.log('[projectCollaboratorsApi] getSharedProjects: no shared projects found');
+        return [];
+      }
+
+      // Transform RPC response to include nested project object
+      const result = rpcData.map((d: any) => ({
+        id: d.collaboration_id,
+        project_id: d.project_id,
+        invited_email: d.invited_email,
+        invited_user_id: d.invited_user_id,
+        invited_company_id: d.invited_company_id,
+        role: d.role,
+        relationship: d.relationship,
+        their_client_id: d.their_client_id,
+        their_client_name: d.their_client_name,
+        can_view_financials: d.can_view_financials,
+        can_view_time_entries: d.can_view_time_entries,
+        can_comment: d.can_comment,
+        can_edit_tasks: d.can_edit_tasks,
+        accepted_at: d.accepted_at,
+        status: 'accepted',
+        project: {
+          id: d.project_id,
+          company_id: d.project_company_id,
+          name: d.project_name,
+          status: d.project_status,
+          description: d.project_description,
+          start_date: d.project_start_date,
+          end_date: d.project_end_date,
+          budget: d.project_budget,
+          client_id: d.project_client_id,
+          priority: d.project_priority
+        },
+        invited_by_company: d.inviter_company_name ? {
+          name: d.inviter_company_name
+        } : null
+      }));
+      
+      console.log('[projectCollaboratorsApi] getSharedProjects returning:', result.length, 'projects');
+      return result;
+    } catch (err) {
+      console.error('[projectCollaboratorsApi] getSharedProjects exception:', err);
+      return [];
+    }
+  },
+
+  // Invite a collaborator to a project
+  async invite(invitation: {
+    project_id: string;
+    invited_email: string;
+    invited_by_user_id: string;
+    invited_by_company_id: string;
+    role?: 'client' | 'collaborator' | 'viewer';
+    relationship?: 'my_client' | 'subcontractor' | 'partner';
+    can_view_financials?: boolean;
+    can_view_time_entries?: boolean;
+    can_comment?: boolean;
+    can_invite_others?: boolean;
+    can_edit_tasks?: boolean;
+  }): Promise<ProjectCollaborator> {
+    console.log('[projectCollaboratorsApi] invite - starting with data:', {
+      project_id: invitation.project_id,
+      invited_email: invitation.invited_email,
+      invited_by_user_id: invitation.invited_by_user_id,
+      invited_by_company_id: invitation.invited_by_company_id,
+      role: invitation.role
+    });
+
+    // Verify auth
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+    console.log('[projectCollaboratorsApi] invite - authenticated user:', user.id);
+
+    // Check if user already exists in the system
+    const { data: existingUser, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, company_id, email')
+      .ilike('email', invitation.invited_email)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('[projectCollaboratorsApi] invite - profile lookup error:', profileError);
+    }
+
+    console.log('[projectCollaboratorsApi] invite - existingUser:', existingUser);
+
+    const insertData = {
+      project_id: invitation.project_id,
+      invited_email: invitation.invited_email.toLowerCase(),
+      invited_by_user_id: invitation.invited_by_user_id,
+      invited_by_company_id: invitation.invited_by_company_id,
+      role: invitation.role || 'collaborator',
+      relationship: invitation.relationship,
+      invited_user_id: existingUser?.id || null,
+      invited_company_id: existingUser?.company_id || null,
+      status: 'pending',
+      can_view_financials: invitation.can_view_financials ?? false,
+      can_view_time_entries: invitation.can_view_time_entries ?? false,
+      can_comment: invitation.can_comment ?? true,
+      can_invite_others: invitation.can_invite_others ?? false,
+      can_edit_tasks: invitation.can_edit_tasks ?? false,
+      invited_at: new Date().toISOString()
+    };
+
+    console.log('[projectCollaboratorsApi] invite - inserting:', insertData);
+
+    const { data, error } = await supabase
+      .from('project_collaborators')
+      .insert(insertData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[projectCollaboratorsApi] invite - insert error:', error);
+      throw error;
+    }
+
+    console.log('[projectCollaboratorsApi] invite - success:', data);
+
+    // Fetch project and inviter details for notification/email
+    const [projectResult, inviterResult, inviterCompanyResult] = await Promise.all([
+      supabase.from('projects').select('name').eq('id', invitation.project_id).single(),
+      supabase.from('profiles').select('full_name, email').eq('id', invitation.invited_by_user_id).single(),
+      supabase.from('companies').select('company_name').eq('id', invitation.invited_by_company_id).single()
+    ]);
+
+    const project = projectResult.data;
+    const inviter = inviterResult.data;
+    const inviterCompany = inviterCompanyResult.data;
+    const projectName = project?.name || 'a project';
+    const inviterName = inviter?.full_name || inviter?.email || 'Someone';
+    const companyName = inviterCompany?.company_name || 'a company';
+
+    console.log('[projectCollaboratorsApi] invite - notification data:', { projectName, inviterName, companyName });
+
+    // Send in-app notification if user exists in system
+    if (existingUser?.id && existingUser?.company_id) {
+      try {
+        console.log('[projectCollaboratorsApi] invite - creating in-app notification for existing user');
+        await NotificationService.collaborationInvited(
+          existingUser.id,
+          existingUser.company_id,
+          projectName,
+          inviterName,
+          data.id
+        );
+        console.log('[projectCollaboratorsApi] invite - in-app notification created');
+      } catch (notifyErr) {
+        console.error('[projectCollaboratorsApi] Failed to send in-app notification:', notifyErr);
+      }
+    }
+
+    // Always send email notification
+    try {
+      const acceptUrl = `${window.location.origin}/project-share/${data.id}`;
+      console.log('[projectCollaboratorsApi] invite - sending email to:', invitation.invited_email);
+      
+      const emailResult = await supabase.functions.invoke('send-email', {
+        body: {
+          to: invitation.invited_email.toLowerCase(),
+          subject: `${inviterName} invited you to collaborate on "${projectName}"`,
+          type: 'project_collaboration_invite',
+          data: {
+            inviterName,
+            companyName,
+            projectName,
+            role: invitation.role || 'collaborator',
+            acceptUrl,
+            // Include permissions summary
+            permissions: {
+              can_comment: invitation.can_comment ?? true,
+              can_view_financials: invitation.can_view_financials ?? false,
+              can_view_time_entries: invitation.can_view_time_entries ?? false,
+              can_edit_tasks: invitation.can_edit_tasks ?? false,
+            }
+          }
+        }
+      });
+
+      if (emailResult.error) {
+        console.error('[projectCollaboratorsApi] invite - email send error:', emailResult.error);
+      } else {
+        console.log('[projectCollaboratorsApi] invite - email sent successfully');
+      }
+    } catch (emailErr) {
+      console.error('[projectCollaboratorsApi] Failed to send email notification:', emailErr);
+    }
+
+    return data;
+  },
+
+  // Accept an invitation
+  async accept(id: string, userId: string, companyId: string): Promise<ProjectCollaborator> {
+    const { data, error } = await supabase
+      .from('project_collaborators')
+      .update({
+        status: 'accepted',
+        invited_user_id: userId,
+        invited_company_id: companyId,
+        accepted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Decline an invitation
+  async decline(id: string): Promise<ProjectCollaborator> {
+    const { data, error } = await supabase
+      .from('project_collaborators')
+      .update({
+        status: 'declined',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Update collaborator permissions
+  async update(id: string, updates: Partial<{
+    role: 'client' | 'collaborator' | 'viewer';
+    relationship: 'my_client' | 'subcontractor' | 'partner';
+    their_client_id: string;
+    their_client_name: string;
+    can_view_financials: boolean;
+    can_view_time_entries: boolean;
+    can_comment: boolean;
+    can_invite_others: boolean;
+    can_edit_tasks: boolean;
+  }>): Promise<ProjectCollaborator> {
+    const { data, error } = await supabase
+      .from('project_collaborators')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Remove a collaborator
+  async remove(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('project_collaborators')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // Set the collaborator's own client for this project
+  async setTheirClient(id: string, clientId: string, clientName: string): Promise<ProjectCollaborator> {
+    return this.update(id, {
+      their_client_id: clientId,
+      their_client_name: clientName
+    });
   }
 };

@@ -171,7 +171,7 @@ export default function FinancialsPage() {
   // All platform transactions combined
   const platformTransactions = useMemo((): PlatformTransaction[] => {
     const txns: PlatformTransaction[] = [];
-    
+
     // Paid invoices as income
     invoices.filter(inv => inv.status === 'paid').forEach(inv => {
       txns.push({
@@ -217,11 +217,11 @@ export default function FinancialsPage() {
   const summary = useMemo(() => {
     const totalRevenue = invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total || 0), 0);
     const totalExpenses = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0) +
-                          companyExpenses.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
+      companyExpenses.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
     const arOutstanding = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue')
-                                   .reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+      .reduce((sum, inv) => sum + Number(inv.total || 0), 0);
     const bankBalance = bankAccounts.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
-    
+
     return {
       totalRevenue,
       totalExpenses,
@@ -232,7 +232,7 @@ export default function FinancialsPage() {
     };
   }, [invoices, expenses, companyExpenses, bankAccounts, bankTransactions, payrollData]);
 
-  const formatCurrency = (amount: number) => 
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
   if (loading) {
@@ -240,7 +240,7 @@ export default function FinancialsPage() {
       <div className="p-6 animate-pulse">
         <div className="h-8 bg-neutral-200 rounded w-48 mb-6"></div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-24 bg-neutral-200 rounded-xl"></div>)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-neutral-200 rounded-xl"></div>)}
         </div>
       </div>
     );
@@ -333,9 +333,8 @@ export default function FinancialsPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as FinancialTab)}
-            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors whitespace-nowrap ${
-              activeTab === tab.key ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
+            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors whitespace-nowrap ${activeTab === tab.key ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+              }`}
           >
             <span className="sm:hidden">{tab.label}</span>
             <span className="hidden sm:inline">{tab.fullLabel}</span>
@@ -353,7 +352,7 @@ export default function FinancialsPage() {
       )}
 
       {activeTab === 'transactions' && (
-        <TransactionsTab 
+        <TransactionsTab
           transactions={platformTransactions}
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -362,7 +361,7 @@ export default function FinancialsPage() {
       )}
 
       {activeTab === 'reports' && (
-        <ReportsTab 
+        <ReportsTab
           monthlyData={monthlyData}
           invoices={invoices}
           expenses={expenses}
@@ -374,7 +373,7 @@ export default function FinancialsPage() {
       )}
 
       {activeTab === 'taxreports' && (
-        <TaxReportsTab 
+        <TaxReportsTab
           invoices={invoices}
           expenses={expenses}
           companyExpenses={companyExpenses}
@@ -384,7 +383,7 @@ export default function FinancialsPage() {
       )}
 
       {activeTab === 'operating' && (
-        <OperatingExpensesTab 
+        <OperatingExpensesTab
           companyId={profile?.company_id || ''}
           formatCurrency={formatCurrency}
           onUpdate={loadData}
@@ -491,54 +490,54 @@ function BankAccountsTab({ accounts, onEdit, onRefresh, formatCurrency, companyI
         </div>
       ) : (
         <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px]">
-          <thead className="bg-neutral-50 border-b border-neutral-100">
-            <tr>
-              <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Account</th>
-              <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden md:table-cell">Bank</th>
-              <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden sm:table-cell">Account #</th>
-              <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Type</th>
-              <th className="text-right px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Balance</th>
-              <th className="text-right px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-50">
-            {accounts.map(acc => (
-              <tr key={acc.id} className="hover:bg-neutral-50 transition-colors">
-                <td className="px-2 py-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#476E66]/10 flex items-center justify-center">
-                      <CreditCard className="w-3.5 h-3.5 text-[#476E66]" />
-                    </div>
-                    <span className="text-xs font-medium text-neutral-900">{acc.account_name}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5 text-xs text-neutral-600 hidden md:table-cell">{acc.bank_name || '-'}</td>
-                <td className="px-2 py-1.5 text-xs text-neutral-600 font-mono hidden sm:table-cell">
-                  {acc.account_number ? `****${acc.account_number.slice(-4)}` : '-'}
-                </td>
-                <td className="px-2 py-1.5">
-                  <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 rounded text-[10px] capitalize">
-                    {acc.account_type}
-                  </span>
-                </td>
-                <td className="px-2 py-1.5 text-right text-xs font-semibold text-[#476E66]">
-                  {formatCurrency(acc.balance)}
-                </td>
-                <td className="px-2 py-1.5 text-right">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <button onClick={() => onEdit(acc)} className="p-0.5 hover:bg-neutral-100 rounded text-neutral-500 hover:text-neutral-700">
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => handleDelete(acc.id)} className="p-0.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </td>
+          <table className="w-full min-w-[600px]">
+            <thead className="bg-neutral-50 border-b border-neutral-100">
+              <tr>
+                <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Account</th>
+                <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden md:table-cell">Bank</th>
+                <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden sm:table-cell">Account #</th>
+                <th className="text-left px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Type</th>
+                <th className="text-right px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Balance</th>
+                <th className="text-right px-2 py-1 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {accounts.map(acc => (
+                <tr key={acc.id} className="hover:bg-neutral-50 transition-colors">
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-[#476E66]/10 flex items-center justify-center">
+                        <CreditCard className="w-3.5 h-3.5 text-[#476E66]" />
+                      </div>
+                      <span className="text-xs font-medium text-neutral-900">{acc.account_name}</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 text-xs text-neutral-600 hidden md:table-cell">{acc.bank_name || '-'}</td>
+                  <td className="px-2 py-1.5 text-xs text-neutral-600 font-mono hidden sm:table-cell">
+                    {acc.account_number ? `****${acc.account_number.slice(-4)}` : '-'}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 rounded text-[10px] capitalize">
+                      {acc.account_type}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-xs font-semibold text-[#476E66]">
+                    {formatCurrency(acc.balance)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    <div className="flex items-center justify-end gap-0.5">
+                      <button onClick={() => onEdit(acc)} className="p-0.5 hover:bg-neutral-100 rounded text-neutral-500 hover:text-neutral-700">
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => handleDelete(acc.id)} className="p-0.5 hover:bg-red-50 rounded text-neutral-500 hover:text-red-600">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -560,8 +559,8 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
 
   const unmatchedBank = bankTransactions.filter(t => t.match_status === 'unmatched');
   const matchedBank = bankTransactions.filter(t => t.match_status === 'matched');
-  const unmatchedPlatform = platformTransactions.filter(pt => 
-    !bankTransactions.some(bt => 
+  const unmatchedPlatform = platformTransactions.filter(pt =>
+    !bankTransactions.some(bt =>
       (bt.matched_expense_id === pt.id || bt.matched_invoice_id === pt.id) && bt.match_status === 'matched'
     )
   );
@@ -569,7 +568,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !companyId) return;
-    
+
     setUploading(true);
     try {
       // For CSV files, parse and create transactions
@@ -577,7 +576,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
         const text = await file.text();
         const lines = text.split('\n').filter(l => l.trim());
         const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        
+
         const dateIdx = headers.findIndex(h => h.includes('date'));
         const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('memo'));
         const amountIdx = headers.findIndex(h => h.includes('amount'));
@@ -606,7 +605,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
 
           let amount = 0;
           let type = 'debit';
-          
+
           if (amountIdx >= 0) {
             amount = parseFloat(cols[amountIdx]?.replace(/[$,]/g, '') || '0');
             type = amount < 0 ? 'debit' : 'credit';
@@ -634,7 +633,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
         if (transactions.length > 0) {
           await supabase.from('bank_transactions').insert(transactions);
         }
-        
+
         alert(`Imported ${transactions.length} transactions`);
         onRefresh();
       } else {
@@ -653,13 +652,13 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
     const matchField = platformTxn.source === 'invoice' ? 'matched_invoice_id' : 'matched_expense_id';
     await supabase
       .from('bank_transactions')
-      .update({ 
+      .update({
         [matchField]: platformTxn.id,
         matched_type: platformTxn.source,
         match_status: 'matched'
       })
       .eq('id', bankTxnId);
-    
+
     setSelectedBankTxn(null);
     onRefresh();
   };
@@ -667,7 +666,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
   const handleUnmatch = async (bankTxnId: string) => {
     await supabase
       .from('bank_transactions')
-      .update({ 
+      .update({
         matched_expense_id: null,
         matched_invoice_id: null,
         matched_type: null,
@@ -702,7 +701,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
             className="hidden"
           />
         </div>
-        
+
         {/* Stats Cards - Brand Colors */}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="p-2 bg-amber-50/50 rounded-lg border border-amber-100">
@@ -737,11 +736,10 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
             ) : (
               <div className="divide-y divide-neutral-50">
                 {bankTransactions.map(txn => (
-                  <div 
-                    key={txn.id} 
-                    className={`px-3 py-2 hover:bg-neutral-50 cursor-pointer transition-colors ${
-                      selectedBankTxn === txn.id ? 'bg-[#476E66]/10 border-l-2 border-[#476E66]' : ''
-                    } ${txn.match_status === 'matched' ? 'bg-[#476E66]/5' : ''}`}
+                  <div
+                    key={txn.id}
+                    className={`px-3 py-2 hover:bg-neutral-50 cursor-pointer transition-colors ${selectedBankTxn === txn.id ? 'bg-[#476E66]/10 border-l-2 border-[#476E66]' : ''
+                      } ${txn.match_status === 'matched' ? 'bg-[#476E66]/5' : ''}`}
                     onClick={() => setSelectedBankTxn(selectedBankTxn === txn.id ? null : txn.id)}
                   >
                     <div className="flex items-center justify-between mb-0.5">
@@ -759,7 +757,7 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
                           <span className="px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-[10px] flex items-center gap-0.5">
                             <Check className="w-2.5 h-2.5" /> Matched
                           </span>
-                          <button 
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleUnmatch(txn.id); }}
                             className="text-[10px] text-red-600 hover:underline"
                           >
@@ -793,12 +791,12 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
             ) : (
               <div className="divide-y divide-neutral-50">
                 {platformTransactions.map(txn => {
-                  const isMatched = bankTransactions.some(bt => 
+                  const isMatched = bankTransactions.some(bt =>
                     (bt.matched_expense_id === txn.id || bt.matched_invoice_id === txn.id) && bt.match_status === 'matched'
                   );
                   return (
-                    <div 
-                      key={txn.id} 
+                    <div
+                      key={txn.id}
                       className={`px-3 py-2 hover:bg-neutral-50 transition-colors ${isMatched ? 'bg-[#476E66]/5' : ''}`}
                     >
                       <div className="flex items-center justify-between mb-0.5">
@@ -812,9 +810,8 @@ function ReconciliationTab({ bankTransactions, platformTransactions, onRefresh, 
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] text-neutral-500">{new Date(txn.date).toLocaleDateString()}</span>
-                          <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${
-                            txn.source === 'invoice' ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-amber-50 text-amber-700'
-                          }`}>
+                          <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${txn.source === 'invoice' ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-amber-50 text-amber-700'
+                            }`}>
                             {txn.source === 'invoice' ? 'Invoice' : 'Expense'}
                           </span>
                         </div>
@@ -863,7 +860,7 @@ function TransactionsTab({ transactions, searchTerm, setSearchTerm, formatCurren
   setSearchTerm: (s: string) => void;
   formatCurrency: (n: number) => string;
 }) {
-  const filtered = transactions.filter(t => 
+  const filtered = transactions.filter(t =>
     t.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -908,9 +905,8 @@ function TransactionsTab({ transactions, searchTerm, setSearchTerm, formatCurren
                 <td className="px-2 py-1.5 text-[10px] text-neutral-500 whitespace-nowrap">{formatDate(txn.date)}</td>
                 <td className="px-2 py-1.5 text-xs text-neutral-900 font-medium truncate max-w-[120px]">{txn.description}</td>
                 <td className="px-2 py-1.5">
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                    txn.type === 'income' ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                  }`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${txn.type === 'income' ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
                     {txn.type === 'income' ? 'Income' : 'Expense'}
                   </span>
                 </td>
@@ -1105,7 +1101,7 @@ function ReportsTab({ monthlyData, invoices, expenses, companyExpenses, payrollD
 
   const generateReport = (reportId: string) => {
     setGeneratingReport(reportId);
-    
+
     let content = '';
     const now = new Date();
     const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -1264,8 +1260,8 @@ function ReportsTab({ monthlyData, invoices, expenses, companyExpenses, payrollD
       </tr>
     </thead>
     <tbody>
-      ${outstanding.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:#999;">No outstanding invoices</td></tr>' : 
-        outstanding.map(inv => `
+      ${outstanding.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:#999;">No outstanding invoices</td></tr>' :
+          outstanding.map(inv => `
         <tr>
           <td>${inv.invoice_number || '-'}</td>
           <td>${inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '-'}</td>
@@ -1379,8 +1375,8 @@ function ReportsTab({ monthlyData, invoices, expenses, companyExpenses, payrollD
     } else if (reportId === 'cashflow') {
       const inflows = invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total || 0), 0);
       const outflows = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0) +
-                       companyExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) +
-                       (payrollData.totalMonthly * 12);
+        companyExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0) +
+        (payrollData.totalMonthly * 12);
 
       content = `
 <!DOCTYPE html>
@@ -1482,11 +1478,11 @@ function ReportsTab({ monthlyData, invoices, expenses, companyExpenses, payrollD
       <div className="bg-white rounded-lg p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
         <h3 className="text-sm font-semibold text-neutral-900 mb-1">Generate Reports</h3>
         <p className="text-[10px] text-neutral-500 mb-3">Select a report type. Opens in new window for printing/PDF.</p>
-        
+
         {/* Report Cards - Compact Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {reports.map(report => (
-            <div 
+            <div
               key={report.id}
               className="border border-neutral-200 rounded-lg p-2.5 hover:border-[#476E66] hover:shadow-sm transition-all cursor-pointer group"
               onClick={() => generateReport(report.id)}
@@ -1794,9 +1790,9 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
           <thead><tr><th>Invoice #</th><th>Due Date</th><th>Status</th><th class="amount">Amount</th></tr></thead>
           <tbody>
             ${outstandingReceivables.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999;padding:24px">No outstanding receivables</td></tr>' : outstandingReceivables.map(inv => {
-              const isOverdue = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
-              return `<tr><td>${inv.invoice_number || '-'}</td><td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td><td><span style="padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;${isOverdue ? 'background:#fee2e2;color:#dc2626' : 'background:#dbeafe;color:#1d4ed8'}">${isOverdue ? 'OVERDUE' : 'SENT'}</span></td><td class="amount">${formatCurrency(Number(inv.total || 0))}</td></tr>`;
-            }).join('')}
+        const isOverdue = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
+        return `<tr><td>${inv.invoice_number || '-'}</td><td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td><td><span style="padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;${isOverdue ? 'background:#fee2e2;color:#dc2626' : 'background:#dbeafe;color:#1d4ed8'}">${isOverdue ? 'OVERDUE' : 'SENT'}</span></td><td class="amount">${formatCurrency(Number(inv.total || 0))}</td></tr>`;
+      }).join('')}
             ${outstandingReceivables.length > 0 ? `<tr class="total-row"><td colspan="3">Total Outstanding</td><td class="amount" style="color:#d97706">${formatCurrency(totalOutstanding)}</td></tr>` : ''}
           </tbody>
         </table>
@@ -1833,9 +1829,8 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
-                    selectedPeriod === period ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-                  }`}
+                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${selectedPeriod === period ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
                 >
                   {period}
                 </button>
@@ -1860,11 +1855,10 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
           <button
             key={report.id}
             onClick={() => setActiveReport(report.id as any)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-              activeReport === report.id 
-                ? 'bg-[#476E66] text-white' 
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${activeReport === report.id
+                ? 'bg-[#476E66] text-white'
                 : 'bg-white border border-neutral-200 text-neutral-700 hover:border-[#476E66]'
-            }`}
+              }`}
             style={activeReport !== report.id ? { boxShadow: 'var(--shadow-card)' } : {}}
           >
             <report.icon className="w-3 h-3" />
@@ -2209,7 +2203,7 @@ function OperatingExpensesTab({ companyId, formatCurrency, onUpdate }: {
                   {isExpanded ? <ChevronDown className="w-4 h-4 text-neutral-400" /> : <ChevronRight className="w-4 h-4 text-neutral-400" />}
                 </div>
               </button>
-              
+
               {isExpanded && (
                 <div className="border-t border-neutral-100 divide-y divide-neutral-50">
                   {catExpenses.map(exp => (

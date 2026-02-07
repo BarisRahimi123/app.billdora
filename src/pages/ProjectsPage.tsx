@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
-import { api, Project, Task, Client, TimeEntry, Invoice, Expense, ProjectTeamMember, settingsApi, FieldValue, StatusCode, CostCenter } from '../lib/api';
+import { api, Project, Task, Client, TimeEntry, Invoice, Expense, ProjectTeamMember, settingsApi, FieldValue, StatusCode, CostCenter, projectCollaboratorsApi } from '../lib/api';
 import { TEAM_MEMBERS_BATCH_LIMIT } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notificationService';
@@ -11,11 +11,14 @@ import {
   Plus, Search, Filter, Download, ChevronLeft, ArrowLeft, Copy,
   FolderKanban, Clock, DollarSign, Users, FileText, CheckSquare, X, Trash2, Edit2,
   MoreVertical, ChevronDown, ChevronRight, RefreshCw, Check, ExternalLink, Info, Settings, UserPlus,
-  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2, Star
+  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2, Star, Activity, Tag, Flag
 } from 'lucide-react';
 import { FieldError } from '../components/ErrorBoundary';
 import { validateEmail } from '../lib/validation';
 import { ExpenseModal } from '../components/ExpenseModal';
+import { ProjectComments } from '../components/ProjectComments';
+import { ProjectCollaborators } from '../components/ProjectCollaborators';
+import { PendingProjectInvitations } from '../components/PendingProjectInvitations';
 
 type TaskSubTab = 'overview' | 'editor' | 'schedule' | 'allocations' | 'checklist';
 
@@ -63,6 +66,8 @@ export default function ProjectsPage() {
   const { canCreate, canEdit, canDelete, canViewFinancials, isAdmin } = usePermissions();
   const { checkAndProceed } = useFeatureGating();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+  const [projectSource, setProjectSource] = useState<'my' | 'shared'>('my');
   const [clients, setClients] = useState<Client[]>([]);
   // CRITICAL: Start with loading=false to prevent spinner on iOS resume
   const [loading, setLoading] = useState(false);
@@ -109,77 +114,175 @@ export default function ProjectsPage() {
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(true);
 
-  // Sort clients with favorites first
+  // Priority dropdown state
+  const [openPriorityDropdown, setOpenPriorityDropdown] = useState<string | null>(null);
+
+  // Roman numeral helper
+  const toRoman = (num: number | null | undefined) => {
+    if (!num) return null;
+    const numerals: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
+    return numerals[num] || null;
+  };
+
+  // Sort clients by priority (1 first, then 2, then 3, then null)
   const sortedClients = useMemo(() => {
     return [...clients].sort((a, b) => {
-      // Favorites first
-      if (a.is_favorite && !b.is_favorite) return -1;
-      if (!a.is_favorite && b.is_favorite) return 1;
+      // Priority sorting: 1 > 2 > 3 > null
+      const aPriority = a.priority || 999;
+      const bPriority = b.priority || 999;
+      if (aPriority !== bPriority) return aPriority - bPriority;
       // Then alphabetically
       return (a.name || '').localeCompare(b.name || '');
     });
   }, [clients]);
 
-  // Toggle favorite status
-  const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Set client priority
+  const setClientPriority = async (clientId: string, newPriority: number | null) => {
     if (!profile?.company_id) return;
 
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
 
-    const newFavoriteStatus = !client.is_favorite;
+    const currentPriority = client.priority;
+
+    // Optimistic update
+    setClients(prev => prev.map(c =>
+      c.id === clientId ? { ...c, priority: newPriority } : c
+    ));
+    setOpenPriorityDropdown(null);
 
     try {
       await supabase
         .from('clients')
-        .update({ is_favorite: newFavoriteStatus })
+        .update({ priority: newPriority })
         .eq('id', clientId);
-
-      // Update local state
-      setClients(prev => prev.map(c =>
-        c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
-      ));
     } catch (err) {
-      console.error('Failed to toggle favorite:', err);
+      console.error('Failed to set client priority:', err);
+      // Revert on failure
+      setClients(prev => prev.map(c =>
+        c.id === clientId ? { ...c, priority: currentPriority } : c
+      ));
     }
   };
 
-  // Toggle project favorite status
-  const toggleProjectFavorite = async (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Set project priority
+  const setProjectPriority = async (projectId: string, newPriority: number | null) => {
     if (!profile?.company_id) return;
 
-    const project = projects.find(p => p.id === projectId);
+    const myProject = projects.find(p => p.id === projectId);
+    const sharedProject = sharedProjects.find(p => p.id === projectId);
+    const project = myProject || sharedProject;
+
     if (!project) return;
 
-    const newFavoriteStatus = !project.is_favorite;
+    const currentPriority = project.priority;
 
     // Optimistic update
-    setProjects(prev => prev.map(p =>
-      p.id === projectId ? { ...p, is_favorite: newFavoriteStatus } : p
-    ));
-
-    try {
-      // Use direct Supabase call to bypass potential API layer caching/schema issues
-      await supabase
-        .from('projects')
-        .update({ is_favorite: newFavoriteStatus })
-        .eq('id', projectId);
-
-      // Force reload to ensure data consistency
-      await loadData();
-    } catch (err: any) {
-      console.error('Failed to toggle project favorite:', err);
-      if (err?.code === 'PGRST204') {
-        alert('Database schema is updating. Please refresh the page in a moment.');
-      }
-      // Revert on failure
+    if (myProject) {
       setProjects(prev => prev.map(p =>
-        p.id === projectId ? { ...p, is_favorite: !newFavoriteStatus } : p
+        p.id === projectId ? { ...p, priority: newPriority } : p
       ));
     }
+    if (sharedProject) {
+      setSharedProjects(prev => prev.map(p =>
+        p.id === projectId ? { ...p, priority: newPriority } : p
+      ));
+    }
+    setOpenPriorityDropdown(null);
+
+    try {
+      await supabase
+        .from('projects')
+        .update({ priority: newPriority })
+        .eq('id', projectId);
+    } catch (err: any) {
+      console.error('Failed to set project priority:', err);
+      // Revert on failure
+      if (myProject) {
+        setProjects(prev => prev.map(p =>
+          p.id === projectId ? { ...p, priority: currentPriority } : p
+        ));
+      }
+      if (sharedProject) {
+        setSharedProjects(prev => prev.map(p =>
+          p.id === projectId ? { ...p, priority: currentPriority } : p
+        ));
+      }
+    }
   };
+
+  // Priority dropdown component
+  const PriorityDropdown = ({
+    id,
+    currentPriority,
+    onSelect,
+    type
+  }: {
+    id: string;
+    currentPriority: number | null | undefined;
+    onSelect: (priority: number | null) => void;
+    type: 'project' | 'client';
+  }) => {
+    const dropdownId = `${type}-${id}`;
+    const isOpen = openPriorityDropdown === dropdownId;
+
+    return (
+      <div className="relative">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenPriorityDropdown(isOpen ? null : dropdownId);
+          }}
+          className="w-6 h-6 rounded hover:bg-neutral-100 transition-colors flex items-center justify-center"
+          title="Set priority"
+        >
+          {currentPriority ? (
+            <span className="text-[11px] font-semibold text-neutral-400">{toRoman(currentPriority)}</span>
+          ) : (
+            <Star className="w-3.5 h-3.5 text-neutral-200 hover:text-neutral-300" />
+          )}
+        </button>
+        {isOpen && (
+          <div
+            className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 min-w-[80px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[1, 2, 3].map((num) => (
+              <button
+                key={num}
+                onClick={() => onSelect(num)}
+                className={`w-full px-3 py-1.5 text-left text-[11px] hover:bg-neutral-50 flex items-center gap-2 ${currentPriority === num ? 'bg-neutral-50 font-medium' : ''
+                  }`}
+              >
+                <span className="text-neutral-400 font-semibold w-4">{toRoman(num)}</span>
+                <span className="text-neutral-500">Priority {num}</span>
+              </button>
+            ))}
+            {currentPriority && (
+              <>
+                <div className="border-t border-neutral-100 my-1" />
+                <button
+                  onClick={() => onSelect(null)}
+                  className="w-full px-3 py-1.5 text-left text-[11px] text-neutral-400 hover:bg-neutral-50"
+                >
+                  Remove
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Close priority dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenPriorityDropdown(null);
+    if (openPriorityDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openPriorityDropdown]);
 
   const toggleClientExpanded = (clientName: string) => {
     const newExpanded = new Set(expandedClients);
@@ -194,16 +297,24 @@ export default function ProjectsPage() {
   }, [profile?.company_id]);
 
   useEffect(() => {
-    if (projectId && projects.length > 0) {
-      const project = projects.find(p => p.id === projectId);
+    if (projectId) {
+      // Look in both own projects and shared projects
+      const myProject = projects.find(p => p.id === projectId);
+      const sharedProject = sharedProjects.find(p => p.id === projectId);
+      const project = myProject || sharedProject;
+      
       if (project) {
         setSelectedProject(project);
         loadProjectDetails(projectId);
+        // Auto-switch to shared view if needed
+        if (!myProject && sharedProject) {
+          setProjectSource('shared');
+        }
       }
     } else {
       setSelectedProject(null);
     }
-  }, [projectId, projects]);
+  }, [projectId, projects, sharedProjects]);
 
   async function loadData() {
     if (!profile?.company_id) {
@@ -231,6 +342,19 @@ export default function ProjectsPage() {
       setProjects(projectsData || []);
       setClients(clientsData || []);
       setAllInvoices(invoicesData || []);
+
+      // Load shared projects (projects shared with me)
+      if (user?.email) {
+        try {
+          const sharedCollabs = await projectCollaboratorsApi.getSharedProjects(user.email, user.id);
+          const sharedProjectList = sharedCollabs
+            .map(collab => collab.project as Project)
+            .filter(Boolean);
+          setSharedProjects(sharedProjectList);
+        } catch (err) {
+          console.error('[ProjectsPage] Failed to load shared projects:', err);
+        }
+      }
 
       // Load invoice line item project associations (Manual Join for robustness)
       const invIds = (invoicesData || []).map(i => i.id);
@@ -444,7 +568,8 @@ export default function ProjectsPage() {
   }, [projects, allInvoices, invoiceProjectIds]);
 
   const filteredProjects = useMemo(() => {
-    return projects.filter(p => {
+    const baseProjects = projectSource === 'my' ? projects : sharedProjects;
+    return baseProjects.filter(p => {
       // Search filter
       if (searchTerm && !p.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
       // Status filter
@@ -469,13 +594,14 @@ export default function ProjectsPage() {
 
       return true;
     }).sort((a, b) => {
-      // Sort by favorite first
-      if (a.is_favorite && !b.is_favorite) return -1;
-      if (!a.is_favorite && b.is_favorite) return 1;
+      // Sort by priority first (1 > 2 > 3 > null)
+      const aPriority = a.priority || 999;
+      const bPriority = b.priority || 999;
+      if (aPriority !== bPriority) return aPriority - bPriority;
       // Then by name
       return a.name.localeCompare(b.name);
     });
-  }, [projects, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats, showActiveOnly]);
+  }, [projects, sharedProjects, projectSource, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats, showActiveOnly]);
 
   // Count active filters
   const activeFilterCount = [statusFilter, clientFilter, billingFilter, categoryFilter].filter(f => f !== 'all').length;
@@ -644,61 +770,108 @@ export default function ProjectsPage() {
         {activeTab === 'vitals' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Hours Card */}
-            <div className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:bg-neutral-50 transition-colors" onClick={() => setActiveTab('tasks')}>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-sm bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-                  <Clock className="w-4 h-4 text-[#476E66]" />
+            <div
+              className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
+              style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+              onClick={() => setActiveTab('tasks')}
+            >
+              <div className="flex flex-col h-full justify-between">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Total Hours</span>
+                  <Clock className="w-3.5 h-3.5 text-neutral-300" />
                 </div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Total Hours</p>
+                <div>
+                  <span className="text-3xl font-light tracking-tight text-neutral-900">
+                    {stats.totalHours}
+                  </span>
+                  <div className="mt-2 text-xs text-neutral-400 font-medium">
+                    Recorded Time
+                  </div>
+                </div>
               </div>
-              <p className="text-2xl font-bold text-neutral-900">{stats.totalHours}<span className="text-sm text-neutral-400 font-bold ml-1">HOURS</span></p>
             </div>
 
             {/* Budget Card */}
             {canViewFinancials && (
-              <div className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:bg-neutral-50 transition-colors" onClick={() => setActiveTab('billing')}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-sm bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="w-4 h-4 text-[#476E66]" />
+              <div
+                className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
+                style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+                onClick={() => setActiveTab('billing')}
+              >
+                <div className="flex flex-col h-full justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Budget</span>
+                    <DollarSign className="w-3.5 h-3.5 text-neutral-300" />
                   </div>
-                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Budget</p>
+                  <div>
+                    <span className="text-3xl font-light tracking-tight text-neutral-900 truncate">
+                      {formatCurrency(selectedProject.budget)}
+                    </span>
+                    <div className="mt-2 text-xs text-neutral-400 font-medium">
+                      Project Allocation
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-neutral-900 truncate">{formatCurrency(selectedProject.budget)}</p>
               </div>
             )}
 
             {/* Tasks Card */}
-            <div className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:bg-neutral-50 transition-colors" onClick={() => setActiveTab('tasks')}>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-sm bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-                  <CheckSquare className="w-4 h-4 text-[#476E66]" />
+            <div
+              className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
+              style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+              onClick={() => setActiveTab('tasks')}
+            >
+              <div className="flex flex-col h-full justify-between">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Tasks</span>
+                  <CheckSquare className="w-3.5 h-3.5 text-neutral-300" />
                 </div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Tasks</p>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold text-neutral-900">{tasks.filter(t => t.status === 'completed').length}</p>
-                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider">/ {tasks.length} COMPLETED</p>
-              </div>
-              {tasks.length > 0 && (
-                <div className="mt-2 w-full h-1 bg-neutral-100 rounded-lg overflow-hidden">
-                  <div
-                    className="h-full bg-[#476E66] rounded-lg transition-all duration-300"
-                    style={{ width: `${(tasks.filter(t => t.status === 'completed').length / tasks.length) * 100}%` }}
-                  />
+                <div>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-light tracking-tight text-neutral-900">
+                      {tasks.filter(t => t.status === 'completed').length}
+                    </span>
+                    <span className="text-sm text-neutral-300 font-light mb-1.5">
+                      / {tasks.length}
+                    </span>
+                  </div>
+
+                  {tasks.length > 0 && (
+                    <div className="mt-3 w-full h-0.5 bg-neutral-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-neutral-900 rounded-full transition-all duration-300"
+                        style={{ width: `${(tasks.filter(t => t.status === 'completed').length / tasks.length) * 100}%` }}
+                      />
+                    </div>
+                  )}
+                  <div className="mt-2 text-xs text-neutral-400 font-medium">
+                    Completion Rate
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Invoiced Card */}
             {canViewFinancials && (
-              <div className="bg-white rounded-sm border border-neutral-200 p-4 cursor-pointer hover:bg-neutral-50 transition-colors" onClick={() => setActiveTab('billing')}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-sm bg-[#476E66]/10 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-4 h-4 text-[#476E66]" />
+              <div
+                className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
+                style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+                onClick={() => setActiveTab('billing')}
+              >
+                <div className="flex flex-col h-full justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Invoiced</span>
+                    <FileText className="w-3.5 h-3.5 text-neutral-300" />
                   </div>
-                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Invoiced</p>
+                  <div>
+                    <span className="text-3xl font-light tracking-tight text-neutral-900 truncate">
+                      {formatCurrency(stats.totalInvoiced)}
+                    </span>
+                    <div className="mt-2 text-xs text-neutral-400 font-medium">
+                      Total Billed
+                    </div>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-neutral-900 truncate">{formatCurrency(stats.totalInvoiced)}</p>
               </div>
             )}
           </div>
@@ -716,6 +889,8 @@ export default function ProjectsPage() {
               }}
               canViewFinancials={canViewFinancials}
               formatCurrency={formatCurrency}
+              companyId={profile?.company_id || ''}
+              projectCompanyId={selectedProject.company_id}
             />
           )}
 
@@ -1269,6 +1444,9 @@ export default function ProjectsPage() {
   // Projects List View
   return (
     <div className="space-y-6">
+      {/* Pending Project Invitations */}
+      <PendingProjectInvitations onAccept={loadData} />
+
       <div className="flex items-end justify-between gap-3 border-b border-neutral-200 pb-4">
         <div className="min-w-0">
           <h1 className="text-3xl font-light tracking-tight text-neutral-900 leading-tight">PROJECTS</h1>
@@ -1290,6 +1468,32 @@ export default function ProjectsPage() {
           </button>
         )}
       </div>
+
+      {/* View Mode Toggle - My Projects vs Shared */}
+      {sharedProjects.length > 0 && (
+        <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-lg w-fit">
+          <button
+            onClick={() => setProjectSource('my')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${projectSource === 'my'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+          >
+            <FolderKanban className="w-3.5 h-3.5" />
+            My Projects ({projects.length})
+          </button>
+          <button
+            onClick={() => setProjectSource('shared')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all ${projectSource === 'shared'
+              ? 'bg-white text-neutral-900 shadow-sm'
+              : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            Shared with Me ({sharedProjects.length})
+          </button>
+        </div>
+      )}
 
       {/* Search and filters */}
       <div className="flex items-center gap-3">
@@ -1370,14 +1574,14 @@ export default function ProjectsPage() {
                               <span className="w-4" />
                               <span>All Clients</span>
                             </div>
-                            {sortedClients.filter(c => c.is_favorite).length > 0 && (
+                            {sortedClients.filter(c => c.priority).length > 0 && (
                               <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50 border-y border-amber-100">
-                                Favorites
+                                Priority
                               </div>
                             )}
-                            {sortedClients.map((client, idx) => {
-                              const favoriteClients = sortedClients.filter(c => c.is_favorite);
-                              const isLastFavorite = client.is_favorite && favoriteClients.indexOf(client) === favoriteClients.length - 1;
+                            {sortedClients.map((client) => {
+                              const priorityClients = sortedClients.filter(c => c.priority);
+                              const isLastPriority = client.priority && priorityClients.indexOf(client) === priorityClients.length - 1;
                               return (
                                 <div
                                   key={client.id}
@@ -1389,18 +1593,14 @@ export default function ProjectsPage() {
                                     setBillingFilter('all');
                                     setCategoryFilter('all');
                                   }}
-                                  className={`px-3 py-2 text-[11px] cursor-pointer hover:bg-neutral-50 flex items-center gap-2 ${clientFilter === client.id ? 'bg-[#476E66]/5 text-[#476E66] font-medium' : ''} ${isLastFavorite ? 'border-b border-neutral-100' : ''}`}
+                                  className={`px-3 py-2 text-[11px] cursor-pointer hover:bg-neutral-50 flex items-center gap-2 ${clientFilter === client.id ? 'bg-[#476E66]/5 text-[#476E66] font-medium' : ''} ${isLastPriority ? 'border-b border-neutral-100' : ''}`}
                                 >
-                                  <button
-                                    type="button"
-                                    onClick={(e) => toggleClientFavorite(client.id, e)}
-                                    className="flex-shrink-0 p-0.5 hover:bg-amber-100 rounded transition-colors"
-                                    title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                                  >
-                                    <Star
-                                      className={`w-3.5 h-3.5 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`}
-                                    />
-                                  </button>
+                                  <PriorityDropdown
+                                    id={client.id}
+                                    currentPriority={client.priority}
+                                    onSelect={(priority) => setClientPriority(client.id, priority)}
+                                    type="client"
+                                  />
                                   <span className="truncate">{client.name}</span>
                                 </div>
                               );
@@ -1743,18 +1943,14 @@ export default function ProjectsPage() {
                     </div>
 
 
-                    <button
-                      onClick={(e) => toggleProjectFavorite(project.id, e)}
-                      className="mt-1 p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0"
-                      title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                    >
-                      <Star
-                        className={`w-4 h-4 transition-colors ${project.is_favorite
-                          ? 'text-amber-400 fill-amber-400'
-                          : 'text-neutral-200 hover:text-neutral-300'
-                          }`}
+                    <div className="mt-1">
+                      <PriorityDropdown
+                        id={project.id}
+                        currentPriority={project.priority}
+                        onSelect={(priority) => setProjectPriority(project.id, priority)}
+                        type="project"
                       />
-                    </button>
+                    </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
@@ -1904,18 +2100,12 @@ export default function ProjectsPage() {
                     {visibleColumns.includes('project') && (
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => toggleProjectFavorite(project.id, e)}
-                            className="p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0"
-                            title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                          >
-                            <Star
-                              className={`w-4 h-4 transition-colors ${project.is_favorite
-                                ? 'text-amber-400 fill-amber-400'
-                                : 'text-neutral-200 hover:text-neutral-300'
-                                }`}
-                            />
-                          </button>
+                          <PriorityDropdown
+                            id={project.id}
+                            currentPriority={project.priority}
+                            onSelect={(priority) => setProjectPriority(project.id, priority)}
+                            type="project"
+                          />
                           <div className="min-w-0">
                             <p className="font-light text-sm text-neutral-900 truncate group-hover:font-bold group-hover:text-[#476E66] transition-all">{project.name}</p>
                           </div>
@@ -2153,18 +2343,14 @@ export default function ProjectsPage() {
                           onClick={() => navigate(`/projects/${project.id}`)}
                           className="flex items-center gap-4 px-6 py-3 hover:bg-neutral-50 cursor-pointer group transition-colors"
                         >
-                          <button
-                            onClick={(e) => toggleProjectFavorite(project.id, e)}
-                            className="p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0 mr-1"
-                            title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                          >
-                            <Star
-                              className={`w-4 h-4 transition-colors ${project.is_favorite
-                                ? 'text-amber-400 fill-amber-400'
-                                : 'text-neutral-200 hover:text-neutral-300'
-                                }`}
+                          <div className="mr-1">
+                            <PriorityDropdown
+                              id={project.id}
+                              currentPriority={project.priority}
+                              onSelect={(priority) => setProjectPriority(project.id, priority)}
+                              type="project"
                             />
-                          </button>
+                          </div>
                           <div className="flex-1">
                             <p className="font-light text-sm text-neutral-900 group-hover:font-bold group-hover:text-[#476E66] transition-all">{project.name}</p>
                           </div>
@@ -2672,12 +2858,14 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
 }
 
 // Project Vitals Tab Component
-function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatCurrency }: {
+function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatCurrency, companyId, projectCompanyId }: {
   project: Project;
   clients: Client[];
   onSave: (updates: Partial<Project>) => Promise<void>;
   canViewFinancials: boolean;
   formatCurrency: (amount?: number) => string;
+  companyId: string;
+  projectCompanyId?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2809,50 +2997,33 @@ function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatC
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-            {canViewFinancials && (
-              <div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Budget</p>
-                <p className="text-xl font-bold text-neutral-900">{formatCurrency(project.budget)}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Status</p>
-              <span className="inline-block px-2 py-0.5 bg-neutral-100 text-neutral-700 text-[10px] font-bold uppercase tracking-wider rounded-sm">
-                {project.status?.replace('_', ' ') || 'active'}
-              </span>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Start Date</p>
-              <p className="text-sm font-bold text-neutral-900">
-                {project.start_date ? new Date(project.start_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">End Date</p>
-              <p className="text-sm font-bold text-neutral-900">
-                {project.end_date ? new Date(project.end_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-          </div>
-          {(project.description || project.client_id) && (
-            <div className="mt-6 pt-6 border-t border-neutral-100 grid gap-6">
-              {project.description && (
-                <div>
-                  <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Description</p>
-                  <p className="text-sm text-neutral-700 leading-relaxed">{project.description}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Client</p>
-                <p className="text-sm font-bold text-neutral-900">{project.client?.name || clients.find(c => c.id === project.client_id)?.name || 'Not assigned'}</p>
-              </div>
+        <div className="space-y-8">
+
+
+          {project.description && (
+            <div className="bg-neutral-50 rounded-2xl p-6 border border-neutral-100">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-3">Project Description</p>
+              <p className="text-sm text-neutral-600 leading-relaxed font-light">{project.description}</p>
             </div>
           )}
         </div>
       )}
-    </div>
+
+      {/* Collaborators Section */}
+      <div className="mt-8 pt-6 border-t border-neutral-100">
+        <ProjectCollaborators
+          projectId={project.id}
+          projectName={project.name}
+          companyId={companyId}
+          clients={clients}
+        />
+      </div>
+
+      {/* Comments Section */}
+      <div className="mt-8 pt-6 border-t border-neutral-100">
+        <ProjectComments projectId={project.id} companyId={projectCompanyId || companyId} />
+      </div>
+    </div >
   );
 }
 
@@ -6180,103 +6351,134 @@ function ProjectDetailsTab({
   };
 
   return (
+
     <div className="space-y-6">
-      {/* Status & Category Section - Compact dropdowns */}
-      {/* Status & Category Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-6 border-b border-neutral-100">
-        {/* Status Dropdown */}
-        <div>
-          <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Status</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Status Card */}
+        <div
+          className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all"
+          style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Project Status</span>
+            <Activity className="w-3.5 h-3.5 text-neutral-300" />
+          </div>
           <select
             value={formData.status}
             onChange={(e) => updateField('status', e.target.value)}
-            className={`w-full px-4 py-2.5 rounded-sm text-xs font-bold uppercase tracking-wide border-0 outline-none cursor-pointer appearance-none transition-colors ${formData.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
-              formData.status === 'on_hold' ? 'bg-amber-50 text-amber-700' :
-                formData.status === 'completed' ? 'bg-blue-50 text-blue-700' :
-                  'bg-neutral-100 text-neutral-700'
-              }`}
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px', paddingRight: '40px' }}
+            className="w-full bg-transparent text-xl font-light text-neutral-900 border-0 outline-none cursor-pointer appearance-none p-0 focus:ring-0"
+            style={{ backgroundImage: 'none' }}
           >
             {STATUS_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label.toUpperCase()}</option>
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          <div className="mt-2 text-xs text-neutral-400 font-medium flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${formData.status === 'active' ? 'bg-emerald-500' :
+              formData.status === 'on_hold' ? 'bg-amber-500' :
+                formData.status === 'completed' ? 'bg-neutral-400' :
+                  'bg-neutral-300'
+              }`} />
+            Current State
+          </div>
         </div>
 
-        {/* Category Dropdown */}
-        <div>
-          <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Category</label>
+        {/* Category Card */}
+        <div
+          className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all"
+          style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Category</span>
+            <Tag className="w-3.5 h-3.5 text-neutral-300" />
+          </div>
           <select
             value={formData.category}
             onChange={(e) => updateField('category', e.target.value)}
-            className={`w-full px-4 py-2.5 rounded-sm text-xs font-bold uppercase tracking-wide border-0 outline-none cursor-pointer appearance-none transition-colors ${formData.category ? 'bg-[#476E66]/10 text-[#476E66]' : 'bg-neutral-100 text-neutral-700'
-              }`}
-            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', backgroundSize: '14px', paddingRight: '40px' }}
+            className="w-full bg-transparent text-xl font-light text-neutral-900 border-0 outline-none cursor-pointer appearance-none p-0 focus:ring-0"
+            style={{ backgroundImage: 'none' }}
           >
-            <option value="">SELECT CATEGORY...</option>
+            <option value="">Select Category...</option>
             {PROJECT_CATEGORIES.map(cat => (
               <option key={cat.value} value={cat.value}>{cat.label}</option>
             ))}
           </select>
-        </div>
-      </div>
-
-      {/* Timeline Section */}
-      <div className="pb-6 border-b border-neutral-100">
-        <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-4">Timeline</label>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-neutral-50 rounded-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Start Date</span>
-            </div>
-            <input
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => updateField('start_date', e.target.value)}
-              className="w-full bg-transparent text-sm font-bold text-neutral-900 border-0 outline-none cursor-pointer p-0 uppercase tracking-wide"
-              style={{ colorScheme: 'light' }}
-            />
-          </div>
-          <div className="p-4 bg-neutral-50 rounded-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Due Date</span>
-            </div>
-            <input
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => updateField('due_date', e.target.value)}
-              className="w-full bg-transparent text-sm font-bold text-neutral-900 border-0 outline-none cursor-pointer p-0 uppercase tracking-wide"
-              style={{ colorScheme: 'light' }}
-            />
+          <div className="mt-2 text-xs text-neutral-400 font-medium">
+            Project Type
           </div>
         </div>
       </div>
 
-      {/* Notes Section */}
-      <div>
-        <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-3">Project Notes</label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Start Date Card */}
+        <div
+          className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all"
+          style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Start Date</span>
+            <Calendar className="w-3.5 h-3.5 text-neutral-300" />
+          </div>
+          <input
+            type="date"
+            value={formData.start_date}
+            onChange={(e) => updateField('start_date', e.target.value)}
+            className="w-full bg-transparent text-xl font-light text-neutral-900 border-0 outline-none cursor-pointer p-0 focus:ring-0"
+            style={{ colorScheme: 'light' }}
+          />
+          <div className="mt-2 text-xs text-neutral-400 font-medium">
+            Project Kickoff
+          </div>
+        </div>
+
+        {/* Due Date Card */}
+        <div
+          className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all"
+          style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Due Date</span>
+            <Flag className="w-3.5 h-3.5 text-neutral-300" />
+          </div>
+          <input
+            type="date"
+            value={formData.due_date}
+            onChange={(e) => updateField('due_date', e.target.value)}
+            className="w-full bg-transparent text-xl font-light text-neutral-900 border-0 outline-none cursor-pointer p-0 focus:ring-0"
+            style={{ colorScheme: 'light' }}
+          />
+          <div className="mt-2 text-xs text-neutral-400 font-medium">
+            Expected Completion
+          </div>
+        </div>
+      </div>
+
+      {/* Notes Card */}
+      <div
+        className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all"
+        style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">Project Notes</span>
+          <FileText className="w-3.5 h-3.5 text-neutral-300" />
+        </div>
         <textarea
           value={formData.status_notes}
           onChange={(e) => updateField('status_notes', e.target.value)}
           rows={4}
-          className="w-full px-4 py-3 text-sm font-medium border-0 rounded-sm focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none resize-none bg-neutral-50 placeholder:text-neutral-400 transition-colors"
+          className="w-full bg-transparent text-sm text-neutral-600 leading-relaxed border-0 outline-none resize-none p-0 focus:ring-0 placeholder:text-neutral-300"
           placeholder="Add any notes about this project..."
         />
-        {formData.status_notes && (
-          <p className="text-[10px] font-bold text-neutral-400 mt-2 text-right uppercase tracking-wide">{formData.status_notes.length} characters</p>
-        )}
       </div>
 
       {/* Save Button */}
       {hasChanges && (
-        <div className="flex items-center justify-between p-4 bg-[#476E66]/5 rounded-sm border border-[#476E66]/20">
+        <div className="flex items-center justify-between p-4 bg-[#476E66]/5 rounded-xl border border-[#476E66]/20 animate-in fade-in slide-in-from-bottom-2">
           <p className="text-[11px] font-bold text-[#476E66] uppercase tracking-wide">You have unsaved changes</p>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] disabled:opacity-50 transition-colors"
+            className="px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest bg-[#476E66] text-white rounded-lg hover:bg-[#3A5B54] disabled:opacity-50 transition-colors shadow-lg shadow-[#476E66]/20"
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>

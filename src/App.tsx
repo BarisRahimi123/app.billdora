@@ -35,6 +35,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const CheckEmailPage = lazy(() => import('./pages/CheckEmailPage'));
 const CollaboratorAcceptPage = lazy(() => import('./pages/CollaboratorAcceptPage'));
+const ProjectShareAcceptPage = lazy(() => import('./pages/ProjectShareAcceptPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const LeadFormPage = lazy(() => import('./pages/LeadFormPage'));
@@ -185,6 +186,7 @@ function AppRoutes() {
           <Route path="/portal/:token" element={<ClientPortalPage />} />
           <Route path="/lead/:formId" element={<LeadFormPage />} />
           <Route path="/collaborate/:id" element={<CollaboratorAcceptPage />} />
+          <Route path="/project-share/:id" element={<ProjectShareAcceptPage />} />
 
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />

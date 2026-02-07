@@ -154,41 +154,125 @@ export default function SalesPage() {
   });
   const [showClientColumnsDropdown, setShowClientColumnsDropdown] = useState(false);
 
-  // Sort clients with favorites first
+  // Priority dropdown state
+  const [openPriorityDropdown, setOpenPriorityDropdown] = useState<string | null>(null);
+
+  // Roman numeral helper
+  const toRoman = (num: number | null | undefined) => {
+    if (!num) return null;
+    const numerals: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
+    return numerals[num] || null;
+  };
+
+  // Sort clients by priority (1 first, then 2, then 3, then null)
   const sortedClients = useMemo(() => {
     return [...clients].sort((a, b) => {
-      // Favorites first
-      if (a.is_favorite && !b.is_favorite) return -1;
-      if (!a.is_favorite && b.is_favorite) return 1;
+      // Priority sorting: 1 > 2 > 3 > null
+      const aPriority = a.priority || 999;
+      const bPriority = b.priority || 999;
+      if (aPriority !== bPriority) return aPriority - bPriority;
       // Then alphabetically
       return (a.name || '').localeCompare(b.name || '');
     });
   }, [clients]);
 
-  // Toggle favorite status for clients
-  const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Set client priority
+  const setClientPriority = async (clientId: string, newPriority: number | null) => {
     if (!profile?.company_id) return;
 
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
 
-    const newFavoriteStatus = !client.is_favorite;
+    const currentPriority = client.priority;
+
+    // Optimistic update
+    setClients(prev => prev.map(c =>
+      c.id === clientId ? { ...c, priority: newPriority } : c
+    ));
+    setOpenPriorityDropdown(null);
 
     try {
       await supabase
         .from('clients')
-        .update({ is_favorite: newFavoriteStatus })
+        .update({ priority: newPriority })
         .eq('id', clientId);
-
-      // Update local state
-      setClients(prev => prev.map(c =>
-        c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
-      ));
     } catch (err) {
-      console.error('Failed to toggle favorite:', err);
+      console.error('Failed to set client priority:', err);
+      // Revert on failure
+      setClients(prev => prev.map(c =>
+        c.id === clientId ? { ...c, priority: currentPriority } : c
+      ));
     }
   };
+
+  // Priority dropdown component
+  const ClientPriorityDropdown = ({ 
+    clientId, 
+    currentPriority 
+  }: { 
+    clientId: string; 
+    currentPriority: number | null | undefined; 
+  }) => {
+    const isOpen = openPriorityDropdown === clientId;
+
+    return (
+      <div className="relative">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenPriorityDropdown(isOpen ? null : clientId);
+          }}
+          className="w-6 h-6 rounded hover:bg-neutral-100 transition-colors flex items-center justify-center"
+          title="Set priority"
+        >
+          {currentPriority ? (
+            <span className="text-[11px] font-semibold text-neutral-400">{toRoman(currentPriority)}</span>
+          ) : (
+            <Star className="w-3.5 h-3.5 text-neutral-200 hover:text-neutral-300" />
+          )}
+        </button>
+        {isOpen && (
+          <div 
+            className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 min-w-[80px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[1, 2, 3].map((num) => (
+              <button
+                key={num}
+                onClick={() => setClientPriority(clientId, num)}
+                className={`w-full px-3 py-1.5 text-left text-[11px] hover:bg-neutral-50 flex items-center gap-2 ${
+                  currentPriority === num ? 'bg-neutral-50 font-medium' : ''
+                }`}
+              >
+                <span className="text-neutral-400 font-semibold w-4">{toRoman(num)}</span>
+                <span className="text-neutral-500">Priority {num}</span>
+              </button>
+            ))}
+            {currentPriority && (
+              <>
+                <div className="border-t border-neutral-100 my-1" />
+                <button
+                  onClick={() => setClientPriority(clientId, null)}
+                  className="w-full px-3 py-1.5 text-left text-[11px] text-neutral-400 hover:bg-neutral-50"
+                >
+                  Remove
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Close priority dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenPriorityDropdown(null);
+    if (openPriorityDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [openPriorityDropdown]);
 
   const clientRevenueData = useMemo(() => {
     if (activeTab !== 'clients') return [];
@@ -476,10 +560,10 @@ export default function SalesPage() {
       )) return false;
       // Type filter
       if (clientTypeFilter !== 'all') {
-        if (clientTypeFilter === 'favorites' && !c.is_favorite) return false;
+        if (clientTypeFilter === 'priority' && !c.priority) return false;
         if (clientTypeFilter === 'active' && c.is_archived) return false;
         if (clientTypeFilter === 'archived' && !c.is_archived) return false;
-        if (clientTypeFilter !== 'favorites' && clientTypeFilter !== 'active' && clientTypeFilter !== 'archived' && c.type !== clientTypeFilter) return false;
+        if (clientTypeFilter !== 'priority' && clientTypeFilter !== 'active' && clientTypeFilter !== 'archived' && c.type !== clientTypeFilter) return false;
       }
       return true;
     }),
@@ -842,7 +926,7 @@ export default function SalesPage() {
                         className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66]"
                       >
                         <option value="all">All Clients</option>
-                        <option value="favorites">⭐ Favorites Only</option>
+                        <option value="priority">① Priority Only</option>
                         <option value="active">Active Only</option>
                         <option value="archived">Archived Only</option>
                       </select>
@@ -1394,13 +1478,13 @@ export default function SalesPage() {
               All ({clients.length})
             </button>
             <button
-              onClick={() => setClientTypeFilter(clientTypeFilter === 'favorites' ? 'all' : 'favorites')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'favorites'
+              onClick={() => setClientTypeFilter(clientTypeFilter === 'priority' ? 'all' : 'priority')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'priority'
                   ? 'bg-amber-100 text-amber-700 border border-amber-200'
                   : 'bg-white border border-neutral-200 text-neutral-600'
                 }`}
             >
-              ⭐ Favorites ({clients.filter(c => c.is_favorite).length})
+              ① Priority ({clients.filter(c => c.priority).length})
             </button>
             <button
               onClick={() => setClientTypeFilter(clientTypeFilter === 'active' ? 'all' : 'active')}
@@ -1555,20 +1639,20 @@ export default function SalesPage() {
                           ))}
                           <th className="px-4 py-3 text-right text-[9px] font-bold uppercase tracking-widest text-neutral-500 w-[80px]">Actions</th>
                         </tr>
-                        {/* Favorites Section Header in Table */}
-                        {sortedClients.filter(c => c.is_favorite).length > 0 && filteredClients.some(c => c.is_favorite) && clientTypeFilter !== 'favorites' && (
+                        {/* Priority Section Header in Table */}
+                        {sortedClients.filter(c => c.priority).length > 0 && filteredClients.some(c => c.priority) && clientTypeFilter !== 'priority' && (
                           <tr>
                             <td colSpan={visibleClientColumns.length + 2} className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50/50 border-b border-amber-100/50">
-                              ⭐ Favorites
+                              ① Priority
                             </td>
                           </tr>
                         )}
                       </thead>
                       <tbody className="divide-y divide-neutral-50">
                         {filteredClients.map((client) => {
-                          const favoriteClients = filteredClients.filter(c => c.is_favorite);
-                          const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
-                          const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
+                          const priorityClients = filteredClients.filter(c => c.priority);
+                          const isLastPriority = client.priority && priorityClients.length > 0 && priorityClients.indexOf(client) === priorityClients.length - 1;
+                          const showDivider = isLastPriority && filteredClients.some(c => !c.priority) && clientTypeFilter !== 'priority';
 
                           // Helper to get column value
                           const getColumnValue = (col: string) => {
@@ -1607,15 +1691,12 @@ export default function SalesPage() {
                                   </div>
                                 </td>
 
-                                {/* Favorite Star */}
+                                {/* Priority */}
                                 <td className="px-2 py-3 text-center">
-                                  <button
-                                    onClick={(e) => toggleClientFavorite(client.id, e)}
-                                    className="p-1.5 rounded-full hover:bg-amber-100 transition-colors"
-                                    title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                                  >
-                                    <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`} />
-                                  </button>
+                                  <ClientPriorityDropdown
+                                    clientId={client.id}
+                                    currentPriority={client.priority}
+                                  />
                                 </td>
 
                                 {/* Dynamic Columns */}
@@ -1711,17 +1792,17 @@ export default function SalesPage() {
                 {/* Card View - Show on mobile OR when few columns selected OR when client panel open */}
                 {(visibleClientColumns.length <= 3 || selectedClient || isAddingNewClient) && (
                   <>
-                    {/* Favorites Section Header */}
-                    {sortedClients.filter(c => c.is_favorite).length > 0 && filteredClients.some(c => c.is_favorite) && clientTypeFilter !== 'favorites' && (
+                    {/* Priority Section Header */}
+                    {sortedClients.filter(c => c.priority).length > 0 && filteredClients.some(c => c.priority) && clientTypeFilter !== 'priority' && (
                       <div className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50/50 border-b border-amber-100/50">
-                        ⭐ Favorites
+                        ① Priority
                       </div>
                     )}
                     <div className="max-h-[calc(100vh-320px)] overflow-y-auto p-2 space-y-1">
                       {filteredClients.map((client) => {
-                        const favoriteClients = filteredClients.filter(c => c.is_favorite);
-                        const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
-                        const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
+                        const priorityClients = filteredClients.filter(c => c.priority);
+                        const isLastPriority = client.priority && priorityClients.length > 0 && priorityClients.indexOf(client) === priorityClients.length - 1;
+                        const showDivider = isLastPriority && filteredClients.some(c => !c.priority) && clientTypeFilter !== 'priority';
                         const isSelected = selectedClient?.id === client.id;
 
                         return (
@@ -1733,24 +1814,11 @@ export default function SalesPage() {
                                 : 'hover:bg-neutral-50 hover:scale-[1.01]'
                                 }`}
                             >
-                              {/* Favorite Star */}
-                              <button
-                                onClick={(e) => toggleClientFavorite(client.id, e)}
-                                className={`flex-shrink-0 p-1 rounded-full transition-colors ${isSelected
-                                    ? 'hover:bg-white/10'
-                                    : 'hover:bg-amber-100'
-                                  }`}
-                                title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                              >
-                                <Star
-                                  className={`w-4 h-4 ${client.is_favorite
-                                      ? 'text-amber-400 fill-amber-400'
-                                      : isSelected
-                                        ? 'text-white/20 hover:text-white/40'
-                                        : 'text-neutral-200 hover:text-neutral-300'
-                                    }`}
-                                />
-                              </button>
+                              {/* Priority */}
+                              <ClientPriorityDropdown
+                                clientId={client.id}
+                                currentPriority={client.priority}
+                              />
 
                               {/* Avatar */}
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${isSelected
@@ -1810,17 +1878,17 @@ export default function SalesPage() {
                 {/* Mobile Card View - Always show on mobile when table mode is active */}
                 {visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient && (
                   <div className="sm:hidden">
-                    {/* Favorites Section Header */}
-                    {sortedClients.filter(c => c.is_favorite).length > 0 && filteredClients.some(c => c.is_favorite) && clientTypeFilter !== 'favorites' && (
+                    {/* Priority Section Header */}
+                    {sortedClients.filter(c => c.priority).length > 0 && filteredClients.some(c => c.priority) && clientTypeFilter !== 'priority' && (
                       <div className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50/50 border-b border-amber-100/50">
-                        ⭐ Favorites
+                        ① Priority
                       </div>
                     )}
                     <div className="max-h-[calc(100vh-320px)] overflow-y-auto p-2 space-y-1">
                       {filteredClients.map((client) => {
-                        const favoriteClients = filteredClients.filter(c => c.is_favorite);
-                        const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
-                        const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
+                        const priorityClients = filteredClients.filter(c => c.priority);
+                        const isLastPriority = client.priority && priorityClients.length > 0 && priorityClients.indexOf(client) === priorityClients.length - 1;
+                        const showDivider = isLastPriority && filteredClients.some(c => !c.priority) && clientTypeFilter !== 'priority';
 
                         return (
                           <div key={client.id}>
@@ -1828,13 +1896,10 @@ export default function SalesPage() {
                               onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
                               className="group flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 hover:bg-neutral-50"
                             >
-                              <button
-                                onClick={(e) => toggleClientFavorite(client.id, e)}
-                                className="flex-shrink-0 p-1 rounded-full hover:bg-amber-100 transition-colors"
-                                title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                              >
-                                <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`} />
-                              </button>
+                              <ClientPriorityDropdown
+                                clientId={client.id}
+                                currentPriority={client.priority}
+                              />
                               <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 bg-neutral-100 text-neutral-500">
                                 {client.name.charAt(0)}
                               </div>
