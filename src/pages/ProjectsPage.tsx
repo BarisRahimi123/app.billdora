@@ -11,7 +11,7 @@ import {
   Plus, Search, Filter, Download, ChevronLeft, ArrowLeft, Copy,
   FolderKanban, Clock, DollarSign, Users, FileText, CheckSquare, X, Trash2, Edit2,
   MoreVertical, ChevronDown, ChevronRight, RefreshCw, Check, ExternalLink, Info, Settings, UserPlus,
-  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2
+  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2, Star
 } from 'lucide-react';
 import { FieldError } from '../components/ErrorBoundary';
 import { validateEmail } from '../lib/validation';
@@ -33,16 +33,23 @@ const PROJECT_CATEGORIES = [
   { value: 'O', label: 'Other', color: 'bg-neutral-400' },
 ];
 
-const DEFAULT_COLUMNS = ['project', 'client', 'budget', 'status'];
+const DEFAULT_COLUMNS = ['project', 'client', 'budget', 'status', 'invoiced', 'collected', 'billing_status'];
 const ALL_COLUMNS = [
-  { key: 'project', label: 'Project' },
-  { key: 'client', label: 'Client' },
-  { key: 'team', label: 'Team' },
-  { key: 'budget', label: 'Budget' },
-  { key: 'status', label: 'Status' },
-  { key: 'category', label: 'Category' },
-  { key: 'start_date', label: 'Start Date' },
-  { key: 'end_date', label: 'End Date' },
+  { key: 'project', label: 'Project', group: 'Basic' },
+  { key: 'client', label: 'Client', group: 'Basic' },
+  { key: 'team', label: 'Team', group: 'Basic' },
+  { key: 'budget', label: 'Budget', group: 'Financial' },
+  { key: 'status', label: 'Status', group: 'Basic' },
+  { key: 'category', label: 'Category', group: 'Basic' },
+  { key: 'start_date', label: 'Start Date', group: 'Dates' },
+  { key: 'end_date', label: 'End Date', group: 'Dates' },
+  // Billing columns
+  { key: 'invoiced', label: 'Invoiced', group: 'Billing' },
+  { key: 'collected', label: 'Collected', group: 'Billing' },
+  { key: 'remaining', label: 'Remaining', group: 'Billing' },
+  { key: 'billing_status', label: 'Billing Status', group: 'Billing' },
+  { key: 'draft_invoices', label: 'Draft Invoices', group: 'Billing' },
+  { key: 'open_invoices', label: 'Open Invoices', group: 'Billing' },
 ];
 
 function getCategoryInfo(category?: string) {
@@ -78,6 +85,7 @@ export default function ProjectsPage() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [projectTeamsMap, setProjectTeamsMap] = useState<Record<string, { id: string; full_name?: string; avatar_url?: string }[]>>({});
   const [viewingBillingInvoice, setViewingBillingInvoice] = useState<Invoice | null>(null);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'client'>('list');
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     const saved = localStorage.getItem('projectsVisibleColumns');
@@ -92,6 +100,48 @@ export default function ProjectsPage() {
     const saved = localStorage.getItem('projectsExpandedClients');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [billingFilter, setBillingFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+
+  // Sort clients with favorites first
+  const sortedClients = useMemo(() => {
+    return [...clients].sort((a, b) => {
+      // Favorites first
+      if (a.is_favorite && !b.is_favorite) return -1;
+      if (!a.is_favorite && b.is_favorite) return 1;
+      // Then alphabetically
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [clients]);
+
+  // Toggle favorite status
+  const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile?.company_id) return;
+    
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+    
+    const newFavoriteStatus = !client.is_favorite;
+    
+    try {
+      await supabase
+        .from('clients')
+        .update({ is_favorite: newFavoriteStatus })
+        .eq('id', clientId);
+      
+      // Update local state
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
+      ));
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+    }
+  };
 
   const toggleClientExpanded = (clientName: string) => {
     const newExpanded = new Set(expandedClients);
@@ -131,16 +181,18 @@ export default function ProjectsPage() {
     const startTime = Date.now();
 
     try {
-      // Load projects and clients in PARALLEL
-      const [projectsData, clientsData] = await Promise.all([
+      // Load projects, clients, and invoices in PARALLEL
+      const [projectsData, clientsData, invoicesData] = await Promise.all([
         api.getProjects(companyId).catch(err => { console.error('Failed to load projects:', err); return []; }),
         api.getClients(companyId).catch(err => { console.error('Failed to load clients:', err); return []; }),
+        api.getInvoices(companyId).catch(err => { console.error('Failed to load invoices:', err); return []; }),
       ]);
 
       console.log('[ProjectsPage] Initial data loaded in', Date.now() - startTime, 'ms');
 
       setProjects(projectsData || []);
       setClients(clientsData || []);
+      setAllInvoices(invoicesData || []);
 
       // Load team members for first batch of projects in parallel (avoids N+1 query problem)
       // Note: This is a frontend optimization. Ideally, backend should include team_members in project response
@@ -235,9 +287,101 @@ export default function ProjectsPage() {
     }
   }
 
-  const filteredProjects = projects.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Compute billing stats for each project - MUST be defined before filteredProjects
+  const projectBillingStats = useMemo(() => {
+    const stats: Record<string, {
+      invoiced: number;
+      collected: number;
+      remaining: number;
+      billingStatus: string;
+      draftCount: number;
+      openCount: number;
+    }> = {};
+
+    projects.forEach(project => {
+      const projectInvoices = allInvoices.filter(inv => inv.project_id === project.id);
+      const budget = project.budget || 0;
+      const invoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+      const collected = projectInvoices
+        .filter(inv => inv.status === 'paid')
+        .reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total || 0), 0);
+      const draftCount = projectInvoices.filter(inv => inv.status === 'draft').length;
+      const openCount = projectInvoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue').length;
+      const isProjectCompleted = project.status === 'completed';
+      
+      // Determine billing status
+      let billingStatus = 'Not Billed';
+      
+      // Priority 1: If project is completed and has invoices that are all paid, show "Paid & Closed"
+      if (isProjectCompleted && projectInvoices.length > 0 && draftCount === 0 && openCount === 0) {
+        billingStatus = 'Paid & Closed';
+      }
+      // Priority 2: If project is completed but still has outstanding invoices
+      else if (isProjectCompleted && openCount > 0) {
+        billingStatus = 'Closed - Outstanding';
+      }
+      // Priority 3: If project is completed with no invoices (imported as completed)
+      else if (isProjectCompleted && projectInvoices.length === 0 && budget > 0) {
+        billingStatus = 'Paid & Closed';
+      }
+      // Normal billing status logic for active projects
+      else if (projectInvoices.length === 0) {
+        billingStatus = 'Not Billed';
+      } else if (draftCount > 0 && openCount === 0 && collected === 0) {
+        billingStatus = 'Draft';
+      } else if (openCount > 0) {
+        billingStatus = 'Open';
+      } else if (collected >= invoiced && invoiced > 0) {
+        billingStatus = 'Paid';
+      } else if (collected > 0 && collected < invoiced) {
+        billingStatus = 'Partial';
+      }
+
+      // Remaining = $0 if: project completed, OR fully collected, OR invoiced >= budget
+      const isFullyCollected = collected >= budget && budget > 0;
+      const isFullyInvoiced = invoiced >= budget && budget > 0;
+      const remainingAmount = (isProjectCompleted || isFullyCollected || isFullyInvoiced) 
+        ? 0 
+        : Math.max(0, budget - collected);
+
+      stats[project.id] = {
+        invoiced,
+        collected,
+        remaining: remainingAmount,
+        billingStatus,
+        draftCount,
+        openCount,
+      };
+    });
+
+    return stats;
+  }, [projects, allInvoices]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p => {
+      // Search filter
+      if (searchTerm && !p.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+      // Status filter
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      // Client filter
+      if (clientFilter !== 'all' && p.client_id !== clientFilter) return false;
+      // Category filter
+      if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+      // Billing status filter
+      if (billingFilter !== 'all') {
+        const billingStatus = projectBillingStats[p.id]?.billingStatus || 'Not Billed';
+        if (billingFilter === 'not_billed' && billingStatus !== 'Not Billed') return false;
+        if (billingFilter === 'draft' && billingStatus !== 'Draft') return false;
+        if (billingFilter === 'open' && billingStatus !== 'Open') return false;
+        if (billingFilter === 'paid' && !billingStatus.includes('Paid')) return false;
+        if (billingFilter === 'partial' && billingStatus !== 'Partial') return false;
+      }
+      return true;
+    });
+  }, [projects, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats]);
+
+  // Count active filters
+  const activeFilterCount = [statusFilter, clientFilter, billingFilter, categoryFilter].filter(f => f !== 'all').length;
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -1079,14 +1223,230 @@ export default function ProjectsPage() {
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-neutral-200 hover:border-neutral-300 rounded-sm hover:bg-neutral-50 transition-all group">
-            <Filter className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 group-hover:text-neutral-900">Filters</span>
-          </button>
+          {/* Filters Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => { setShowFiltersDropdown(!showFiltersDropdown); setShowColumnsDropdown(false); setShowActionsMenu(false); }}
+              className={`hidden sm:flex items-center gap-2 px-4 py-2.5 border rounded-sm transition-all group ${activeFilterCount > 0 ? 'bg-[#476E66]/10 border-[#476E66]/30 hover:bg-[#476E66]/20' : 'bg-white border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'}`}
+            >
+              <Filter className={`w-4 h-4 ${activeFilterCount > 0 ? 'text-[#476E66]' : 'text-neutral-400 group-hover:text-neutral-600'}`} />
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${activeFilterCount > 0 ? 'text-[#476E66]' : 'text-neutral-600 group-hover:text-neutral-900'}`}>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-[9px] font-bold bg-[#476E66] text-white rounded-full">{activeFilterCount}</span>
+              )}
+            </button>
+            {showFiltersDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFiltersDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-sm border border-neutral-200 z-50 py-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-4 py-2 border-b border-neutral-100">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66]">Filter Projects</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">Narrow down your project list</p>
+                  </div>
+                  <div className="px-4 py-3 space-y-4">
+                    {/* Client Filter - Most important, show first */}
+                    <div className="relative">
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Client</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowClientDropdown(!showClientDropdown)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66] focus:ring-1 focus:ring-[#476E66] text-left flex items-center justify-between"
+                      >
+                        <span className="truncate">
+                          {clientFilter === 'all' 
+                            ? 'All Clients' 
+                            : clients.find(c => c.id === clientFilter)?.name || 'Select Client'}
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                      </button>
+                      {showClientDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-50" onClick={() => setShowClientDropdown(false)} />
+                          <div className="absolute left-0 top-full mt-1 w-full bg-white rounded-sm border border-neutral-200 z-[60] shadow-lg max-h-64 overflow-y-auto">
+                            <div
+                              onClick={() => {
+                                setClientFilter('all');
+                                setShowClientDropdown(false);
+                              }}
+                              className={`px-3 py-2 text-[11px] cursor-pointer hover:bg-neutral-50 flex items-center gap-2 ${clientFilter === 'all' ? 'bg-[#476E66]/5 text-[#476E66] font-medium' : ''}`}
+                            >
+                              <span className="w-4" />
+                              <span>All Clients</span>
+                            </div>
+                            {sortedClients.filter(c => c.is_favorite).length > 0 && (
+                              <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50 border-y border-amber-100">
+                                Favorites
+                              </div>
+                            )}
+                            {sortedClients.map((client, idx) => {
+                              const favoriteClients = sortedClients.filter(c => c.is_favorite);
+                              const isLastFavorite = client.is_favorite && favoriteClients.indexOf(client) === favoriteClients.length - 1;
+                              return (
+                                <div
+                                  key={client.id}
+                                  onClick={() => {
+                                    setClientFilter(client.id);
+                                    setShowClientDropdown(false);
+                                    // Reset other filters when selecting a client
+                                    setStatusFilter('all');
+                                    setBillingFilter('all');
+                                    setCategoryFilter('all');
+                                  }}
+                                  className={`px-3 py-2 text-[11px] cursor-pointer hover:bg-neutral-50 flex items-center gap-2 ${clientFilter === client.id ? 'bg-[#476E66]/5 text-[#476E66] font-medium' : ''} ${isLastFavorite ? 'border-b border-neutral-100' : ''}`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => toggleClientFavorite(client.id, e)}
+                                    className="flex-shrink-0 p-0.5 hover:bg-amber-100 rounded transition-colors"
+                                    title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                                  >
+                                    <Star 
+                                      className={`w-3.5 h-3.5 ${client.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-neutral-300 hover:text-amber-400'}`} 
+                                    />
+                                  </button>
+                                  <span className="truncate">{client.name}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {/* Status Filter */}
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Project Status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66] focus:ring-1 focus:ring-[#476E66]"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="on_hold">On Hold</option>
+                      </select>
+                    </div>
+                    {/* Billing Status Filter */}
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Billing Status</label>
+                      <select
+                        value={billingFilter}
+                        onChange={(e) => setBillingFilter(e.target.value)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66] focus:ring-1 focus:ring-[#476E66]"
+                      >
+                        <option value="all">All Billing</option>
+                        <option value="not_billed">Not Billed</option>
+                        <option value="draft">Draft</option>
+                        <option value="open">Open</option>
+                        <option value="partial">Partial Payment</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </div>
+                    {/* Category Filter */}
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Category</label>
+                      <select
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66] focus:ring-1 focus:ring-[#476E66]"
+                      >
+                        <option value="all">All Categories</option>
+                        {PROJECT_CATEGORIES.map(cat => (
+                          <option key={cat.value} value={cat.value}>{cat.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {activeFilterCount > 0 && (
+                    <div className="px-4 py-2 border-t border-neutral-100">
+                      <button
+                        onClick={() => {
+                          setStatusFilter('all');
+                          setClientFilter('all');
+                          setBillingFilter('all');
+                          setCategoryFilter('all');
+                        }}
+                        className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
+                      >
+                        Clear All Filters
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Columns Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowColumnsDropdown(!showColumnsDropdown); setShowActionsMenu(false); setShowFiltersDropdown(false); }}
+              className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-neutral-200 hover:border-neutral-300 rounded-sm hover:bg-neutral-50 transition-all group"
+            >
+              <Columns3 className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 group-hover:text-neutral-900">Columns</span>
+            </button>
+            {showColumnsDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowColumnsDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-sm border border-neutral-200 z-50 py-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-4 py-2 border-b border-neutral-100">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66]">Customize Columns</p>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">Select which columns to display</p>
+                  </div>
+                  <div className="px-4 py-2 max-h-72 overflow-y-auto">
+                    {['Basic', 'Financial', 'Billing', 'Dates'].map(group => {
+                      const groupCols = ALL_COLUMNS.filter(col => col.group === group);
+                      if (groupCols.length === 0) return null;
+                      return (
+                        <div key={group} className="mb-3">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-2">{group}</p>
+                          <div className="space-y-1">
+                            {groupCols.map(col => (
+                              <label key={col.key} className="flex items-center gap-3 py-1 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={visibleColumns.includes(col.key)}
+                                    onChange={(e) => {
+                                      const newCols = e.target.checked
+                                        ? [...visibleColumns, col.key]
+                                        : visibleColumns.filter(c => c !== col.key);
+                                      setVisibleColumns(newCols);
+                                      localStorage.setItem('projectsVisibleColumns', JSON.stringify(newCols));
+                                    }}
+                                    className="peer appearance-none w-3.5 h-3.5 border border-neutral-300 rounded-sm bg-white checked:bg-neutral-900 checked:border-neutral-900 transition-colors"
+                                  />
+                                  <Check className="w-2.5 h-2.5 text-white absolute left-0.5 top-0.5 opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                                </div>
+                                <span className="text-[11px] font-medium text-neutral-500 group-hover:text-neutral-900 transition-colors">{col.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-4 py-2 border-t border-neutral-100">
+                    <button
+                      onClick={() => {
+                        setVisibleColumns(DEFAULT_COLUMNS);
+                        localStorage.setItem('projectsVisibleColumns', JSON.stringify(DEFAULT_COLUMNS));
+                      }}
+                      className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
+                    >
+                      Reset to Default
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="relative">
             <button
-              onClick={() => setShowActionsMenu(!showActionsMenu)}
+              onClick={() => { setShowActionsMenu(!showActionsMenu); setShowColumnsDropdown(false); setShowFiltersDropdown(false); }}
               className="flex items-center justify-center w-10 h-[42px] bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 hover:border-neutral-300 transition-all text-neutral-500 hover:text-neutral-900"
             >
               <MoreVertical className="w-4 h-4" />
@@ -1132,30 +1492,39 @@ export default function ProjectsPage() {
                   <RefreshCw className="w-3.5 h-3.5" /> Refresh Data
                 </button>
                 <hr className="my-1 border-neutral-100" />
-                <div className="px-4 py-2">
+                <div className="px-4 py-2 max-h-80 overflow-y-auto">
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66] mb-3">Visible Columns</p>
-                  <div className="space-y-1">
-                    {ALL_COLUMNS.map(col => (
-                      <label key={col.key} className="flex items-center gap-3 py-1 cursor-pointer group">
-                        <div className="relative flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={visibleColumns.includes(col.key)}
-                            onChange={(e) => {
-                              const newCols = e.target.checked
-                                ? [...visibleColumns, col.key]
-                                : visibleColumns.filter(c => c !== col.key);
-                              setVisibleColumns(newCols);
-                              localStorage.setItem('projectsVisibleColumns', JSON.stringify(newCols));
-                            }}
-                            className="peer appearance-none w-3.5 h-3.5 border border-neutral-300 rounded-sm bg-white checked:bg-neutral-900 checked:border-neutral-900 transition-colors"
-                          />
-                          <Check className="w-2.5 h-2.5 text-white absolute left-0.5 top-0.5 opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                  {['Basic', 'Financial', 'Billing', 'Dates'].map(group => {
+                    const groupCols = ALL_COLUMNS.filter(col => col.group === group);
+                    if (groupCols.length === 0) return null;
+                    return (
+                      <div key={group} className="mb-3">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-2">{group}</p>
+                        <div className="space-y-1">
+                          {groupCols.map(col => (
+                            <label key={col.key} className="flex items-center gap-3 py-1 cursor-pointer group">
+                              <div className="relative flex items-center">
+                                <input
+                                  type="checkbox"
+                                  checked={visibleColumns.includes(col.key)}
+                                  onChange={(e) => {
+                                    const newCols = e.target.checked
+                                      ? [...visibleColumns, col.key]
+                                      : visibleColumns.filter(c => c !== col.key);
+                                    setVisibleColumns(newCols);
+                                    localStorage.setItem('projectsVisibleColumns', JSON.stringify(newCols));
+                                  }}
+                                  className="peer appearance-none w-3.5 h-3.5 border border-neutral-300 rounded-sm bg-white checked:bg-neutral-900 checked:border-neutral-900 transition-colors"
+                                />
+                                <Check className="w-2.5 h-2.5 text-white absolute left-0.5 top-0.5 opacity-0 peer-checked:opacity-100 pointer-events-none" />
+                              </div>
+                              <span className="text-[11px] font-medium text-neutral-500 group-hover:text-neutral-900 transition-colors uppercase tracking-wide">{col.label}</span>
+                            </label>
+                          ))}
                         </div>
-                        <span className="text-[11px] font-medium text-neutral-500 group-hover:text-neutral-900 transition-colors uppercase tracking-wide">{col.label}</span>
-                      </label>
-                    ))}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 {selectedProjects.size > 0 && (
                   <>
@@ -1180,6 +1549,61 @@ export default function ProjectsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Mobile Quick Filters */}
+      <div className="flex sm:hidden gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'all' ? 'all' : 'all')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+            statusFilter === 'all' && clientFilter === 'all' && billingFilter === 'all'
+              ? 'bg-neutral-900 text-white' 
+              : 'bg-white border border-neutral-200 text-neutral-600'
+          }`}
+          style={{ ...(statusFilter === 'all' && clientFilter === 'all' && billingFilter === 'all' ? {} : {}) }}
+        >
+          All ({projects.length})
+        </button>
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+            statusFilter === 'active' 
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+              : 'bg-white border border-neutral-200 text-neutral-600'
+          }`}
+        >
+          Active ({projects.filter(p => p.status === 'active').length})
+        </button>
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+            statusFilter === 'in_progress' 
+              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+              : 'bg-white border border-neutral-200 text-neutral-600'
+          }`}
+        >
+          In Progress ({projects.filter(p => p.status === 'in_progress').length})
+        </button>
+        <button
+          onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+            statusFilter === 'completed' 
+              ? 'bg-neutral-200 text-neutral-700 border border-neutral-300' 
+              : 'bg-white border border-neutral-200 text-neutral-600'
+          }`}
+        >
+          Completed ({projects.filter(p => p.status === 'completed').length})
+        </button>
+        <button
+          onClick={() => setBillingFilter(billingFilter === 'not_billed' ? 'all' : 'not_billed')}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+            billingFilter === 'not_billed' 
+              ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+              : 'bg-white border border-neutral-200 text-neutral-600'
+          }`}
+        >
+          Unbilled
+        </button>
       </div>
 
       {/* Projects Table */}
@@ -1241,6 +1665,24 @@ export default function ProjectsPage() {
                         {project.start_date && (
                           <span className="text-[10px] text-neutral-400">{new Date(project.start_date).toLocaleDateString()}</span>
                         )}
+                        {/* Billing Status Badge */}
+                        {(() => {
+                          const billingStatus = projectBillingStats[project.id]?.billingStatus;
+                          if (!billingStatus || billingStatus === 'Not Billed') return null;
+                          const statusStyles: Record<string, string> = {
+                            'Draft': 'bg-amber-50 text-amber-700',
+                            'Open': 'bg-blue-50 text-blue-700',
+                            'Partial': 'bg-orange-50 text-orange-700',
+                            'Paid': 'bg-emerald-50 text-emerald-700',
+                            'Paid & Closed': 'bg-neutral-200 text-neutral-700',
+                            'Closed - Outstanding': 'bg-red-50 text-red-700',
+                          };
+                          return (
+                            <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest ${statusStyles[billingStatus]}`}>
+                              {billingStatus}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1308,6 +1750,12 @@ export default function ProjectsPage() {
                 {visibleColumns.includes('category') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Category</th>}
                 {visibleColumns.includes('start_date') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Start Date</th>}
                 {visibleColumns.includes('end_date') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">End Date</th>}
+                {visibleColumns.includes('invoiced') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invoiced</th>}
+                {visibleColumns.includes('collected') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Collected</th>}
+                {visibleColumns.includes('remaining') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Remaining</th>}
+                {visibleColumns.includes('billing_status') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Billing Status</th>}
+                {visibleColumns.includes('draft_invoices') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Draft Invoices</th>}
+                {visibleColumns.includes('open_invoices') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Open Invoices</th>}
                 <th className="w-16 text-right px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest"></th>
               </tr>
             </thead>
@@ -1406,6 +1854,64 @@ export default function ProjectsPage() {
                     {visibleColumns.includes('end_date') && (
                       <td className="px-4 py-4 text-[11px] font-mono text-neutral-500">
                         {project.end_date ? new Date(project.end_date).toLocaleDateString() : '-'}
+                      </td>
+                    )}
+                    {visibleColumns.includes('invoiced') && canViewFinancials && (
+                      <td className="px-4 py-4 font-mono text-sm text-neutral-900">
+                        {formatCurrency(projectBillingStats[project.id]?.invoiced || 0)}
+                      </td>
+                    )}
+                    {visibleColumns.includes('collected') && canViewFinancials && (
+                      <td className="px-4 py-4 font-mono text-sm text-emerald-600">
+                        {formatCurrency(projectBillingStats[project.id]?.collected || 0)}
+                      </td>
+                    )}
+                    {visibleColumns.includes('remaining') && canViewFinancials && (
+                      <td className="px-4 py-4 font-mono text-sm text-neutral-500">
+                        {formatCurrency(projectBillingStats[project.id]?.remaining || 0)}
+                      </td>
+                    )}
+                    {visibleColumns.includes('billing_status') && (
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const status = projectBillingStats[project.id]?.billingStatus || 'Not Billed';
+                          const statusStyles: Record<string, string> = {
+                            'Not Billed': 'bg-neutral-100 text-neutral-600',
+                            'Draft': 'bg-amber-50 text-amber-700',
+                            'Open': 'bg-blue-50 text-blue-700',
+                            'Partial': 'bg-orange-50 text-orange-700',
+                            'Paid': 'bg-emerald-50 text-emerald-700',
+                            'Paid & Closed': 'bg-neutral-200 text-neutral-700',
+                            'Closed - Outstanding': 'bg-red-50 text-red-700',
+                          };
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-bold uppercase tracking-widest ${statusStyles[status] || statusStyles['Not Billed']}`}>
+                              {status}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                    )}
+                    {visibleColumns.includes('draft_invoices') && (
+                      <td className="px-4 py-4 text-center">
+                        {projectBillingStats[project.id]?.draftCount > 0 ? (
+                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                            {projectBillingStats[project.id]?.draftCount}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-300">-</span>
+                        )}
+                      </td>
+                    )}
+                    {visibleColumns.includes('open_invoices') && (
+                      <td className="px-4 py-4 text-center">
+                        {projectBillingStats[project.id]?.openCount > 0 ? (
+                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
+                            {projectBillingStats[project.id]?.openCount}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-300">-</span>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-4 text-right relative" onClick={(e) => e.stopPropagation()}>

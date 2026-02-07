@@ -44,6 +44,7 @@ export interface Client {
   type?: string;
   lifecycle_stage?: string;
   is_archived?: boolean;
+  is_favorite?: boolean;
   created_at?: string;
   // Primary Contact (legacy - kept for backwards compatibility)
   primary_contact_name?: string;
