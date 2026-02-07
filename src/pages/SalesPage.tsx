@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell, BarChart2, FilePlus } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell, BarChart2, FilePlus, Star, Columns3, MapPin, Globe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -41,6 +41,25 @@ function generateQuoteNumber(): string {
   const seq = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
   return `${yy}${mm}${dd}-${seq}`;
 }
+
+// Client columns configuration
+const DEFAULT_CLIENT_COLUMNS = ['name', 'contact', 'email', 'phone', 'status'];
+const ALL_CLIENT_COLUMNS = [
+  { key: 'name', label: 'Client Name', group: 'Basic' },
+  { key: 'contact', label: 'Primary Contact', group: 'Basic' },
+  { key: 'email', label: 'Email', group: 'Contact' },
+  { key: 'phone', label: 'Phone', group: 'Contact' },
+  { key: 'status', label: 'Status', group: 'Basic' },
+  { key: 'type', label: 'Client Type', group: 'Basic' },
+  { key: 'lifecycle_stage', label: 'Lifecycle Stage', group: 'Basic' },
+  { key: 'address', label: 'Address', group: 'Location' },
+  { key: 'city', label: 'City', group: 'Location' },
+  { key: 'state', label: 'State', group: 'Location' },
+  { key: 'website', label: 'Website', group: 'Contact' },
+  { key: 'billing_contact', label: 'Billing Contact', group: 'Billing' },
+  { key: 'billing_email', label: 'Billing Email', group: 'Billing' },
+  { key: 'created_at', label: 'Created Date', group: 'Dates' },
+];
 
 export default function SalesPage() {
   const navigate = useNavigate();
@@ -117,9 +136,59 @@ export default function SalesPage() {
     localStorage.setItem('quotesExpandedClients', JSON.stringify([...newExpanded]));
   }, [expandedClients]);
 
+  // Filter states
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
+  const [leadStatusFilter, setLeadStatusFilter] = useState<string>('all');
+  const [leadSourceFilter, setLeadSourceFilter] = useState<string>('all');
+  const [clientTypeFilter, setClientTypeFilter] = useState<string>('all');
+  const [proposalStatusFilter, setProposalStatusFilter] = useState<string>('all');
+
   // Client View Mode & Analysis
   const [clientsViewMode, setClientsViewMode] = useState<'list' | 'chart'>('list');
   const [chartTimeframe, setChartTimeframe] = useState<'month' | 'year'>('year');
+  
+  // Client columns customization
+  const [visibleClientColumns, setVisibleClientColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('clientsVisibleColumns');
+    return saved ? JSON.parse(saved) : DEFAULT_CLIENT_COLUMNS;
+  });
+  const [showClientColumnsDropdown, setShowClientColumnsDropdown] = useState(false);
+  
+  // Sort clients with favorites first
+  const sortedClients = useMemo(() => {
+    return [...clients].sort((a, b) => {
+      // Favorites first
+      if (a.is_favorite && !b.is_favorite) return -1;
+      if (!a.is_favorite && b.is_favorite) return 1;
+      // Then alphabetically
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [clients]);
+  
+  // Toggle favorite status for clients
+  const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile?.company_id) return;
+    
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+    
+    const newFavoriteStatus = !client.is_favorite;
+    
+    try {
+      await supabase
+        .from('clients')
+        .update({ is_favorite: newFavoriteStatus })
+        .eq('id', clientId);
+      
+      // Update local state
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
+      ));
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+    }
+  };
 
   const clientRevenueData = useMemo(() => {
     if (activeTab !== 'clients') return [];
@@ -399,20 +468,36 @@ export default function SalesPage() {
   }
 
   const filteredClients = useMemo(() =>
-    clients.filter(c =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.display_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    ),
-    [clients, searchTerm]
+    sortedClients.filter(c => {
+      // Search filter
+      if (searchTerm && !(
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.display_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      )) return false;
+      // Type filter
+      if (clientTypeFilter !== 'all') {
+        if (clientTypeFilter === 'favorites' && !c.is_favorite) return false;
+        if (clientTypeFilter === 'active' && c.is_archived) return false;
+        if (clientTypeFilter === 'archived' && !c.is_archived) return false;
+        if (clientTypeFilter !== 'favorites' && clientTypeFilter !== 'active' && clientTypeFilter !== 'archived' && c.type !== clientTypeFilter) return false;
+      }
+      return true;
+    }),
+    [sortedClients, searchTerm, clientTypeFilter]
   );
 
   const filteredQuotes = useMemo(() => {
     return quotes.filter(q => {
-      const matchesSearch = q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.quote_number?.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
+      // Search filter
+      if (searchTerm && !(
+        q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        q.quote_number?.toLowerCase().includes(searchTerm.toLowerCase())
+      )) return false;
+      // Proposal status filter
+      if (proposalStatusFilter !== 'all' && q.status !== proposalStatusFilter) return false;
+      return true;
     });
-  }, [quotes, searchTerm]);
+  }, [quotes, searchTerm, proposalStatusFilter]);
 
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -683,10 +768,125 @@ export default function SalesPage() {
             className="w-full pl-11 pr-4 py-3 bg-white border border-neutral-200 rounded-none focus:ring-1 focus:ring-neutral-900 focus:border-neutral-900 outline-none text-sm transition-all"
           />
         </div>
-        <button className="hidden sm:flex items-center gap-2 px-6 py-3 border border-neutral-200 bg-white hover:bg-neutral-50 transition-colors text-[10px] font-bold uppercase tracking-widest text-neutral-600">
-          <Filter className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">Filters</span>
-        </button>
+        {/* Filters Dropdown */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+            className={`hidden sm:flex items-center gap-2 px-6 py-3 border transition-colors text-[10px] font-bold uppercase tracking-widest ${
+              (activeTab === 'clients' && clientTypeFilter !== 'all') ||
+              (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
+              (activeTab === 'proposals' && proposalStatusFilter !== 'all')
+                ? 'bg-[#476E66]/10 border-[#476E66]/30 text-[#476E66] hover:bg-[#476E66]/20' 
+                : 'border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Filters</span>
+            {((activeTab === 'clients' && clientTypeFilter !== 'all') ||
+              (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
+              (activeTab === 'proposals' && proposalStatusFilter !== 'all')) && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#476E66] text-white rounded-full">1</span>
+            )}
+          </button>
+          {showFiltersDropdown && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowFiltersDropdown(false)} />
+              <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-sm border border-neutral-200 z-50 py-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-4 py-2 border-b border-neutral-100">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66]">
+                    Filter {activeTab === 'leads' ? 'Leads' : activeTab === 'clients' ? 'Clients' : 'Proposals'}
+                  </p>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {activeTab === 'leads' && (
+                    <>
+                      <div>
+                        <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Status</label>
+                        <select
+                          value={leadStatusFilter}
+                          onChange={(e) => setLeadStatusFilter(e.target.value)}
+                          className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66]"
+                        >
+                          <option value="all">All Statuses</option>
+                          <option value="new">New</option>
+                          <option value="contacted">Contacted</option>
+                          <option value="qualified">Qualified</option>
+                          <option value="proposal">Proposal</option>
+                          <option value="negotiation">Negotiation</option>
+                          <option value="won">Won</option>
+                          <option value="lost">Lost</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Source</label>
+                        <select
+                          value={leadSourceFilter}
+                          onChange={(e) => setLeadSourceFilter(e.target.value)}
+                          className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66]"
+                        >
+                          <option value="all">All Sources</option>
+                          <option value="website">Website</option>
+                          <option value="referral">Referral</option>
+                          <option value="social">Social Media</option>
+                          <option value="email">Email</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  {activeTab === 'clients' && (
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Show</label>
+                      <select
+                        value={clientTypeFilter}
+                        onChange={(e) => setClientTypeFilter(e.target.value)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66]"
+                      >
+                        <option value="all">All Clients</option>
+                        <option value="favorites">⭐ Favorites Only</option>
+                        <option value="active">Active Only</option>
+                        <option value="archived">Archived Only</option>
+                      </select>
+                    </div>
+                  )}
+                  {activeTab === 'proposals' && (
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5 block">Status</label>
+                      <select
+                        value={proposalStatusFilter}
+                        onChange={(e) => setProposalStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66]"
+                      >
+                        <option value="all">All Proposals</option>
+                        <option value="draft">Draft</option>
+                        <option value="sent">Sent</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+                {((activeTab === 'clients' && clientTypeFilter !== 'all') ||
+                  (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
+                  (activeTab === 'proposals' && proposalStatusFilter !== 'all')) && (
+                  <div className="px-4 py-2 border-t border-neutral-100">
+                    <button
+                      onClick={() => {
+                        setLeadStatusFilter('all');
+                        setLeadSourceFilter('all');
+                        setClientTypeFilter('all');
+                        setProposalStatusFilter('all');
+                      }}
+                      className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
         {activeTab === 'proposals' && (
           <>
             {/* Client/Lead Source Toggle Removed */}
@@ -716,22 +916,85 @@ export default function SalesPage() {
 
         {/* Clients View Toggles */}
         {activeTab === 'clients' && (
-          <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg flex-shrink-0">
-            <button
-              onClick={() => setClientsViewMode('list')}
-              className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
-              title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setClientsViewMode('chart')}
-              className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'chart' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
-              title="Revenue Chart"
-            >
-              <BarChart2 className="w-4 h-4" />
-            </button>
-          </div>
+          <>
+            <div className="flex items-center gap-0.5 p-0.5 bg-neutral-100 rounded-lg flex-shrink-0">
+              <button
+                onClick={() => setClientsViewMode('list')}
+                className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setClientsViewMode('chart')}
+                className={`p-1.5 rounded-md transition-colors ${clientsViewMode === 'chart' ? 'bg-white shadow-sm' : 'hover:bg-neutral-200'}`}
+                title="Revenue Chart"
+              >
+                <BarChart2 className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {/* Columns Dropdown for Clients */}
+            <div className="relative">
+              <button
+                onClick={() => { setShowClientColumnsDropdown(!showClientColumnsDropdown); setShowFiltersDropdown(false); }}
+                className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-white border border-neutral-200 hover:border-neutral-300 rounded-sm hover:bg-neutral-50 transition-all group"
+              >
+                <Columns3 className="w-4 h-4 text-neutral-400 group-hover:text-neutral-600" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600 group-hover:text-neutral-900">Columns</span>
+              </button>
+              {showClientColumnsDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowClientColumnsDropdown(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-sm border border-neutral-200 z-50 py-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-4 py-2 border-b border-neutral-100">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66]">Customize Columns</p>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">Select which columns to display</p>
+                    </div>
+                    <div className="px-4 py-2 max-h-72 overflow-y-auto">
+                      {['Basic', 'Contact', 'Location', 'Billing', 'Dates'].map(group => {
+                        const groupCols = ALL_CLIENT_COLUMNS.filter(col => col.group === group);
+                        if (groupCols.length === 0) return null;
+                        return (
+                          <div key={group} className="mb-3">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-400 mb-1.5">{group}</p>
+                            {groupCols.map(col => (
+                              <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer group/col">
+                                <input
+                                  type="checkbox"
+                                  checked={visibleClientColumns.includes(col.key)}
+                                  onChange={(e) => {
+                                    const newCols = e.target.checked
+                                      ? [...visibleClientColumns, col.key]
+                                      : visibleClientColumns.filter(c => c !== col.key);
+                                    setVisibleClientColumns(newCols);
+                                    localStorage.setItem('clientsVisibleColumns', JSON.stringify(newCols));
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]"
+                                />
+                                <span className="text-[11px] text-neutral-600 group-hover/col:text-neutral-900">{col.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="px-4 py-2 border-t border-neutral-100">
+                      <button
+                        onClick={() => {
+                          setVisibleClientColumns(DEFAULT_CLIENT_COLUMNS);
+                          localStorage.setItem('clientsVisibleColumns', JSON.stringify(DEFAULT_CLIENT_COLUMNS));
+                        }}
+                        className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
+                      >
+                        Reset to Default
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
         )}
 
         {activeTab === 'leads' && (
@@ -1120,6 +1383,49 @@ export default function SalesPage() {
       {/* Clients Section */}
       {activeTab === 'clients' && (
         <div className="space-y-6">
+          {/* Mobile Quick Filters for Clients */}
+          <div className="flex sm:hidden gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+            <button
+              onClick={() => setClientTypeFilter('all')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                clientTypeFilter === 'all'
+                  ? 'bg-neutral-900 text-white' 
+                  : 'bg-white border border-neutral-200 text-neutral-600'
+              }`}
+            >
+              All ({clients.length})
+            </button>
+            <button
+              onClick={() => setClientTypeFilter(clientTypeFilter === 'favorites' ? 'all' : 'favorites')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                clientTypeFilter === 'favorites' 
+                  ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                  : 'bg-white border border-neutral-200 text-neutral-600'
+              }`}
+            >
+              ⭐ Favorites ({clients.filter(c => c.is_favorite).length})
+            </button>
+            <button
+              onClick={() => setClientTypeFilter(clientTypeFilter === 'active' ? 'all' : 'active')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                clientTypeFilter === 'active' 
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                  : 'bg-white border border-neutral-200 text-neutral-600'
+              }`}
+            >
+              Active ({clients.filter(c => !c.is_archived).length})
+            </button>
+            <button
+              onClick={() => setClientTypeFilter(clientTypeFilter === 'archived' ? 'all' : 'archived')}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
+                clientTypeFilter === 'archived' 
+                  ? 'bg-neutral-200 text-neutral-700 border border-neutral-300' 
+                  : 'bg-white border border-neutral-200 text-neutral-600'
+              }`}
+            >
+              Archived ({clients.filter(c => c.is_archived).length})
+            </button>
+          </div>
 
           {clientsViewMode === 'chart' ? (
             /* SKYLINE CHART VIEW */
@@ -1238,55 +1544,92 @@ export default function SalesPage() {
                 ? 'hidden lg:block lg:w-80 lg:flex-shrink-0'
                 : 'flex-1'
                 }`} style={{ boxShadow: '0 4px 20px -2px rgba(0,0,0,0.02)' }}>
+                {/* Favorites Section Header */}
+                {sortedClients.filter(c => c.is_favorite).length > 0 && filteredClients.some(c => c.is_favorite) && clientTypeFilter !== 'favorites' && (
+                  <div className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50/50 border-b border-amber-100/50">
+                    ⭐ Favorites
+                  </div>
+                )}
                 <div className="max-h-[calc(100vh-320px)] overflow-y-auto p-2 space-y-1">
-                  {filteredClients.map((client) => (
-                    <div
-                      key={client.id}
-                      onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
-                      className={`group flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${selectedClient?.id === client.id
-                        ? 'bg-neutral-900 shadow-lg shadow-neutral-900/10'
-                        : 'hover:bg-neutral-50 hover:scale-[1.01]'
-                        }`}
-                    >
-                      {/* Avatar */}
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${selectedClient?.id === client.id
-                        ? 'bg-white/20 text-white'
-                        : 'bg-neutral-100 text-neutral-500 group-hover:bg-white group-hover:shadow-sm group-hover:text-neutral-700'
-                        }`}>
-                        {client.name.charAt(0)}
-                      </div>
+                  {filteredClients.map((client, idx) => {
+                    const favoriteClients = filteredClients.filter(c => c.is_favorite);
+                    const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
+                    const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
+                    
+                    return (
+                      <React.Fragment key={client.id}>
+                        <div
+                          onClick={() => { setSelectedClient(client); setIsAddingNewClient(false); }}
+                          className={`group flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${selectedClient?.id === client.id
+                            ? 'bg-neutral-900 shadow-lg shadow-neutral-900/10'
+                            : 'hover:bg-neutral-50 hover:scale-[1.01]'
+                            }`}
+                        >
+                          {/* Favorite Star */}
+                          <button
+                            onClick={(e) => toggleClientFavorite(client.id, e)}
+                            className={`flex-shrink-0 p-1 rounded-full transition-colors ${
+                              selectedClient?.id === client.id 
+                                ? 'hover:bg-white/10' 
+                                : 'hover:bg-amber-100'
+                            }`}
+                            title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <Star 
+                              className={`w-4 h-4 ${
+                                client.is_favorite 
+                                  ? 'text-amber-500 fill-amber-500' 
+                                  : selectedClient?.id === client.id 
+                                    ? 'text-white/30 hover:text-amber-400' 
+                                    : 'text-neutral-300 hover:text-amber-400'
+                              }`} 
+                            />
+                          </button>
+                          
+                          {/* Avatar */}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${selectedClient?.id === client.id
+                            ? 'bg-white/20 text-white'
+                            : 'bg-neutral-100 text-neutral-500 group-hover:bg-white group-hover:shadow-sm group-hover:text-neutral-700'
+                            }`}>
+                            {client.name.charAt(0)}
+                          </div>
 
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-center mb-0.5">
-                          <p className={`font-semibold text-sm truncate ${selectedClient?.id === client.id ? 'text-white' : 'text-neutral-900'}`}>
-                            {client.name}
-                          </p>
-                          {(!selectedClient && !isAddingNewClient) && (
-                            <div className="flex items-center gap-2">
-                              {/* Quick Actions - Visible on Hover */}
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 mr-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/quotes/new/document?client_id=${client.id}`);
-                                  }}
-                                  className="p-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors"
-                                  title="Create Proposal"
-                                >
-                                  <FilePlus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <div className={`w-1.5 h-1.5 rounded-full ${client.lifecycle_stage === 'lead' ? 'bg-blue-400' : 'bg-emerald-400'} shadow-[0_0_8px_rgba(52,211,153,0.4)]`}></div>
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center mb-0.5">
+                              <p className={`font-semibold text-sm truncate ${selectedClient?.id === client.id ? 'text-white' : 'text-neutral-900'}`}>
+                                {client.name}
+                              </p>
+                              {(!selectedClient && !isAddingNewClient) && (
+                                <div className="flex items-center gap-2">
+                                  {/* Quick Actions - Visible on Hover */}
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 mr-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/quotes/new/document?client_id=${client.id}`);
+                                      }}
+                                      className="p-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors"
+                                      title="Create Proposal"
+                                    >
+                                      <FilePlus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className={`w-1.5 h-1.5 rounded-full ${client.lifecycle_stage === 'lead' ? 'bg-blue-400' : 'bg-emerald-400'} shadow-[0_0_8px_rgba(52,211,153,0.4)]`}></div>
+                                </div>
+                              )}
                             </div>
-                          )}
+                            <p className={`text-xs truncate ${selectedClient?.id === client.id ? 'text-white/60' : 'text-neutral-400'}`}>
+                              {client.primary_contact_name || client.email || 'No contact info'}
+                            </p>
+                          </div>
                         </div>
-                        <p className={`text-xs truncate ${selectedClient?.id === client.id ? 'text-white/60' : 'text-neutral-400'}`}>
-                          {client.primary_contact_name || client.email || 'No contact info'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                        {showDivider && (
+                          <div className="mx-4 my-2 border-t border-neutral-100" />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   {filteredClients.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
                       <div className="w-12 h-12 bg-neutral-50 rounded-full flex items-center justify-center mb-3">
