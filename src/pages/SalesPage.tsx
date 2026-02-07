@@ -23,13 +23,13 @@ type LeadsViewMode = 'list' | 'kanban';
 type LeadStage = 'all' | 'new' | 'contacted' | 'qualified' | 'proposal_sent' | 'won' | 'lost';
 
 const PIPELINE_STAGES: { key: LeadStage; label: string; color: string; bgColor: string }[] = [
-  { key: 'all', label: 'All', color: 'text-neutral-700', bgColor: 'bg-neutral-100' },
-  { key: 'new', label: 'New', color: 'text-blue-700', bgColor: 'bg-blue-100' },
-  { key: 'contacted', label: 'Contacted', color: 'text-purple-700', bgColor: 'bg-purple-100' },
-  { key: 'qualified', label: 'Qualified', color: 'text-amber-700', bgColor: 'bg-amber-100' },
-  { key: 'proposal_sent', label: 'Proposal', color: 'text-cyan-700', bgColor: 'bg-cyan-100' },
-  { key: 'won', label: 'Won', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
-  { key: 'lost', label: 'Lost', color: 'text-red-700', bgColor: 'bg-red-100' },
+  { key: 'all', label: 'All', color: 'text-neutral-500', bgColor: '' },
+  { key: 'new', label: 'New', color: 'text-blue-600', bgColor: '' },
+  { key: 'contacted', label: 'Contacted', color: 'text-purple-600', bgColor: '' },
+  { key: 'qualified', label: 'Qualified', color: 'text-amber-600', bgColor: '' },
+  { key: 'proposal_sent', label: 'Proposal', color: 'text-cyan-600', bgColor: '' },
+  { key: 'won', label: 'Won', color: 'text-emerald-600', bgColor: '' },
+  { key: 'lost', label: 'Lost', color: 'text-red-600', bgColor: '' },
 ];
 
 // Generate quote number in format: YYMMDD-XXX (e.g., 250102-001)
@@ -146,14 +146,14 @@ export default function SalesPage() {
   // Client View Mode & Analysis
   const [clientsViewMode, setClientsViewMode] = useState<'list' | 'chart'>('list');
   const [chartTimeframe, setChartTimeframe] = useState<'month' | 'year'>('year');
-  
+
   // Client columns customization
   const [visibleClientColumns, setVisibleClientColumns] = useState<string[]>(() => {
     const saved = localStorage.getItem('clientsVisibleColumns');
     return saved ? JSON.parse(saved) : DEFAULT_CLIENT_COLUMNS;
   });
   const [showClientColumnsDropdown, setShowClientColumnsDropdown] = useState(false);
-  
+
   // Sort clients with favorites first
   const sortedClients = useMemo(() => {
     return [...clients].sort((a, b) => {
@@ -164,25 +164,25 @@ export default function SalesPage() {
       return (a.name || '').localeCompare(b.name || '');
     });
   }, [clients]);
-  
+
   // Toggle favorite status for clients
   const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!profile?.company_id) return;
-    
+
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
-    
+
     const newFavoriteStatus = !client.is_favorite;
-    
+
     try {
       await supabase
         .from('clients')
         .update({ is_favorite: newFavoriteStatus })
         .eq('id', clientId);
-      
+
       // Update local state
-      setClients(prev => prev.map(c => 
+      setClients(prev => prev.map(c =>
         c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
       ));
     } catch (err) {
@@ -770,23 +770,22 @@ export default function SalesPage() {
         </div>
         {/* Filters Dropdown */}
         <div className="relative">
-          <button 
+          <button
             onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
-            className={`hidden sm:flex items-center gap-2 px-6 py-3 border transition-colors text-[10px] font-bold uppercase tracking-widest ${
-              (activeTab === 'clients' && clientTypeFilter !== 'all') ||
-              (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
-              (activeTab === 'proposals' && proposalStatusFilter !== 'all')
-                ? 'bg-[#476E66]/10 border-[#476E66]/30 text-[#476E66] hover:bg-[#476E66]/20' 
+            className={`hidden sm:flex items-center gap-2 px-6 py-3 border transition-colors text-[10px] font-bold uppercase tracking-widest ${(activeTab === 'clients' && clientTypeFilter !== 'all') ||
+                (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
+                (activeTab === 'proposals' && proposalStatusFilter !== 'all')
+                ? 'bg-[#476E66]/10 border-[#476E66]/30 text-[#476E66] hover:bg-[#476E66]/20'
                 : 'border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-600'
-            }`}
+              }`}
           >
             <Filter className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Filters</span>
             {((activeTab === 'clients' && clientTypeFilter !== 'all') ||
               (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
               (activeTab === 'proposals' && proposalStatusFilter !== 'all')) && (
-              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#476E66] text-white rounded-full">1</span>
-            )}
+                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#476E66] text-white rounded-full">1</span>
+              )}
           </button>
           {showFiltersDropdown && (
             <>
@@ -869,20 +868,20 @@ export default function SalesPage() {
                 {((activeTab === 'clients' && clientTypeFilter !== 'all') ||
                   (activeTab === 'leads' && (leadStatusFilter !== 'all' || leadSourceFilter !== 'all')) ||
                   (activeTab === 'proposals' && proposalStatusFilter !== 'all')) && (
-                  <div className="px-4 py-2 border-t border-neutral-100">
-                    <button
-                      onClick={() => {
-                        setLeadStatusFilter('all');
-                        setLeadSourceFilter('all');
-                        setClientTypeFilter('all');
-                        setProposalStatusFilter('all');
-                      }}
-                      className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
-                    >
-                      Clear All Filters
-                    </button>
-                  </div>
-                )}
+                    <div className="px-4 py-2 border-t border-neutral-100">
+                      <button
+                        onClick={() => {
+                          setLeadStatusFilter('all');
+                          setLeadSourceFilter('all');
+                          setClientTypeFilter('all');
+                          setProposalStatusFilter('all');
+                        }}
+                        className="text-[10px] font-medium text-[#476E66] hover:text-[#3A5B54] uppercase tracking-wide"
+                      >
+                        Clear All Filters
+                      </button>
+                    </div>
+                  )}
               </div>
             </>
           )}
@@ -933,7 +932,7 @@ export default function SalesPage() {
                 <BarChart2 className="w-4 h-4" />
               </button>
             </div>
-            
+
             {/* Columns Dropdown for Clients */}
             <div className="relative">
               <button
@@ -1227,13 +1226,13 @@ export default function SalesPage() {
                     <button
                       key={stage.key}
                       onClick={() => setSelectedPipelineStage(stage.key)}
-                      className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all flex-shrink-0 ${isSelected
-                        ? `${stage.bgColor} ${stage.color}`
-                        : 'bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50'
+                      className={`flex items-center gap-1 sm:gap-1.5 px-3 py-1.5 rounded-full text-[10px] sm:text-xs font-medium transition-all flex-shrink-0 ${isSelected
+                        ? `bg-neutral-100 ${stage.color}`
+                        : 'bg-white border border-neutral-200 text-neutral-500 hover:bg-neutral-50'
                         }`}
                     >
                       <span>{stage.label}</span>
-                      <span className={`px-1 sm:px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] ${isSelected ? 'bg-white/50' : 'bg-neutral-100'}`}>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] ${isSelected ? 'bg-white' : 'bg-neutral-100 text-neutral-400'}`}>
                         {count}
                       </span>
                     </button>
@@ -1303,13 +1302,13 @@ export default function SalesPage() {
                                     console.error('Failed to update lead:', error);
                                   }
                                 }}
-                                className={`appearance-none pl-3 pr-8 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest border-0 cursor-pointer transition-all ${lead.status === 'new' ? 'bg-blue-50 text-blue-600' :
-                                  lead.status === 'contacted' ? 'bg-purple-50 text-purple-600' :
-                                    lead.status === 'qualified' ? 'bg-amber-50 text-amber-600' :
-                                      lead.status === 'proposal_sent' ? 'bg-cyan-50 text-cyan-600' :
-                                        lead.status === 'won' ? 'bg-emerald-50 text-emerald-600' :
-                                          lead.status === 'lost' ? 'bg-red-50 text-red-600' :
-                                            'bg-neutral-100 text-neutral-500'
+                                className={`appearance-none py-1.5 text-[10px] font-medium uppercase tracking-widest border-0 cursor-pointer transition-all bg-transparent ${lead.status === 'new' ? 'text-blue-600' :
+                                  lead.status === 'contacted' ? 'text-purple-600' :
+                                    lead.status === 'qualified' ? 'text-amber-600' :
+                                      lead.status === 'proposal_sent' ? 'text-cyan-600' :
+                                        lead.status === 'won' ? 'text-emerald-600' :
+                                          lead.status === 'lost' ? 'text-red-600' :
+                                            'text-neutral-500'
                                   }`}
                               >
                                 <option value="new">New</option>
@@ -1387,41 +1386,37 @@ export default function SalesPage() {
           <div className="flex sm:hidden gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
             <button
               onClick={() => setClientTypeFilter('all')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-                clientTypeFilter === 'all'
-                  ? 'bg-neutral-900 text-white' 
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'all'
+                  ? 'bg-neutral-900 text-white'
                   : 'bg-white border border-neutral-200 text-neutral-600'
-              }`}
+                }`}
             >
               All ({clients.length})
             </button>
             <button
               onClick={() => setClientTypeFilter(clientTypeFilter === 'favorites' ? 'all' : 'favorites')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-                clientTypeFilter === 'favorites' 
-                  ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'favorites'
+                  ? 'bg-amber-100 text-amber-700 border border-amber-200'
                   : 'bg-white border border-neutral-200 text-neutral-600'
-              }`}
+                }`}
             >
               ⭐ Favorites ({clients.filter(c => c.is_favorite).length})
             </button>
             <button
               onClick={() => setClientTypeFilter(clientTypeFilter === 'active' ? 'all' : 'active')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-                clientTypeFilter === 'active' 
-                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'active'
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                   : 'bg-white border border-neutral-200 text-neutral-600'
-              }`}
+                }`}
             >
               Active ({clients.filter(c => !c.is_archived).length})
             </button>
             <button
               onClick={() => setClientTypeFilter(clientTypeFilter === 'archived' ? 'all' : 'archived')}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-                clientTypeFilter === 'archived' 
-                  ? 'bg-neutral-200 text-neutral-700 border border-neutral-300' 
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${clientTypeFilter === 'archived'
+                  ? 'bg-neutral-200 text-neutral-700 border border-neutral-300'
                   : 'bg-white border border-neutral-200 text-neutral-600'
-              }`}
+                }`}
             >
               Archived ({clients.filter(c => c.is_archived).length})
             </button>
@@ -1544,7 +1539,7 @@ export default function SalesPage() {
                 ? 'hidden lg:block lg:w-80 lg:flex-shrink-0'
                 : 'flex-1'
                 }`} style={{ boxShadow: '0 4px 20px -2px rgba(0,0,0,0.02)' }}>
-                
+
                 {/* Table View - Show when extra columns selected */}
                 {visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient ? (
                   <div className="hidden sm:block overflow-x-auto">
@@ -1574,7 +1569,7 @@ export default function SalesPage() {
                           const favoriteClients = filteredClients.filter(c => c.is_favorite);
                           const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
                           const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
-                          
+
                           // Helper to get column value
                           const getColumnValue = (col: string) => {
                             switch (col) {
@@ -1595,7 +1590,7 @@ export default function SalesPage() {
                               default: return '-';
                             }
                           };
-                          
+
                           return (
                             <React.Fragment key={client.id}>
                               <tr
@@ -1611,7 +1606,7 @@ export default function SalesPage() {
                                     <span className="font-semibold text-sm text-neutral-900 truncate">{client.name}</span>
                                   </div>
                                 </td>
-                                
+
                                 {/* Favorite Star */}
                                 <td className="px-2 py-3 text-center">
                                   <button
@@ -1619,23 +1614,22 @@ export default function SalesPage() {
                                     className="p-1.5 rounded-full hover:bg-amber-100 transition-colors"
                                     title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                                   >
-                                    <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-neutral-300 hover:text-amber-400'}`} />
+                                    <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`} />
                                   </button>
                                 </td>
-                                
+
                                 {/* Dynamic Columns */}
                                 {visibleClientColumns.filter(c => c !== 'name').map(col => (
                                   <td key={col} className="px-3 py-3 text-xs text-neutral-600">
                                     {col === 'status' ? (
-                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                                        client.is_archived 
-                                          ? 'bg-neutral-100 text-neutral-500' 
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${client.is_archived
+                                          ? 'bg-neutral-100 text-neutral-500'
                                           : 'bg-emerald-50 text-emerald-600'
-                                      }`}>
+                                        }`}>
                                         {getColumnValue(col)}
                                       </span>
                                     ) : col === 'website' && client.website ? (
-                                      <a 
+                                      <a
                                         href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -1646,7 +1640,7 @@ export default function SalesPage() {
                                         <span className="truncate max-w-[120px]">{client.website.replace(/^https?:\/\//, '')}</span>
                                       </a>
                                     ) : col === 'email' && (client.email || client.primary_contact_email) ? (
-                                      <a 
+                                      <a
                                         href={`mailto:${client.email || client.primary_contact_email}`}
                                         onClick={(e) => e.stopPropagation()}
                                         className="text-[#476E66] hover:underline inline-flex items-center gap-1"
@@ -1655,7 +1649,7 @@ export default function SalesPage() {
                                         <span className="truncate max-w-[150px]">{getColumnValue(col)}</span>
                                       </a>
                                     ) : col === 'phone' && (client.phone || client.primary_contact_phone) ? (
-                                      <a 
+                                      <a
                                         href={`tel:${client.phone || client.primary_contact_phone}`}
                                         onClick={(e) => e.stopPropagation()}
                                         className="text-neutral-600 hover:text-[#476E66] inline-flex items-center gap-1"
@@ -1673,7 +1667,7 @@ export default function SalesPage() {
                                     )}
                                   </td>
                                 ))}
-                                
+
                                 {/* Actions */}
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-2">
@@ -1713,7 +1707,7 @@ export default function SalesPage() {
                     )}
                   </div>
                 ) : null}
-                
+
                 {/* Card View - Show on mobile OR when few columns selected OR when client panel open */}
                 {(visibleClientColumns.length <= 3 || selectedClient || isAddingNewClient) && (
                   <>
@@ -1729,7 +1723,7 @@ export default function SalesPage() {
                         const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
                         const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
                         const isSelected = selectedClient?.id === client.id;
-                        
+
                         return (
                           <div key={client.id}>
                             <div
@@ -1742,24 +1736,22 @@ export default function SalesPage() {
                               {/* Favorite Star */}
                               <button
                                 onClick={(e) => toggleClientFavorite(client.id, e)}
-                                className={`flex-shrink-0 p-1 rounded-full transition-colors ${
-                                  isSelected 
-                                    ? 'hover:bg-white/10' 
+                                className={`flex-shrink-0 p-1 rounded-full transition-colors ${isSelected
+                                    ? 'hover:bg-white/10'
                                     : 'hover:bg-amber-100'
-                                }`}
+                                  }`}
                                 title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                               >
-                                <Star 
-                                  className={`w-4 h-4 ${
-                                    client.is_favorite 
-                                      ? 'text-amber-500 fill-amber-500' 
-                                      : isSelected 
-                                        ? 'text-white/30 hover:text-amber-400' 
-                                        : 'text-neutral-300 hover:text-amber-400'
-                                  }`} 
+                                <Star
+                                  className={`w-4 h-4 ${client.is_favorite
+                                      ? 'text-amber-400 fill-amber-400'
+                                      : isSelected
+                                        ? 'text-white/20 hover:text-white/40'
+                                        : 'text-neutral-200 hover:text-neutral-300'
+                                    }`}
                                 />
                               </button>
-                              
+
                               {/* Avatar */}
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${isSelected
                                 ? 'bg-white/20 text-white'
@@ -1814,7 +1806,7 @@ export default function SalesPage() {
                     </div>
                   </>
                 )}
-                
+
                 {/* Mobile Card View - Always show on mobile when table mode is active */}
                 {visibleClientColumns.length > 3 && !selectedClient && !isAddingNewClient && (
                   <div className="sm:hidden">
@@ -1829,7 +1821,7 @@ export default function SalesPage() {
                         const favoriteClients = filteredClients.filter(c => c.is_favorite);
                         const isLastFavorite = client.is_favorite && favoriteClients.length > 0 && favoriteClients.indexOf(client) === favoriteClients.length - 1;
                         const showDivider = isLastFavorite && filteredClients.some(c => !c.is_favorite) && clientTypeFilter !== 'favorites';
-                        
+
                         return (
                           <div key={client.id}>
                             <div
@@ -1841,7 +1833,7 @@ export default function SalesPage() {
                                 className="flex-shrink-0 p-1 rounded-full hover:bg-amber-100 transition-colors"
                                 title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                               >
-                                <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-neutral-300 hover:text-amber-400'}`} />
+                                <Star className={`w-4 h-4 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`} />
                               </button>
                               <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 bg-neutral-100 text-neutral-500">
                                 {client.name.charAt(0)}

@@ -86,6 +86,7 @@ export default function ProjectsPage() {
   const [projectTeamsMap, setProjectTeamsMap] = useState<Record<string, { id: string; full_name?: string; avatar_url?: string }[]>>({});
   const [viewingBillingInvoice, setViewingBillingInvoice] = useState<Invoice | null>(null);
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [invoiceProjectIds, setInvoiceProjectIds] = useState<Record<string, string[]>>({});
   const [viewMode, setViewMode] = useState<'list' | 'client'>('list');
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     const saved = localStorage.getItem('projectsVisibleColumns');
@@ -106,6 +107,7 @@ export default function ProjectsPage() {
   const [billingFilter, setBillingFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   // Sort clients with favorites first
   const sortedClients = useMemo(() => {
@@ -122,24 +124,60 @@ export default function ProjectsPage() {
   const toggleClientFavorite = async (clientId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!profile?.company_id) return;
-    
+
     const client = clients.find(c => c.id === clientId);
     if (!client) return;
-    
+
     const newFavoriteStatus = !client.is_favorite;
-    
+
     try {
       await supabase
         .from('clients')
         .update({ is_favorite: newFavoriteStatus })
         .eq('id', clientId);
-      
+
       // Update local state
-      setClients(prev => prev.map(c => 
+      setClients(prev => prev.map(c =>
         c.id === clientId ? { ...c, is_favorite: newFavoriteStatus } : c
       ));
     } catch (err) {
       console.error('Failed to toggle favorite:', err);
+    }
+  };
+
+  // Toggle project favorite status
+  const toggleProjectFavorite = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!profile?.company_id) return;
+
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const newFavoriteStatus = !project.is_favorite;
+
+    // Optimistic update
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, is_favorite: newFavoriteStatus } : p
+    ));
+
+    try {
+      // Use direct Supabase call to bypass potential API layer caching/schema issues
+      await supabase
+        .from('projects')
+        .update({ is_favorite: newFavoriteStatus })
+        .eq('id', projectId);
+
+      // Force reload to ensure data consistency
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to toggle project favorite:', err);
+      if (err?.code === 'PGRST204') {
+        alert('Database schema is updating. Please refresh the page in a moment.');
+      }
+      // Revert on failure
+      setProjects(prev => prev.map(p =>
+        p.id === projectId ? { ...p, is_favorite: !newFavoriteStatus } : p
+      ));
     }
   };
 
@@ -193,6 +231,46 @@ export default function ProjectsPage() {
       setProjects(projectsData || []);
       setClients(clientsData || []);
       setAllInvoices(invoicesData || []);
+
+      // Load invoice line item project associations (Manual Join for robustness)
+      const invIds = (invoicesData || []).map(i => i.id);
+      const invProjMap: Record<string, string[]> = {};
+
+      if (invIds.length > 0) {
+        // 1. Get line items with task_ids
+        const { data: lineItems } = await supabase
+          .from('invoice_line_items')
+          .select('invoice_id, task_id')
+          .in('invoice_id', invIds);
+
+        if (lineItems && lineItems.length > 0) {
+          const taskIds = Array.from(new Set(lineItems.map((i: any) => i.task_id).filter(Boolean)));
+
+          if (taskIds.length > 0) {
+            // 2. Get tasks with project_ids
+            const { data: tasks } = await supabase
+              .from('tasks')
+              .select('id, project_id')
+              .in('id', taskIds);
+
+            const taskProjectMap = (tasks || []).reduce((acc: any, t: any) => {
+              acc[t.id] = t.project_id;
+              return acc;
+            }, {} as Record<string, string>);
+
+            lineItems.forEach((item: any) => {
+              const projectId = taskProjectMap[item.task_id];
+              if (projectId) {
+                if (!invProjMap[item.invoice_id]) invProjMap[item.invoice_id] = [];
+                if (!invProjMap[item.invoice_id].includes(projectId)) {
+                  invProjMap[item.invoice_id].push(projectId);
+                }
+              }
+            });
+          }
+        }
+      }
+      setInvoiceProjectIds(invProjMap);
 
       // Load team members for first batch of projects in parallel (avoids N+1 query problem)
       // Note: This is a frontend optimization. Ideally, backend should include team_members in project response
@@ -295,23 +373,30 @@ export default function ProjectsPage() {
       remaining: number;
       billingStatus: string;
       draftCount: number;
+      draftAmount: number;
       openCount: number;
     }> = {};
 
     projects.forEach(project => {
-      const projectInvoices = allInvoices.filter(inv => inv.project_id === project.id);
+      const projectInvoices = allInvoices.filter(inv =>
+        inv.project_id === project.id ||
+        (invoiceProjectIds[inv.id] || []).includes(project.id)
+      );
       const budget = project.budget || 0;
       const invoiced = projectInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
       const collected = projectInvoices
-        .filter(inv => inv.status === 'paid')
+        .filter(inv => (inv.status || '').toLowerCase() === 'paid')
         .reduce((sum, inv) => sum + Number(inv.amount_paid || inv.total || 0), 0);
-      const draftCount = projectInvoices.filter(inv => inv.status === 'draft').length;
-      const openCount = projectInvoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue').length;
+      const draftCount = projectInvoices.filter(inv => (inv.status || '').toLowerCase() === 'draft').length;
+      const draftAmount = projectInvoices
+        .filter(inv => (inv.status || '').toLowerCase() === 'draft')
+        .reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+      const openCount = projectInvoices.filter(inv => ['sent', 'overdue'].includes((inv.status || '').toLowerCase())).length;
       const isProjectCompleted = project.status === 'completed';
-      
+
       // Determine billing status
       let billingStatus = 'Not Billed';
-      
+
       // Priority 1: If project is completed and has invoices that are all paid, show "Paid & Closed"
       if (isProjectCompleted && projectInvoices.length > 0 && draftCount === 0 && openCount === 0) {
         billingStatus = 'Paid & Closed';
@@ -340,8 +425,8 @@ export default function ProjectsPage() {
       // Remaining = $0 if: project completed, OR fully collected, OR invoiced >= budget
       const isFullyCollected = collected >= budget && budget > 0;
       const isFullyInvoiced = invoiced >= budget && budget > 0;
-      const remainingAmount = (isProjectCompleted || isFullyCollected || isFullyInvoiced) 
-        ? 0 
+      const remainingAmount = (isProjectCompleted || isFullyCollected || isFullyInvoiced)
+        ? 0
         : Math.max(0, budget - collected);
 
       stats[project.id] = {
@@ -350,12 +435,13 @@ export default function ProjectsPage() {
         remaining: remainingAmount,
         billingStatus,
         draftCount,
+        draftAmount,
         openCount,
       };
     });
 
     return stats;
-  }, [projects, allInvoices]);
+  }, [projects, allInvoices, invoiceProjectIds]);
 
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
@@ -375,21 +461,32 @@ export default function ProjectsPage() {
         if (billingFilter === 'open' && billingStatus !== 'Open') return false;
         if (billingFilter === 'paid' && !billingStatus.includes('Paid')) return false;
         if (billingFilter === 'partial' && billingStatus !== 'Partial') return false;
+        if (billingFilter === 'partial' && billingStatus !== 'Partial') return false;
       }
+
+      // Active Only filter
+      if (showActiveOnly && p.status === 'completed') return false;
+
       return true;
+    }).sort((a, b) => {
+      // Sort by favorite first
+      if (a.is_favorite && !b.is_favorite) return -1;
+      if (!a.is_favorite && b.is_favorite) return 1;
+      // Then by name
+      return a.name.localeCompare(b.name);
     });
-  }, [projects, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats]);
+  }, [projects, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats, showActiveOnly]);
 
   // Count active filters
   const activeFilterCount = [statusFilter, clientFilter, billingFilter, categoryFilter].filter(f => f !== 'all').length;
 
   const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'not_started': return 'bg-neutral-100 text-neutral-700';
-      case 'active': return 'bg-emerald-100 text-emerald-700';
-      case 'on_hold': return 'bg-amber-100 text-amber-700';
-      case 'completed': return 'bg-[#476E66]/10 text-[#476E66]';
-      default: return 'bg-neutral-100 text-neutral-700';
+      case 'not_started': return 'text-neutral-500';
+      case 'active': return 'text-emerald-600';
+      case 'on_hold': return 'text-amber-600';
+      case 'completed': return 'text-neutral-400';
+      default: return 'text-neutral-500';
     }
   };
 
@@ -451,7 +548,7 @@ export default function ProjectsPage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-xl font-bold text-neutral-900 uppercase tracking-wide truncate">{selectedProject.name}</h1>
-              <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider ${getStatusColor(selectedProject.status)}`}>
+              <span className={`text-[10px] font-medium uppercase tracking-wider ${getStatusColor(selectedProject.status)}`}>
                 {selectedProject.status?.replace('_', ' ') || 'active'}
               </span>
             </div>
@@ -1225,7 +1322,7 @@ export default function ProjectsPage() {
           </div>
           {/* Filters Dropdown */}
           <div className="relative">
-            <button 
+            <button
               onClick={() => { setShowFiltersDropdown(!showFiltersDropdown); setShowColumnsDropdown(false); setShowActionsMenu(false); }}
               className={`hidden sm:flex items-center gap-2 px-4 py-2.5 border rounded-sm transition-all group ${activeFilterCount > 0 ? 'bg-[#476E66]/10 border-[#476E66]/30 hover:bg-[#476E66]/20' : 'bg-white border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'}`}
             >
@@ -1253,8 +1350,8 @@ export default function ProjectsPage() {
                         className="w-full px-3 py-2 text-[11px] border border-neutral-200 rounded-sm bg-white focus:outline-none focus:border-[#476E66] focus:ring-1 focus:ring-[#476E66] text-left flex items-center justify-between"
                       >
                         <span className="truncate">
-                          {clientFilter === 'all' 
-                            ? 'All Clients' 
+                          {clientFilter === 'all'
+                            ? 'All Clients'
                             : clients.find(c => c.id === clientFilter)?.name || 'Select Client'}
                         </span>
                         <ChevronDown className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
@@ -1300,8 +1397,8 @@ export default function ProjectsPage() {
                                     className="flex-shrink-0 p-0.5 hover:bg-amber-100 rounded transition-colors"
                                     title={client.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                                   >
-                                    <Star 
-                                      className={`w-3.5 h-3.5 ${client.is_favorite ? 'text-amber-500 fill-amber-500' : 'text-neutral-300 hover:text-amber-400'}`} 
+                                    <Star
+                                      className={`w-3.5 h-3.5 ${client.is_favorite ? 'text-amber-400 fill-amber-400' : 'text-neutral-200 hover:text-neutral-300'}`}
                                     />
                                   </button>
                                   <span className="truncate">{client.name}</span>
@@ -1377,6 +1474,19 @@ export default function ProjectsPage() {
               </>
             )}
           </div>
+
+
+          {/* Active Only Toggle */}
+          <button
+            onClick={() => setShowActiveOnly(!showActiveOnly)}
+            className={`hidden sm:flex items-center gap-2 px-4 py-2.5 border rounded-sm transition-all group ${showActiveOnly
+              ? 'bg-[#476E66]/10 border-[#476E66] text-[#476E66]'
+              : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:text-neutral-900 hover:bg-neutral-50'
+              }`}
+          >
+            <CheckCircle2 className={`w-4 h-4 ${showActiveOnly ? 'text-[#476E66]' : 'text-neutral-400 group-hover:text-neutral-600'}`} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Active Only</span>
+          </button>
 
           {/* Columns Dropdown */}
           <div className="relative">
@@ -1555,52 +1665,47 @@ export default function ProjectsPage() {
       <div className="flex sm:hidden gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
         <button
           onClick={() => setStatusFilter(statusFilter === 'all' ? 'all' : 'all')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-            statusFilter === 'all' && clientFilter === 'all' && billingFilter === 'all'
-              ? 'bg-neutral-900 text-white' 
-              : 'bg-white border border-neutral-200 text-neutral-600'
-          }`}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${statusFilter === 'all' && clientFilter === 'all' && billingFilter === 'all'
+            ? 'bg-neutral-900 text-white'
+            : 'bg-white border border-neutral-200 text-neutral-600'
+            }`}
           style={{ ...(statusFilter === 'all' && clientFilter === 'all' && billingFilter === 'all' ? {} : {}) }}
         >
           All ({projects.length})
         </button>
         <button
           onClick={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-            statusFilter === 'active' 
-              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-              : 'bg-white border border-neutral-200 text-neutral-600'
-          }`}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${statusFilter === 'active'
+            ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+            : 'bg-white border border-neutral-200 text-neutral-600'
+            }`}
         >
           Active ({projects.filter(p => p.status === 'active').length})
         </button>
         <button
           onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-            statusFilter === 'in_progress' 
-              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-              : 'bg-white border border-neutral-200 text-neutral-600'
-          }`}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${statusFilter === 'in_progress'
+            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+            : 'bg-white border border-neutral-200 text-neutral-600'
+            }`}
         >
           In Progress ({projects.filter(p => p.status === 'in_progress').length})
         </button>
         <button
           onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-            statusFilter === 'completed' 
-              ? 'bg-neutral-200 text-neutral-700 border border-neutral-300' 
-              : 'bg-white border border-neutral-200 text-neutral-600'
-          }`}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${statusFilter === 'completed'
+            ? 'bg-neutral-200 text-neutral-700 border border-neutral-300'
+            : 'bg-white border border-neutral-200 text-neutral-600'
+            }`}
         >
           Completed ({projects.filter(p => p.status === 'completed').length})
         </button>
         <button
           onClick={() => setBillingFilter(billingFilter === 'not_billed' ? 'all' : 'not_billed')}
-          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${
-            billingFilter === 'not_billed' 
-              ? 'bg-amber-100 text-amber-700 border border-amber-200' 
-              : 'bg-white border border-neutral-200 text-neutral-600'
-          }`}
+          className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${billingFilter === 'not_billed'
+            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+            : 'bg-white border border-neutral-200 text-neutral-600'
+            }`}
         >
           Unbilled
         </button>
@@ -1637,27 +1742,36 @@ export default function ProjectsPage() {
                       />
                     </div>
 
-                    {/* Category Icon */}
-                    <div className={`w-8 h-8 rounded-full ${catInfo.color} flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0`}>
-                      {catInfo.value}
-                    </div>
+
+                    <button
+                      onClick={(e) => toggleProjectFavorite(project.id, e)}
+                      className="mt-1 p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0"
+                      title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      <Star
+                        className={`w-4 h-4 transition-colors ${project.is_favorite
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-neutral-200 hover:text-neutral-300'
+                          }`}
+                      />
+                    </button>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-sm text-neutral-900 truncate">{project.name}</h3>
+                      <h3 className="font-light text-sm text-neutral-900 truncate group-hover:font-bold transition-all">{project.name}</h3>
                       <p className="text-[11px] font-medium text-neutral-500 truncate mt-0.5 uppercase tracking-wide">{clientName}</p>
 
                       {/* Meta Info */}
                       <div className="flex items-center gap-3 mt-3 flex-wrap">
-                        <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest ${project.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
-                          project.status === 'completed' ? 'bg-neutral-100 text-neutral-600' :
-                            'bg-amber-50 text-amber-700'
+                        <span className={`flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest ${project.status === 'active' ? 'text-emerald-600' :
+                          project.status === 'completed' ? 'text-neutral-400' :
+                            'text-amber-600'
                           }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${project.status === 'active' ? 'bg-emerald-500' :
-                            project.status === 'completed' ? 'bg-neutral-400' :
+                            project.status === 'completed' ? 'bg-neutral-300' :
                               'bg-amber-500'
                             }`} />
-                          {project.status || 'active'}
+                          {project.status?.replace('_', ' ') || 'active'}
                         </span>
                         {canViewFinancials && project.budget > 0 && (
                           <span className="text-[11px] font-medium text-neutral-600">{formatCurrency(project.budget)}</span>
@@ -1790,12 +1904,20 @@ export default function ProjectsPage() {
                     {visibleColumns.includes('project') && (
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full ${catInfo.color} flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0`}>
-                            {catInfo.value}
-                          </div>
+                          <button
+                            onClick={(e) => toggleProjectFavorite(project.id, e)}
+                            className="p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0"
+                            title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Star
+                              className={`w-4 h-4 transition-colors ${project.is_favorite
+                                ? 'text-amber-400 fill-amber-400'
+                                : 'text-neutral-200 hover:text-neutral-300'
+                                }`}
+                            />
+                          </button>
                           <div className="min-w-0">
-                            <p className="font-bold text-sm text-neutral-900 truncate group-hover:text-[#476E66] transition-colors">{project.name}</p>
-                            <p className="text-[11px] text-neutral-500 truncate mt-0.5">{project.description || 'No description'}</p>
+                            <p className="font-light text-sm text-neutral-900 truncate group-hover:font-bold group-hover:text-[#476E66] transition-all">{project.name}</p>
                           </div>
                         </div>
                       </td>
@@ -1829,15 +1951,15 @@ export default function ProjectsPage() {
                     {visibleColumns.includes('budget') && canViewFinancials && <td className="px-4 py-4 font-mono text-sm text-neutral-900">{formatCurrency(project.budget)}</td>}
                     {visibleColumns.includes('status') && (
                       <td className="px-4 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-sm text-[10px] font-bold uppercase tracking-widest ${project.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
-                          project.status === 'completed' ? 'bg-neutral-100 text-neutral-600' :
-                            'bg-amber-50 text-amber-700'
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest ${project.status === 'active' ? 'text-emerald-600' :
+                          project.status === 'completed' ? 'text-neutral-400' :
+                            'text-amber-600'
                           }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${project.status === 'active' ? 'bg-emerald-500' :
-                            project.status === 'completed' ? 'bg-neutral-400' :
+                            project.status === 'completed' ? 'bg-neutral-300' :
                               'bg-amber-500'
                             }`} />
-                          {project.status || 'active'}
+                          {project.status?.replace('_', ' ') || 'active'}
                         </span>
                       </td>
                     )}
@@ -1893,11 +2015,9 @@ export default function ProjectsPage() {
                       </td>
                     )}
                     {visibleColumns.includes('draft_invoices') && (
-                      <td className="px-4 py-4 text-center">
-                        {projectBillingStats[project.id]?.draftCount > 0 ? (
-                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
-                            {projectBillingStats[project.id]?.draftCount}
-                          </span>
+                      <td className="px-4 py-4 font-mono text-sm text-amber-700">
+                        {projectBillingStats[project.id]?.draftAmount > 0 ? (
+                          formatCurrency(projectBillingStats[project.id]?.draftAmount)
                         ) : (
                           <span className="text-neutral-300">-</span>
                         )}
@@ -2033,25 +2153,39 @@ export default function ProjectsPage() {
                           onClick={() => navigate(`/projects/${project.id}`)}
                           className="flex items-center gap-4 px-6 py-3 hover:bg-neutral-50 cursor-pointer group transition-colors"
                         >
-                          <div className={`w-8 h-8 rounded-full ${catInfo.color} flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0`}>
-                            {catInfo.value}
-                          </div>
+                          <button
+                            onClick={(e) => toggleProjectFavorite(project.id, e)}
+                            className="p-0.5 hover:bg-neutral-100 rounded transition-colors flex-shrink-0 mr-1"
+                            title={project.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Star
+                              className={`w-4 h-4 transition-colors ${project.is_favorite
+                                ? 'text-amber-400 fill-amber-400'
+                                : 'text-neutral-200 hover:text-neutral-300'
+                                }`}
+                            />
+                          </button>
                           <div className="flex-1">
-                            <p className="font-bold text-sm text-neutral-900 group-hover:text-[#476E66] transition-colors">{project.name}</p>
-                            <p className="text-[11px] text-neutral-500 truncate mt-0.5 uppercase tracking-wide">{project.description || 'No description'}</p>
+                            <p className="font-light text-sm text-neutral-900 group-hover:font-bold group-hover:text-[#476E66] transition-all">{project.name}</p>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-widest ${project.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
-                            project.status === 'completed' ? 'bg-neutral-100 text-neutral-600' :
-                              'bg-amber-50 text-amber-700'
-                            }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${project.status === 'active' ? 'bg-emerald-500' :
-                              project.status === 'completed' ? 'bg-neutral-400' :
-                                'bg-amber-500'
-                              }`} />
-                            {project.status || 'active'}
-                          </span>
-                          {canViewFinancials && <span className="font-mono text-[11px] text-neutral-900">{formatCurrency(project.budget)}</span>}
-                          <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
+                          <div className="w-32 flex-shrink-0 flex items-center">
+                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest ${project.status === 'active' ? 'text-emerald-600' :
+                              project.status === 'completed' ? 'text-neutral-400' :
+                                'text-amber-600'
+                              }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${project.status === 'active' ? 'bg-emerald-500' :
+                                project.status === 'completed' ? 'bg-neutral-300' :
+                                  'bg-amber-500'
+                                }`} />
+                              {project.status?.replace('_', ' ') || 'active'}
+                            </span>
+                          </div>
+                          {canViewFinancials && (
+                            <div className="w-24 flex-shrink-0 text-right">
+                              <span className="font-mono text-[11px] text-neutral-900">{formatCurrency(project.budget)}</span>
+                            </div>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors flex-shrink-0" />
                         </div>
                       );
                     })}
@@ -2064,19 +2198,22 @@ export default function ProjectsPage() {
             <div className="text-center py-12 text-neutral-500 bg-white rounded-sm border border-neutral-200">No projects found</div>
           )}
         </div>
-      )}
+      )
+      }
 
       {/* Project Modal */}
-      {showProjectModal && (
-        <ProjectModal
-          project={editingProject}
-          clients={clients}
-          companyId={profile?.company_id || ''}
-          onClose={() => { setShowProjectModal(false); setEditingProject(null); }}
-          onSave={() => { loadData(); setShowProjectModal(false); setEditingProject(null); }}
-        />
-      )}
-    </div>
+      {
+        showProjectModal && (
+          <ProjectModal
+            project={editingProject}
+            clients={clients}
+            companyId={profile?.company_id || ''}
+            onClose={() => { setShowProjectModal(false); setEditingProject(null); }}
+            onSave={() => { loadData(); setShowProjectModal(false); setEditingProject(null); }}
+          />
+        )
+      }
+    </div >
   );
 }
 
