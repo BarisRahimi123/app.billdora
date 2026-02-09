@@ -398,10 +398,11 @@ export default function DashboardPage() {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
+    const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    if (date.toDateString() === today.toDateString()) return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (date.toDateString() === today.toDateString()) return `Today at ${time}`;
+    if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${time}`;
   };
 
   const validateTimeEntry = () => {

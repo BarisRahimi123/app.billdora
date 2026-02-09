@@ -2066,7 +2066,7 @@ export default function QuoteDocumentPage() {
               <span className="font-medium">Signed by: </span>
               <span>{mergeCollaboration.owner_profile?.full_name || 'Project Owner'}</span>
               <span className="mx-2">•</span>
-              <span>{new Date(mergeCollaboration.owner_signed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span>{new Date(mergeCollaboration.owner_signed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} at {new Date(mergeCollaboration.owner_signed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
             </div>
           </div>
         </div>
@@ -2116,7 +2116,7 @@ export default function QuoteDocumentPage() {
             {(quote?.status === 'sent' || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
               <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-medium flex items-center gap-1" title={
                 isCollaborationResponse && mergeCollaboration?.submitted_at
-                  ? `Submitted on ${new Date(mergeCollaboration.submitted_at).toLocaleDateString()}`
+                  ? `Submitted on ${new Date(mergeCollaboration.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(mergeCollaboration.submitted_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
                   : 'Proposal sent'
               }>
                 <CheckCircle2 className="w-3 h-3" />
@@ -3993,7 +3993,7 @@ Example:
                               <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
                                 <Eye className="w-3 h-3" />
                                 Viewed {quote.view_count} time{quote.view_count !== 1 ? 's' : ''}
-                                {quote.last_viewed_at && ` • Last viewed ${new Date(quote.last_viewed_at).toLocaleDateString()}`}
+                                {quote.last_viewed_at && ` • Last viewed ${new Date(quote.last_viewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(quote.last_viewed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
                               </p>
                             )}
                           </>

@@ -278,7 +278,7 @@ export default function NotificationsPage() {
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return then.toLocaleDateString();
+    return `${then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${then.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
   }
 
   function getNotificationIcon(type: string) {

@@ -615,7 +615,7 @@ export default function Layout() {
                                 <p className="text-sm font-medium text-neutral-900 truncate">{notif.title}</p>
                                 <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{notif.message}</p>
                                 <p className="text-xs text-neutral-400 mt-1">
-                                  {notif.created_at ? new Date(notif.created_at).toLocaleDateString() : ''}
+                                  {notif.created_at ? `${new Date(notif.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(notif.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
                                 </p>
                               </div>
                             </div>

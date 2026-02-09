@@ -1025,7 +1025,7 @@ export default function InvoicingPage() {
                           <span className="text-[11px] font-bold text-neutral-900 capitalize">{invoice.view_count} view{invoice.view_count !== 1 ? 's' : ''}</span>
                           {invoice.last_viewed_at && (
                             <span className="text-[9px] text-neutral-400 mt-0.5 uppercase tracking-wide">
-                              {new Date(invoice.last_viewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              {new Date(invoice.last_viewed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {new Date(invoice.last_viewed_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </span>
                           )}
                         </div>
