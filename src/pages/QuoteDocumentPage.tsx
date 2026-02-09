@@ -1959,8 +1959,11 @@ export default function QuoteDocumentPage() {
     if (!quote || !recipientEmail) return;
 
     // Determine CC recipient - custom CC takes priority over billing contact
-    const finalCcEmail = ccEmail.trim() || (recipientType === 'client' ? (client?.billing_contact_email || null) : null);
-    const finalCcName = ccEmail.trim() ? (ccName.trim() || 'CC Recipient') : (recipientType === 'client' ? (client?.billing_contact_name || null) : null);
+    // Skip CC if it's the same email as the recipient (SendGrid rejects duplicates)
+    const rawCcEmail = ccEmail.trim() || (recipientType === 'client' ? (client?.billing_contact_email || null) : null);
+    const rawCcName = ccEmail.trim() ? (ccName.trim() || 'CC Recipient') : (recipientType === 'client' ? (client?.billing_contact_name || null) : null);
+    const finalCcEmail = rawCcEmail && rawCcEmail.toLowerCase() !== recipientEmail?.toLowerCase() ? rawCcEmail : null;
+    const finalCcName = finalCcEmail ? rawCcName : null;
 
     setSendingProposal(true);
     try {
