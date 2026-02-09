@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FieldError } from '../components/ErrorBoundary';
 import { validateEmail } from '../lib/validation';
+import { sortClientsForDisplay } from '../lib/utils';
 import { ExpenseModal } from '../components/ExpenseModal';
 import { ProjectComments } from '../components/ProjectComments';
 import { ProjectCollaborators } from '../components/ProjectCollaborators';
@@ -434,7 +435,7 @@ export default function ProjectsPage() {
 
   async function loadProjectDetails(id: string) {
     try {
-      const tasksData = await api.getTasks(id);
+      const tasksData = await api.getTasksWithBilling(id);
       setTasks(tasksData || []);
     } catch (error) {
       console.error('Failed to load tasks:', error);
@@ -1247,7 +1248,10 @@ export default function ProjectsPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => setShowInvoiceModal(true)}
+                        onClick={async () => {
+                          if (selectedProject?.id) await loadProjectDetails(selectedProject.id);
+                          setShowInvoiceModal(true);
+                        }}
                         className="flex items-center gap-2 px-4 py-2 bg-[#476E66] text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-[#3A5B54] transition-colors"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -1266,7 +1270,10 @@ export default function ProjectsPage() {
                           Create your first invoice to start billing for this project
                         </p>
                         <button
-                          onClick={() => setShowInvoiceModal(true)}
+                          onClick={async () => {
+                            if (selectedProject?.id) await loadProjectDetails(selectedProject.id);
+                            setShowInvoiceModal(true);
+                          }}
                           className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#476E66] text-white text-[10px] font-bold uppercase tracking-widest rounded-sm hover:bg-[#3A5B54] transition-colors"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -2499,7 +2506,7 @@ function ProjectModal({ project, clients, companyId, onClose, onSave }: {
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Client</label>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none">
               <option value="">No client</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {sortClientsForDisplay(clients).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
@@ -2936,7 +2943,7 @@ function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatC
                 className="w-full px-3 py-2 text-[13px] border border-neutral-200 rounded-sm bg-neutral-50 focus:ring-0 focus:border-neutral-900 outline-none transition-colors"
               >
                 <option value="">Select client...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {sortClientsForDisplay(clients).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           </div>
@@ -4409,18 +4416,33 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
   const [saving, setSaving] = useState(false);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Fresh task billing so "All Tasks Fully Billed" reflects actual invoice line items (not stale after deleting a draft)
+  const [tasksWithBilling, setTasksWithBilling] = useState<Task[] | null>(null);
+
+  useEffect(() => {
+    if (!project?.id) return;
+    let cancelled = false;
+    api.getTasksWithBilling(project.id).then((data) => {
+      if (!cancelled) setTasksWithBilling(data || []);
+    }).catch(() => {
+      if (!cancelled) setTasksWithBilling([]);
+    });
+    return () => { cancelled = true; };
+  }, [project?.id]);
+
+  const displayTasks = tasksWithBilling ?? tasks;
 
   // Calculate project invoice status
   const projectInvoiceStatus = useMemo(() => {
     const projectBudget = project.budget || 0;
-    const tasksBudgetTotal = tasks.reduce((sum, t) => sum + (t.total_budget || t.estimated_fees || 0), 0);
+    const tasksBudgetTotal = displayTasks.reduce((sum, t) => sum + (t.total_budget || t.estimated_fees || 0), 0);
     const totalBudget = projectBudget > 0 ? projectBudget : tasksBudgetTotal;
     const totalInvoiced = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
     const remainingToBill = Math.max(0, totalBudget - totalInvoiced);
     const isFullyInvoiced = totalBudget > 0 && totalInvoiced >= totalBudget;
     const isOverInvoiced = totalBudget > 0 && totalInvoiced > totalBudget;
     return { totalBudget, totalInvoiced, remainingToBill, isFullyInvoiced, isOverInvoiced };
-  }, [project.budget, tasks, invoices]);
+  }, [project.budget, displayTasks, invoices]);
 
   const unbilledTimeEntries = timeEntries.filter(e => e.billable && !e.invoice_id);
   const unbilledExpenses = expenses.filter(e => e.billable && e.status !== 'invoiced');
@@ -4433,7 +4455,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
   const taskFeesTotal = useMemo(() => {
     if (billingType === 'milestone') {
       // Bill full remaining amount for selected tasks
-      return tasks
+      return displayTasks
         .filter(t => selectedTasks.has(t.id))
         .reduce((sum, t) => {
           const totalBudget = t.total_budget || t.estimated_fees || 0;
@@ -4443,7 +4465,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
         }, 0);
     } else if (billingType === 'percentage') {
       // Bill specified percentage for selected tasks
-      return tasks
+      return displayTasks
         .filter(t => selectedTasks.has(t.id))
         .reduce((sum, t) => {
           const totalBudget = t.total_budget || t.estimated_fees || 0;
@@ -4454,7 +4476,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
         }, 0);
     } else {
       // Standard item-based billing - use remaining amount
-      return tasks
+      return displayTasks
         .filter(t => selectedTasks.has(t.id))
         .reduce((sum, t) => {
           const totalBudget = t.total_budget || t.estimated_fees || 0;
@@ -4463,7 +4485,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
           return sum + remainingAmt;
         }, 0);
     }
-  }, [billingType, selectedTasks, taskPercentages, tasks]);
+  }, [billingType, selectedTasks, taskPercentages, displayTasks]);
 
   const timeEntriesTotal = unbilledTimeEntries
     .filter(e => selectedTimeEntries.has(e.id))
@@ -4488,7 +4510,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
       newSet.add(taskId);
       // Set default percentage for percentage billing (always set it)
       if (billingType === 'percentage') {
-        const task = tasks.find(t => t.id === taskId);
+        const task = displayTasks.find(t => t.id === taskId);
         const remainingPct = 100 - (task?.billed_percentage || 0);
         const newPcts = new Map(taskPercentages);
         newPcts.set(taskId, Math.min(10, remainingPct));
@@ -4499,7 +4521,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
   };
 
   const updateTaskPercentage = (taskId: string, pct: number) => {
-    const task = tasks.find(t => t.id === taskId);
+    const task = displayTasks.find(t => t.id === taskId);
     const remainingPct = 100 - (task?.billed_percentage || 0);
     const validPct = Math.max(0, Math.min(pct, remainingPct));
     const newPcts = new Map(taskPercentages);
@@ -4515,15 +4537,20 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
   };
 
   const selectAllTasks = () => {
-    if (selectedTasks.size === tasks.length) {
+    const available = displayTasks.filter(t => {
+      const remainingPct = 100 - (t.billed_percentage || 0);
+      const taskMode = t.billing_mode || 'unset';
+      const isModeIncompatible = taskMode !== 'unset' && taskMode !== billingType;
+      return remainingPct > 0 && !isModeIncompatible;
+    });
+    if (selectedTasks.size === available.length && available.length > 0) {
       setSelectedTasks(new Set());
     } else {
-      const newSet = new Set(tasks.map(t => t.id));
+      const newSet = new Set(available.map(t => t.id));
       setSelectedTasks(newSet);
-      // Set default percentages for percentage billing
       if (billingType === 'percentage') {
         const newPcts = new Map(taskPercentages);
-        tasks.forEach(t => {
+        available.forEach(t => {
           if (!newPcts.has(t.id)) {
             const remainingPct = 100 - (t.billed_percentage || 0);
             newPcts.set(t.id, Math.min(10, remainingPct));
@@ -4565,7 +4592,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
 
     // Validate billing mode compatibility for selected tasks
     if (billingType === 'milestone' || billingType === 'percentage') {
-      const incompatibleTasks = tasks.filter(t =>
+      const incompatibleTasks = displayTasks.filter(t =>
         selectedTasks.has(t.id) &&
         t.billing_mode &&
         t.billing_mode !== 'unset' &&
@@ -4583,7 +4610,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
       if (billingType === 'milestone' || billingType === 'percentage') {
         // Create invoice with task billing tracking
         const taskBillings = Array.from(selectedTasks).map(taskId => {
-          const task = tasks.find(t => t.id === taskId)!;
+          const task = displayTasks.find(t => t.id === taskId)!;
           const totalBudget = task.total_budget || task.estimated_fees || 0;
           const billedPct = task.billed_percentage || 0;
           const remainingPct = 100 - billedPct;
@@ -4856,9 +4883,18 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
               </div>
             )}
 
-            {/* Tasks - Only show for Milestone and Percentage modes */}
-            {(billingType === 'milestone' || billingType === 'percentage') && tasks.length > 0 && (() => {
-              const availableTasks = tasks.filter(t => {
+            {/* Tasks - Only show for Milestone and Percentage modes (use fresh billing data when loaded) */}
+            {(billingType === 'milestone' || billingType === 'percentage') && (() => {
+              if (tasksWithBilling === null) {
+                return (
+                  <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 text-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-neutral-400 mx-auto mb-2" />
+                    <p className="text-xs text-neutral-500">Loading task billing…</p>
+                  </div>
+                );
+              }
+              if (displayTasks.length === 0) return null;
+              const availableTasks = displayTasks.filter(t => {
                 const billedPct = t.billed_percentage || 0;
                 const remainingPct = 100 - billedPct;
                 const isFullyBilled = remainingPct <= 0;
@@ -4867,7 +4903,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
                 const isModeIncompatible = isModeLocked && taskMode !== billingType;
                 return !isFullyBilled && !isModeIncompatible;
               });
-              const allTasksFullyBilled = tasks.every(t => (100 - (t.billed_percentage || 0)) <= 0);
+              const allTasksFullyBilled = displayTasks.every(t => (100 - (t.billed_percentage || 0)) <= 0);
 
               if (availableTasks.length === 0) {
                 return (
@@ -4904,7 +4940,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
                     <span className="text-[10px] font-semibold text-neutral-500">{formatCurrency(taskFeesTotal)} selected</span>
                   </div>
                   <div className="divide-y divide-neutral-50 max-h-60 overflow-y-auto">
-                    {tasks.map(task => {
+                    {displayTasks.map(task => {
                       const totalBudget = task.total_budget || task.estimated_fees || 0;
                       const billedPct = task.billed_percentage || 0;
                       const remainingPct = 100 - billedPct;
@@ -5146,7 +5182,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
                 <div className="flex justify-between text-xs">
                   <span className="text-blue-700">Prior Billed (Total)</span>
                   <span className="font-semibold text-blue-900">
-                    {formatCurrency(tasks.filter(t => selectedTasks.has(t.id)).reduce((sum, t) => {
+                    {formatCurrency(displayTasks.filter(t => selectedTasks.has(t.id)).reduce((sum, t) => {
                       const totalBudget = t.total_budget || t.estimated_fees || 0;
                       const billedPct = t.billed_percentage || 0;
                       return sum + (totalBudget * billedPct) / 100;
@@ -5160,7 +5196,7 @@ function ProjectInvoiceModal({ project, tasks, timeEntries, expenses, invoices, 
                 <div className="flex justify-between text-xs pt-1.5 border-t border-blue-200">
                   <span className="text-blue-700">After This Invoice</span>
                   <span className="font-semibold text-blue-900">
-                    {formatCurrency(tasks.filter(t => selectedTasks.has(t.id)).reduce((sum, t) => {
+                    {formatCurrency(displayTasks.filter(t => selectedTasks.has(t.id)).reduce((sum, t) => {
                       const totalBudget = t.total_budget || t.estimated_fees || 0;
                       const billedPct = t.billed_percentage || 0;
                       const currentPct = taskPercentages.get(t.id) || 0;

@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { ProjectCollaborator, projectCollaboratorsApi, Client, api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { sortClientsForDisplay } from '../lib/utils';
 
 export default function ProjectShareAcceptPage() {
   const { id } = useParams<{ id: string }>();
@@ -484,7 +485,7 @@ export default function ProjectShareAcceptPage() {
                         }}
                       >
                         <option value="">-- Select a client --</option>
-                        {clients.map((client) => (
+                        {sortClientsForDisplay(clients).map((client) => (
                           <option key={client.id} value={client.id}>
                             {client.display_name || client.name}{client.email ? ` (${client.email})` : ''}
                           </option>

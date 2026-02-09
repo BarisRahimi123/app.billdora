@@ -12,6 +12,30 @@ export const formatDate = (date: string | undefined): string => {
   return new Date(date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+/** Sort clients for dropdowns/lists: favorites first, then by priority (1 > 2 > 3), then by name. */
+export function sortClientsForDisplay<T extends { id: string; name?: string; is_favorite?: boolean; priority?: number | null }>(clients: T[]): T[] {
+  return [...clients].sort((a, b) => {
+    if (a.is_favorite && !b.is_favorite) return -1;
+    if (!a.is_favorite && b.is_favorite) return 1;
+    const pA = a.priority ?? 999999;
+    const pB = b.priority ?? 999999;
+    if (pA !== pB) return pA - pB;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
+/** Score used for pagination: chars + newlines weighted higher (vertical space). */
+function textScore(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) n += s[i] === '\n' ? 120 : 1;
+  return n;
+}
+
+/** Minimum score for the "remainder" after a break so we don't create a page with 1–2 lines. */
+const MIN_REMAINDER_SCORE = 500;
+/** If the last chunk is below this score, merge it into the previous page when combined fits. */
+const MIN_LAST_CHUNK_SCORE = 600;
+
 export const paginateText = (text: string, maxScore: number = 3200): string[] => {
   if (!text) return [];
   const chunks: string[] = [];
@@ -24,17 +48,12 @@ export const paginateText = (text: string, maxScore: number = 3200): string[] =>
     // Scan through text to find cut-off point based on score
     for (let i = 0; i < remainingText.length; i++) {
       const char = remainingText[i];
-      // Newline = ~80 chars worth of vertical space (approx 4 lines of text height vs 1 char width)
-      // This helps catch "long vertical lists" which have low char count but high height
       currentScore += (char === '\n' ? 120 : 1);
 
       if (currentScore >= maxScore) {
-        // We crossed the limit. Now assume we need to backtrack to a safe split point.
-        // Look backwards from i for a newline or space
         let safeBreak = -1;
-
-        // First try finding a newline in the last 20% of the scanned block to keep paragraphs together
         const searchBackLimit = Math.max(0, i - 500);
+
         for (let j = i; j >= searchBackLimit; j--) {
           if (remainingText[j] === '\n') {
             safeBreak = j;
@@ -42,7 +61,6 @@ export const paginateText = (text: string, maxScore: number = 3200): string[] =>
           }
         }
 
-        // If no newline, try space
         if (safeBreak === -1) {
           for (let j = i; j >= searchBackLimit; j--) {
             if (remainingText[j] === ' ') {
@@ -52,15 +70,41 @@ export const paginateText = (text: string, maxScore: number = 3200): string[] =>
           }
         }
 
-        // If still no safe break, just break at i (mid-word potentially, but better than overflow)
         splitIndex = safeBreak !== -1 ? safeBreak : i;
+
+        // Avoid leaving a tiny remainder (next page with only 1–2 lines): prefer breaking earlier
+        const remainder = remainingText.slice(splitIndex + 1);
+        if (remainder.length > 0 && textScore(remainder) < MIN_REMAINDER_SCORE) {
+          for (let j = splitIndex - 1; j >= searchBackLimit; j--) {
+            if (remainingText[j] === '\n') {
+              const earlierRemainder = remainingText.slice(j + 1);
+              if (textScore(earlierRemainder) >= MIN_REMAINDER_SCORE) {
+                splitIndex = j;
+                break;
+              }
+            }
+          }
+        }
         break;
       }
     }
 
-    // Push chunk and advance
     chunks.push(remainingText.slice(0, splitIndex + 1));
-    remainingText = remainingText.slice(splitIndex + 1); // Don't trimStart here to preserve paragraph spacing if intentionally double-spaced
+    remainingText = remainingText.slice(splitIndex + 1);
   }
+
+  // Merge a too-short last chunk into the previous page when combined fits
+  while (chunks.length >= 2 && textScore(chunks[chunks.length - 1]) < MIN_LAST_CHUNK_SCORE) {
+    const last = chunks.pop()!;
+    const prev = chunks[chunks.length - 1];
+    const combined = prev + last;
+    if (textScore(combined) <= maxScore) {
+      chunks[chunks.length - 1] = combined;
+    } else {
+      chunks.push(last);
+      break;
+    }
+  }
+
   return chunks;
 };
