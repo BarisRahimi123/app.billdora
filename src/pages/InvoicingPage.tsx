@@ -10,6 +10,7 @@ import PaymentModal from '../components/PaymentModal';
 import MakePaymentModal from '../components/MakePaymentModal';
 import { useToast } from '../components/Toast';
 import { InvoicesSkeleton } from '../components/Skeleton';
+import { sortClientsForDisplay } from '../lib/utils';
 
 export default function InvoicingPage() {
   const { profile, user, loading: authLoading } = useAuth();
@@ -24,6 +25,9 @@ export default function InvoicingPage() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'sent' | 'aging'>('all');
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -39,7 +43,7 @@ export default function InvoicingPage() {
     const saved = localStorage.getItem('invoicesExpandedClients');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
-  const [company, setCompany] = useState<{ company_name?: string; logo_url?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string } | null>(null);
+  const [company, setCompany] = useState<{ company_name?: string; logo_url?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string; website?: string } | null>(null);
 
   // Count invoices created this month for limit checking
   const currentMonthInvoiceCount = useMemo(() => {
@@ -228,7 +232,7 @@ export default function InvoicingPage() {
         api.getClients(profile.company_id),
         api.getProjects(profile.company_id),
         recurringInvoicesApi.getAll(profile.company_id),
-        supabase.from('company_settings').select('company_name, logo_url, address, city, state, zip, phone').eq('company_id', profile.company_id).single(),
+        supabase.from('company_settings').select('company_name, logo_url, address, city, state, zip, phone, website').eq('company_id', profile.company_id).single(),
       ]);
       setInvoices(invoicesData);
       setClients(clientsData);
@@ -297,14 +301,19 @@ export default function InvoicingPage() {
       filtered = agingInvoices;
     }
 
-    // Then apply search and status filters
+    // Then apply search, status, client, and date range filters
     return filtered.filter(i => {
       const matchesSearch = i.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         i.client?.name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || i.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesClient = clientFilter === 'all' || i.client_id === clientFilter;
+      const invDate = i.created_at ? new Date(i.created_at.split('T')[0]).getTime() : 0;
+      const fromTs = dateFrom ? new Date(dateFrom).setHours(0, 0, 0, 0) : null;
+      const toTs = dateTo ? new Date(dateTo).setHours(23, 59, 59, 999) : null;
+      const matchesDate = (!fromTs || invDate >= fromTs) && (!toTs || invDate <= toTs);
+      return matchesSearch && matchesStatus && matchesClient && matchesDate;
     });
-  }, [invoices, activeTab, sentInvoicesList, agingInvoices, searchTerm, statusFilter]);
+  }, [invoices, activeTab, sentInvoicesList, agingInvoices, searchTerm, statusFilter, clientFilter, dateFrom, dateTo]);
 
   const toggleSelectAll = useCallback(() => {
     if (selectedInvoices.size === filteredInvoices.length) {
@@ -483,85 +492,158 @@ export default function InvoicingPage() {
 <html>
 <head>
   <title>Invoice ${invoice.invoice_number}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
-    .invoice-title { font-size: 32px; font-weight: bold; color: #333; }
-    .invoice-number { color: #666; margin-top: 8px; }
-    .section { margin-bottom: 30px; }
-    .section-title { font-size: 14px; font-weight: bold; color: #666; margin-bottom: 8px; text-transform: uppercase; }
-    .client-name { font-size: 18px; font-weight: bold; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
-    th { background: #f9f9f9; font-weight: bold; text-transform: uppercase; font-size: 12px; color: #666; }
-    .amount { text-align: right; }
-    .total-row { font-weight: bold; font-size: 18px; }
-    .total-row td { border-top: 2px solid #333; border-bottom: none; }
-    .status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .status-draft { background: #f0f0f0; color: #666; }
-    .status-sent { background: #e3f2fd; color: #1976d2; }
-    .status-paid { background: #e8f5e9; color: #388e3c; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #666; font-size: 12px; }
+    @page { margin: 0; size: auto; }
+    body { font-family: 'Inter', sans-serif; padding: 60px; max-width: 800px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; color: #171717; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 60px; }
+    .invoice-title { font-size: 32px; font-weight: 700; color: #171717; letter-spacing: -1px; }
+    .invoice-number { color: #737373; margin-top: 8px; font-weight: 500; }
+    .section { margin-bottom: 40px; }
+    .section-title { font-size: 11px; font-weight: 600; color: #171717; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .client-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .client-details { font-size: 14px; color: #525252; line-height: 1.5; }
+    
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 40px; }
+    th { text-align: left; padding: 12px 16px; border-bottom: 1px solid #e5e5e5; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #737373; background: #fafafa; }
+    td { padding: 16px 16px; border-bottom: 1px solid #f5f5f5; font-size: 14px; color: #171717; }
+    .amount { text-align: right; font-feature-settings: "tnum"; }
+    
+    .totals-area { margin-top: 30px; margin-left: auto; width: 300px; }
+    .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; color: #525252; }
+    .grand-total { border-top: 2px solid #171717; margin-top: 12px; padding-top: 12px; font-weight: 700; font-size: 18px; color: #171717; }
+    
+    .status-badge { display: inline-block; padding: 6px 16px; border-radius: 99px; font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+    .status-draft { background: #f5f5f5; color: #525252; }
+    .status-sent { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+    .status-paid { background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7; }
+    
+    .payment-received { margin-top: 12px; padding: 12px; background: #ecfdf5; border-radius: 8px; color: #065f46; font-size: 13px; text-align: right; }
+
+    .footer { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      right: 0; 
+      padding: 30px 60px 20px 60px;
+      background: white;
+      border-top: 1px solid #e5e5e5;
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #a3a3a3;
+      opacity: 0.7;
+    }
+    .footer-left { display: flex; gap: 16px; align-items: center; }
+    .footer-divider { color: #e5e5e5; }
+    
+    /* Ensure content doesn't overlapping footer */
+    .content-wrapper { padding-bottom: 100px; }
+    
+    @media print {
+      body { -webkit-print-color-adjust: exact; }
+      .footer { position: fixed; bottom: 0; }
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div>
-      <div class="invoice-title">INVOICE</div>
-      <div class="invoice-number">${invoice.invoice_number}</div>
-    </div>
-    <div style="text-align: right;">
-      <span class="status status-${invoice.status}">${(invoice.status || 'draft').toUpperCase()}</span>
-      <div style="margin-top: 8px; color: #666;">
-        Date: ${new Date(invoice.created_at || '').toLocaleDateString()}<br/>
-        ${invoice.due_date ? `Due: ${new Date(invoice.due_date).toLocaleDateString()}` : ''}
+  <div class="content-wrapper">
+    <div class="header">
+      <div>
+        <div class="invoice-title">INVOICE</div>
+        <div class="invoice-number">#${invoice.invoice_number}</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="status-badge status-${invoice.status}">${(invoice.status || 'draft').toUpperCase()}</span>
+        <div style="color: #525252; font-size: 13px;">
+          <div>Issued: ${new Date(invoice.created_at || '').toLocaleDateString()}</div>
+          ${invoice.due_date ? `<div>Due: ${new Date(invoice.due_date).toLocaleDateString()}</div>` : ''}
+        </div>
       </div>
     </div>
+    
+    <div style="display: flex; justify-content: space-between; margin-bottom: 60px;">
+      <div class="section" style="flex: 1;">
+        <div class="section-title">Bill To</div>
+        <div class="client-name">${client?.name || 'Valued Client'}</div>
+        <div class="client-details">
+          ${client?.address ? `<div>${client.address}</div>` : ''}
+          ${(client?.city || client?.state || client?.zip) ? `<div>${[client?.city, client?.state, client?.zip].filter(Boolean).join(', ')}</div>` : ''}
+          ${client?.email ? `<div>${client.email}</div>` : ''}
+        </div>
+      </div>
+      
+      <div class="section" style="text-align: right; flex: 1;">
+        <div class="section-title">Payable To</div>
+        <div class="client-name">${company?.company_name || profile?.full_name || 'Us'}</div>
+        <div class="client-details">
+          ${company?.address ? `<div>${company.address}</div>` : ''}
+          ${(company?.city || company?.state || company?.zip) ? `<div>${[company?.city, company?.state, company?.zip].filter(Boolean).join(', ')}</div>` : ''}
+          ${company?.website ? `<div>${company.website.replace(/^https?:\/\//, '')}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    
+    ${project ? `
+    <div class="section">
+      <div class="section-title">Project Reference</div>
+      <div style="font-weight: 500;">${project.name}</div>
+    </div>
+    ` : ''}
+    
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 60%">Time & Materials / Description</th>
+          <th class="amount">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-weight: 500; margin-bottom: 4px;">Services Rendered</div>
+            <div style="font-size: 12px; color: #737373;">Professional services as per agreement</div>
+          </td>
+          <td class="amount">${formatCurrency(invoice.subtotal)}</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500; margin-bottom: 4px;">Tax</div>
+            <div style="font-size: 12px; color: #737373;">Applicable taxes</div>
+          </td>
+          <td class="amount">${formatCurrency(invoice.tax_amount)}</td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div class="totals-area">
+      <div class="total-row">
+        <span>Subtotal</span>
+        <span>${formatCurrency(invoice.subtotal)}</span>
+      </div>
+      <div class="total-row">
+        <span>Tax</span>
+        <span>${formatCurrency(invoice.tax_amount)}</span>
+      </div>
+      <div class="total-row grand-total">
+        <span>Total</span>
+        <span>${formatCurrency(invoice.total)}</span>
+      </div>
+      
+      ${invoice.status === 'paid' && invoice.paid_at ? `
+      <div class="payment-received">
+        <strong>✓ Payment Received</strong><br/>
+        <span style="font-size: 11px; opacity: 0.8">${new Date(invoice.paid_at).toLocaleDateString()}</span>
+      </div>
+      ` : ''}
+    </div>
   </div>
   
-  <div class="section">
-    <div class="section-title">Bill To</div>
-    <div class="client-name">${client?.name || 'N/A'}</div>
-    ${client?.address ? `<div>${client.address}</div>` : ''}
-    ${(client?.city || client?.state || client?.zip) ? `<div>${[client?.city, client?.state, client?.zip].filter(Boolean).join(', ')}</div>` : ''}
-    ${client?.phone ? `<div>${client.phone}</div>` : ''}
-  </div>
-  
-  ${project ? `
-  <div class="section">
-    <div class="section-title">Project</div>
-    <div>${project.name}</div>
-  </div>
-  ` : ''}
-  
-  <table>
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th class="amount">Amount</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Services rendered</td>
-        <td class="amount">${formatCurrency(invoice.subtotal)}</td>
-      </tr>
-      <tr>
-        <td>Tax</td>
-        <td class="amount">${formatCurrency(invoice.tax_amount)}</td>
-      </tr>
-      <tr class="total-row">
-        <td>Total</td>
-        <td class="amount">${formatCurrency(invoice.total)}</td>
-      </tr>
-    </tbody>
-  </table>
-  
-  ${invoice.status === 'paid' && invoice.paid_at ? `
   <div class="footer">
-    <strong>Payment received:</strong> ${new Date(invoice.paid_at).toLocaleDateString()}
   </div>
-  ` : ''}
 </body>
 </html>`;
 
@@ -770,6 +852,36 @@ export default function InvoicingPage() {
           <option value="overdue">Overdue</option>
           <option value="consolidated">Consolidated</option>
         </select>
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="px-3 py-2 border border-neutral-200 rounded-sm focus:border-neutral-900 focus:ring-0 outline-none text-[13px] font-medium bg-neutral-50 focus:bg-white transition-colors cursor-pointer min-w-[140px]"
+          title="Filter by client"
+        >
+          <option value="all">All Clients</option>
+          {sortClientsForDisplay(clients).map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-2.5 py-2 border border-neutral-200 rounded-sm focus:border-neutral-900 focus:ring-0 outline-none text-[13px] bg-neutral-50 focus:bg-white transition-colors w-[130px]"
+            title="From date"
+            placeholder="From"
+          />
+          <span className="text-neutral-400 text-xs">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-2.5 py-2 border border-neutral-200 rounded-sm focus:border-neutral-900 focus:ring-0 outline-none text-[13px] bg-neutral-50 focus:bg-white transition-colors w-[130px]"
+            title="To date"
+            placeholder="To"
+          />
+        </div>
         <div className="flex items-center gap-1 p-1 bg-neutral-100 rounded-sm border border-neutral-200">
           <button
             onClick={() => setViewMode('list')}
@@ -1764,7 +1876,7 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
             <label className="block text-xs font-medium text-neutral-600 mb-1.5">Client *</label>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full h-11 px-3 py-2 rounded-lg border border-neutral-200 focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none text-sm" required>
               <option value="">Select a client</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {sortClientsForDisplay(clients).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
@@ -1849,8 +1961,8 @@ function InvoiceModal({ clients, projects, companyId, onClose, onSave }: { clien
                           return (
                             <tr
                               key={task.id}
-                              className={`${isDisabled ? 'bg-neutral-50 opacity-50' : (calculatorType === 'milestone' ? isSelected : (selection?.percentageToBill || 0) > 0) ? 'bg-[#476E66]/5' : 'hover:bg-neutral-50/50'}`}
-                              title={isModeIncompatible ? `Task locked to ${taskMode} billing` : undefined}
+                              className={`${isDisabled ? 'bg-neutral-50 opacity-50 cursor-not-allowed' : (calculatorType === 'milestone' ? isSelected : (selection?.percentageToBill || 0) > 0) ? 'bg-[#476E66]/5' : 'hover:bg-neutral-50/50'}`}
+                              title={isFullyBilled ? 'Already fully billed (100%)' : isModeIncompatible ? `Task locked to ${taskMode} billing` : undefined}
                             >
                               {calculatorType === 'milestone' && (
                                 <td className="px-1.5 py-1.5 text-center">
@@ -2484,7 +2596,7 @@ function InvoiceDetailView({
   clients: Client[];
   projects: Project[];
   companyId: string;
-  company: { company_name?: string; logo_url?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string } | null;
+  company: { company_name?: string; logo_url?: string; address?: string; city?: string; state?: string; zip?: string; phone?: string; website?: string } | null;
   onClose: () => void;
   onUpdate: () => void;
   getStatusColor: (status?: string) => string;
@@ -2795,6 +2907,24 @@ function InvoiceDetailView({
   const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0);
   const taxAmount = invoice.tax_amount || 0;
   const total = subtotal + taxAmount;
+  const displayTotal = invoice.total != null && invoice.total !== undefined ? invoice.total : total;
+  const displaySubtotal = invoice.subtotal != null && invoice.subtotal !== undefined ? invoice.subtotal : subtotal;
+
+  const isConsolidated = !!(invoice.consolidated_from && invoice.consolidated_from.length > 0);
+  const CONSOLIDATED_DESC_REGEX = /^\[([^\]]+)\]\s*(.*)$/;
+  function groupLineItemsByProject(items: typeof lineItems): { project: string; items: { description: string; amount: number; id: string }[] }[] {
+    const map = new Map<string, { description: string; amount: number; id: string }[]>();
+    for (const item of items) {
+      const desc = item.description || '';
+      const m = desc.match(CONSOLIDATED_DESC_REGEX);
+      const project = m ? m[1].trim() : 'Other';
+      const taskDescription = m ? m[2].trim() : desc || 'Line item';
+      if (!map.has(project)) map.set(project, []);
+      map.get(project)!.push({ description: taskDescription, amount: item.amount, id: String(item.id) });
+    }
+    return Array.from(map.entries()).map(([project, itemList]) => ({ project, items: itemList }));
+  }
+  const consolidatedGroups = isConsolidated ? groupLineItemsByProject(lineItems) : [];
 
   const addLineItem = () => {
     setLineItems([...lineItems, {
@@ -2956,7 +3086,34 @@ function InvoiceDetailView({
                         </tbody>
                       </table>`;
                   } else {
-                    lineItemsHtml = `
+                    if (invoice.consolidated_from && invoice.consolidated_from.length > 0 && consolidatedGroups.length > 0) {
+                      lineItemsHtml = consolidatedGroups.map(({ project, items }) => `
+                        <div style="margin-bottom: 20px;">
+                          <div style="font-weight: 700; font-size: 12px; color: #333; margin-bottom: 2px; padding-bottom: 0; border-bottom: 2px solid #476E66;">${project}</div>
+                          ${items.length > 1 ? `<div style="font-size: 10px; color: #666; margin-bottom: 8px;">${items.length} tasks</div>` : '<div style="margin-bottom: 8px;"></div>'}
+                          <table class="section-table">
+                            <thead>
+                              <tr>
+                                <th style="text-align:left;">Description</th>
+                                <th style="text-align:right;width:100px;">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${items.map(row => `<tr>
+                                <td>${row.description}</td>
+                                <td style="text-align:right;font-weight:600;">${formatCurrency(row.amount)}</td>
+                              </tr>`).join('')}
+                            </tbody>
+                            <tfoot>
+                              <tr style="background: #f9f9f9;">
+                                <td style="padding: 10px 10px 8px; font-size: 11px; font-weight: 600;">Section total</td>
+                                <td style="text-align:right; padding: 10px 10px 8px; font-size: 11px; font-weight: 600;">${formatCurrency(items.reduce((s, r) => s + r.amount, 0))}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>`).join('');
+                    } else {
+                      lineItemsHtml = `
                       <table>
                         <thead>
                           <tr>
@@ -2975,6 +3132,7 @@ function InvoiceDetailView({
                           </tr>`).join('')}
                         </tbody>
                       </table>`;
+                    }
                   }
 
                   const printWindow = window.open('', '_blank');
@@ -2983,38 +3141,74 @@ function InvoiceDetailView({
 <html>
 <head>
   <title>Invoice ${invoiceNumber}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: letter; margin: 0.6in; }
+    @page { size: letter; margin: 0.6in; margin-bottom: 1.1in; }
+    @page { @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #666; font-family: 'Inter', sans-serif; } }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.4; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #333; line-height: 1.4; padding-bottom: 80px; }
+    @media print { body { padding-bottom: 0; } }
+    
     .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
     .logo { width: 50px; height: 50px; background: #111; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; margin-bottom: 12px; }
     .company-info { font-size: 11px; color: #666; }
     .company-name { font-weight: 600; color: #111; font-size: 13px; margin-bottom: 2px; }
-    .invoice-title { font-size: 28px; font-weight: bold; color: #111; text-align: right; margin-bottom: 12px; }
+    
+    .invoice-title { font-size: 28px; font-weight: 700; color: #111; text-align: right; margin-bottom: 12px; letter-spacing: -0.5px; }
     .invoice-meta { text-align: right; font-size: 11px; }
-    .invoice-meta span { color: #666; }
+    .invoice-meta span { color: #666; margin-right: 4px; }
+    .invoice-meta div { margin-bottom: 2px; }
+    
     .bill-to { margin-bottom: 24px; }
-    .bill-to-label { font-size: 10px; color: #666; margin-bottom: 4px; }
-    .bill-to-name { font-size: 14px; font-weight: 600; }
-    .calc-type { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #111; }
+    .bill-to-label { font-size: 10px; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .bill-to-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+    
+    .calc-type { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #111; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+    
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th { background: #f5f5f5; padding: 8px 10px; font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; border-bottom: 1px solid #ddd; }
-    td { padding: 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-    .totals { display: flex; justify-content: flex-end; }
-    .totals-box { width: 200px; }
-    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 11px; }
-    .totals-row.total { border-top: 2px solid #111; margin-top: 6px; padding-top: 10px; font-size: 14px; font-weight: bold; }
+    th { background: #f9f9f9; padding: 8px 10px; font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; border-bottom: 1px solid #ddd; text-align: left; }
+    td { padding: 10px; border-bottom: 1px solid #eee; font-size: 11px; vertical-align: top; }
+    table.section-table tbody tr:last-child td { border-bottom: none !important; }
+    table.section-table tfoot td { border: none !important; border-bottom: none !important; }
+    
+    .totals { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .totals-box { width: 250px; }
+    .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 11px; color: #666; }
+    .totals-row.total { margin-top: 6px; padding-top: 10px; font-size: 14px; font-weight: 700; color: #111; }
+    
+    .print-footer { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      right: 0; 
+      height: auto; 
+      font-size: 9px; 
+      color: #a3a3a3;
+      opacity: 0.7;
+      border-top: 1px solid #e5e5e5; 
+      padding: 15px 0.6in;
+      background: #fff; 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      text-transform: uppercase; 
+      letter-spacing: 2px;
+      font-weight: 500;
+      z-index: 1000;
+    }
+    .print-footer-left { display: flex; align-items: center; gap: 12px; }
+    .footer-divider { color: #ddd; }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
-      <div class="logo">P</div>
+      <div class="logo">${(company?.company_name || 'C').charAt(0)}</div>
       <div class="company-info">
-        <div class="company-name">Your Company</div>
-        <div>123 Business Ave</div>
-        <div>City, State 12345</div>
+        <div class="company-name">${company?.company_name || 'Your Company'}</div>
+        ${company?.address ? `<div>${company.address}</div>` : ''}
+        ${(company?.city || company?.state || company?.zip) ? `<div>${[company?.city, company?.state, company?.zip].filter(Boolean).join(', ')}</div>` : ''}
+        ${company?.phone ? `<div>${company.phone}</div>` : ''}
       </div>
     </div>
     <div>
@@ -3029,7 +3223,7 @@ function InvoiceDetailView({
   </div>
   
   <div class="bill-to">
-    <div class="bill-to-label">Bill To:</div>
+    <div class="bill-to-label">Bill To</div>
     <div class="bill-to-name">${client?.name || 'Client'}</div>
     ${client?.address ? `<div>${client.address}</div>` : ''}
     ${(client?.city || client?.state || client?.zip) ? `<div>${[client?.city, client?.state, client?.zip].filter(Boolean).join(', ')}</div>` : ''}
@@ -3042,10 +3236,13 @@ function InvoiceDetailView({
   
   <div class="totals">
     <div class="totals-box">
-      <div class="totals-row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
-      ${taxAmount > 0 ? `<div class="totals-row"><span>Tax</span><span>${formatCurrency(taxAmount)}</span></div>` : ''}
-      <div class="totals-row total"><span>Total</span><span>${formatCurrency(total)}</span></div>
+      <div class="totals-row"><span>Subtotal</span><span>${formatCurrency(displaySubtotal)}</span></div>
+      ${parseFloat(taxAmount as any) > 0 ? `<div class="totals-row"><span>Tax</span><span>${formatCurrency(parseFloat(taxAmount as any))}</span></div>` : ''}
+      <div class="totals-row total"><span>Total</span><span>${formatCurrency(displayTotal)}</span></div>
     </div>
+  </div>
+
+  <div class="print-footer">
   </div>
 </body>
 </html>`);
@@ -3116,7 +3313,7 @@ function InvoiceDetailView({
                   <h2 className="text-3xl font-bold text-neutral-900 mb-4">INVOICE</h2>
                   <div className="text-sm space-y-1">
                     <p><span className="text-neutral-500">Invoice Date:</span> {draftDate ? new Date(draftDate).toLocaleDateString() : new Date().toLocaleDateString()}</p>
-                    <p><span className="text-neutral-500">Total Amount:</span> <span className="font-semibold text-lg">{formatCurrency(total)}</span></p>
+                    <p><span className="text-neutral-500">Total Amount:</span> <span className="font-semibold text-lg">{formatCurrency(displayTotal)}</span></p>
                     <p><span className="text-neutral-500">Number:</span> {invoiceNumber}</p>
                     <p><span className="text-neutral-500">Terms:</span> {terms}</p>
                     {invoice.project && <p><span className="text-neutral-500">Project:</span> {invoice.project.name}</p>}
@@ -3285,25 +3482,62 @@ function InvoiceDetailView({
                     {lineItems.length === 0 && <p className="text-neutral-500 italic">No time entries found.</p>}
                   </>
                 ) : (
-                  /* Fixed Fee - Simple line items without hourly breakdown */
+                  /* Fixed Fee - Simple line items; when consolidated, group by project with section headers */
                   <>
                     <h4 className="font-semibold text-neutral-900 mb-4 text-lg">Fixed Fee Invoice</h4>
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-neutral-500 text-sm border-b border-neutral-200">
-                          <th className="pb-3 font-medium">Description</th>
-                          <th className="pb-3 font-medium text-right w-40">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100">
-                        {lineItems.map(item => (
-                          <tr key={item.id}>
-                            <td className="py-3">{item.description || 'Service'}</td>
-                            <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
-                          </tr>
+                    {isConsolidated && consolidatedGroups.length > 0 ? (
+                      <div className="space-y-6">
+                        {consolidatedGroups.map(({ project, items }) => (
+                          <div key={project} className="break-inside-avoid">
+                            <div className="border-b-2 border-[#476E66] mb-3 pb-1">
+                              <h3 className="text-base font-bold text-[#476E66] uppercase tracking-wide">{project}</h3>
+                              {items.length > 1 && (
+                                <p className="text-xs text-neutral-500 mt-0.5">{items.length} tasks</p>
+                              )}
+                            </div>
+                            <table className="w-full">
+                              <thead>
+                                <tr className="text-left text-neutral-500 text-sm border-b border-neutral-200">
+                                  <th className="pb-2 font-medium">Description</th>
+                                  <th className="pb-2 font-medium text-right w-40">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-100">
+                                {items.map((row) => (
+                                  <tr key={row.id}>
+                                    <td className="py-2.5">{row.description}</td>
+                                    <td className="py-2.5 text-right font-medium">{formatCurrency(row.amount)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot className="border-t border-neutral-200 bg-neutral-50/50">
+                                <tr>
+                                  <td className="py-2.5 text-sm font-semibold text-neutral-700">Section total</td>
+                                  <td className="py-2.5 text-right text-sm font-semibold text-neutral-900">{formatCurrency(items.reduce((s, r) => s + r.amount, 0))}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-neutral-500 text-sm border-b border-neutral-200">
+                            <th className="pb-3 font-medium">Description</th>
+                            <th className="pb-3 font-medium text-right w-40">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {lineItems.map(item => (
+                            <tr key={item.id}>
+                              <td className="py-3">{item.description || 'Service'}</td>
+                              <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </>
                 )}
               </div>
@@ -3313,7 +3547,7 @@ function InvoiceDetailView({
                 <div className="w-72">
                   <div className="flex justify-between py-2 text-neutral-600">
                     <span>Subtotal</span>
-                    <span>{formatCurrency(subtotal)}</span>
+                    <span>{formatCurrency(displaySubtotal)}</span>
                   </div>
                   {taxAmount > 0 && (
                     <div className="flex justify-between py-2 text-neutral-600">
@@ -3323,7 +3557,7 @@ function InvoiceDetailView({
                   )}
                   <div className="flex justify-between py-3 text-xl font-bold border-t border-neutral-300 mt-2">
                     <span>Total</span>
-                    <span>{formatCurrency(total)}</span>
+                    <span>{formatCurrency(displayTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -3507,7 +3741,7 @@ function InvoiceDetailView({
                   <p className="text-neutral-500 text-xs">Client</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl lg:text-3xl font-bold text-neutral-900">{formatCurrency(total)}</p>
+                  <p className="text-2xl lg:text-3xl font-bold text-neutral-900">{formatCurrency(displayTotal)}</p>
                 </div>
               </div>
 
@@ -3631,11 +3865,11 @@ function InvoiceDetailView({
                 <div className="w-full sm:w-64 text-sm">
                   <div className="flex justify-between py-2 border-t border-neutral-200">
                     <span className="text-neutral-600">Subtotal</span>
-                    <span className="font-medium">{formatCurrency(subtotal)}</span>
+                    <span className="font-medium">{formatCurrency(displaySubtotal)}</span>
                   </div>
                   <div className="flex justify-between py-2 text-lg font-bold border-t border-neutral-300">
                     <span>Total</span>
-                    <span>{formatCurrency(total)}</span>
+                    <span>{formatCurrency(displayTotal)}</span>
                   </div>
                 </div>
               </div>

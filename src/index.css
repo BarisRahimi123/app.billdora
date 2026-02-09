@@ -224,11 +224,20 @@ img {
   position: fixed;
 }
 
-/* Print styles for proposal */
+/* Print styles */
 @media print {
-  body {
+  html, body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  @page {
+    size: letter;
+    margin: 0;
   }
 
   .print\\:hidden {
@@ -239,51 +248,64 @@ img {
     display: block !important;
   }
 
-  header {
+  /* Hide the sticky header */
+  header.fixed {
     display: none !important;
   }
 
-  .fixed {
-    display: none !important;
-  }
-
+  /* Remove all spacing from the page container */
   main {
     padding: 0 !important;
+    margin: 0 !important;
     max-width: 100% !important;
   }
+  main > div {
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 
-  /* Table spacing fix for print */
-  table {
+  /* ===== PROPOSAL PAGES: one div = one printed page ===== */
+  .proposal-page {
+    display: block !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    aspect-ratio: unset !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    position: relative !important;
+  }
+  .proposal-page:last-of-type {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  /* Scale inner content to fit the page */
+  .proposal-page > div,
+  .proposal-page > .relative {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  /* Keep proposal tables clean — no forced borders */
+  .proposal-page table {
     width: 100% !important;
     border-collapse: collapse !important;
   }
-
-  table th,
-  table td {
-    padding: 12px 16px !important;
-    border: 1px solid #e5e5e5 !important;
-  }
-
-  table thead th {
-    background-color: #f5f5f5 !important;
-    font-weight: 600 !important;
-    text-align: left !important;
-  }
-
-  table tfoot td {
-    background-color: #f5f5f5 !important;
-    font-weight: 600 !important;
-  }
-
-  /* Timeline fix for print - add borders for grayscale printing */
-  .bg-neutral-100 {
-    background-color: #f5f5f5 !important;
-    border: 1px solid #d4d4d4 !important;
-  }
-
-  /* Timeline bars - ensure they have borders */
-  [style*="backgroundColor"] {
-    border: 1px solid #333 !important;
+  .proposal-page table th,
+  .proposal-page table td {
+    border: none !important;
   }
 }
 

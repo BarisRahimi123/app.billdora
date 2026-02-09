@@ -8,9 +8,91 @@ import { NotificationService } from '../lib/notificationService';
 import SaveAsTemplateModal from '../components/SaveAsTemplateModal';
 import TemplatePickerModal from '../components/TemplatePickerModal';
 import { useToast } from '../components/Toast';
-import SimpleEditor from '../components/SimpleEditor';
+import SimpleEditor, { SimpleMarkdownRenderer, FONT_OPTIONS } from '../components/SimpleEditor';
 
-// ============================================
+// Timeline View Component
+const TimelineView = ({ items, computedOffsets }: { items: LineItem[], computedOffsets: Map<string, number> }) => {
+  const validItems = items.filter(item => item.description.trim());
+  if (validItems.length === 0) return null;
+
+  const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
+  const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimatedDays));
+  const timelineRange = maxEnd - minStart;
+  const totalDays = maxEnd || 1;
+
+  return (
+    <div className="w-full">
+      <h3 className="text-lg font-bold text-neutral-900 mb-8 tracking-tight" style={{ fontFamily: 'Inter, sans-serif' }}>Estimated Timeline</h3>
+
+      <div className="relative">
+        {/* Header */}
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-neutral-400 font-medium mb-6 px-1">
+          <span>Project Schedule</span>
+          <div className="flex gap-16">
+            <span>Start (Day 1)</span>
+            <span>Completion (Day {totalDays})</span>
+          </div>
+        </div>
+
+        {/* List of Tasks */}
+        <div className="space-y-6">
+          {[...validItems]
+            .sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0))
+            .map((item, idx) => {
+              const startDay = computedOffsets.get(item.id) || 0;
+              const widthPercent = (item.estimatedDays / totalDays) * 100;
+              const leftPercent = (startDay / totalDays) * 100;
+
+              return (
+                <div key={item.id} className="relative group">
+                  {/* Background Line */}
+                  <div className="absolute top-[50%] left-0 right-0 h-px bg-neutral-100/80 -translate-y-1/2 z-0"></div>
+
+                  {/* Content Row */}
+                  <div className="relative z-10 flex items-center justify-between w-full h-12">
+
+                    {/* Task Description */}
+                    <div className="font-medium text-neutral-900 text-sm bg-white pr-4 max-w-[40%] truncate relative z-20" title={item.description} style={{ fontFamily: 'Inter, sans-serif' }}>
+                      {item.description}
+                    </div>
+
+                    {/* Timeline Interaction Area - Simplified visual */}
+                    <div className="absolute inset-0 left-[40%] right-16 flex items-center">
+                      {/* Actual Gantt Bar */}
+                      <div
+                        className="h-7 bg-neutral-100 rounded-sm relative group-hover:bg-neutral-200 transition-colors"
+                        style={{
+                          left: `${leftPercent}%`,
+                          width: `${Math.max(widthPercent, 1)}%`, // Ensure at least 1% visible
+                          position: 'absolute'
+                        }}
+                      >
+                        {/* Optional: subtle strip for 'start' indication if needed */}
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-neutral-300/50 rounded-l-sm"></div>
+                      </div>
+                    </div>
+
+                    {/* Duration Label */}
+                    <div className="text-right text-xs font-semibold text-neutral-900 bg-white pl-4 whitespace-nowrap z-20 w-16" style={{ fontFamily: 'Inter, sans-serif' }}>
+                      {item.estimatedDays} Days
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+
+        {/* Total Duration Footer */}
+        <div className="mt-10 flex justify-end border-t border-neutral-100 pt-6">
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-bold mb-1">Total Project Duration</p>
+            <p className="text-xl font-bold text-neutral-900" style={{ fontFamily: 'Inter, sans-serif' }}>{totalDays} Days</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 // SIMPLE FIELD HINT STYLES
 interface LineItem {
   id: string;
@@ -287,7 +369,8 @@ export default function QuoteDocumentPage() {
   // Letter content
   const [letterContent, setLetterContent] = useState('');
 
-  // Send Proposal Modal
+  // Send Proposal Modal ('reminder' = same recipient, 'another_contact' = pick a different contact e.g. PM)
+  const [sendModalMode, setSendModalMode] = useState<'reminder' | 'another_contact' | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendingProposal, setSendingProposal] = useState(false);
   const [mergingItems, setMergingItems] = useState(false);
@@ -402,6 +485,22 @@ export default function QuoteDocumentPage() {
     try {
       // Load clients for dropdown
       const clientsData = await api.getClients(profile.company_id);
+
+      // Sort clients: Favorites first, then by Priority, then by Name
+      clientsData.sort((a, b) => {
+        // Favorites check
+        if (a.is_favorite && !b.is_favorite) return -1;
+        if (!a.is_favorite && b.is_favorite) return 1;
+
+        // Priority check (1 is highest, so ascending order)
+        const pA = a.priority || 999999;
+        const pB = b.priority || 999999;
+        if (pA !== pB) return pA - pB;
+
+        // Name check
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
       setClients(clientsData);
 
       // Load leads for dropdown
@@ -1185,9 +1284,26 @@ export default function QuoteDocumentPage() {
     }
   };
 
-  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+    if (profile?.company_id) {
+      setUploadingCover(true);
+      try {
+        const url = await api.uploadCoverBackground(profile.company_id, file);
+        setCoverBgUrl(url);
+        setHasUnsavedChanges(true);
+        const settings = await api.getCompanySettings(profile.company_id);
+        if (settings) setCompanySettings(settings);
+        showToast('Cover image uploaded and saved for reuse', 'success');
+      } catch (err: any) {
+        showToast(err?.message || 'Upload failed. Create a storage bucket "cover-backgrounds" in Supabase if needed.', 'error');
+      } finally {
+        setUploadingCover(false);
+        e.target.value = '';
+      }
+    } else {
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverBgUrl(reader.result as string);
@@ -1989,7 +2105,11 @@ export default function QuoteDocumentPage() {
             {hasUnsavedChanges && (
               <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full font-medium">Unsaved Changes</span>
             )}
-            {/* Sent Status Badge */}
+            {quote?.revision_of_quote_id && (
+              <span className="text-xs text-[#476E66] bg-[#476E66]/10 px-2.5 py-1 rounded-full font-medium" title="This is a revision of a previously sent proposal">
+                Revision
+              </span>
+            )}
             {(quote?.status === 'sent' || (isCollaborationResponse && mergeCollaboration?.submitted_at)) && (
               <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-medium flex items-center gap-1" title={
                 isCollaborationResponse && mergeCollaboration?.submitted_at
@@ -2069,15 +2189,36 @@ export default function QuoteDocumentPage() {
                     <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80" />
                   </div>
 
-                  {/* Upload Background Button */}
+                  {/* Upload Background Button + Saved covers */}
                   {!isLocked && (
-                    <label className="absolute top-4 right-4 z-20 cursor-pointer print:hidden">
-                      <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
-                      <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white text-sm rounded-xl hover:bg-white/30 transition-colors">
-                        <Upload className="w-4 h-4" />
-                        Change Image
+                    <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2 print:hidden">
+                      <label className="cursor-pointer">
+                        <input type="file" accept="image/*" onChange={handleBgUpload} className="hidden" disabled={uploadingCover} />
+                        <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white text-sm rounded-xl hover:bg-white/30 transition-colors disabled:opacity-50">
+                          {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                          {uploadingCover ? 'Uploading…' : 'Upload & save'}
+                        </div>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5 justify-end max-w-[280px]">
+                        <button
+                          type="button"
+                          onClick={() => { setCoverBgUrl('https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80'); setHasUnsavedChanges(true); }}
+                          className={`w-12 h-12 rounded-lg border-2 bg-neutral-800 bg-cover bg-center flex-shrink-0 ${coverBgUrl?.includes('unsplash') ? 'border-white ring-2 ring-white' : 'border-white/40 hover:border-white/70'}`}
+                          style={{ backgroundImage: `url(https://images.unsplash.com/photo-1497366216548-37526070297c?w=200&q=60)` }}
+                          title="Default style"
+                        />
+                        {(companySettings?.saved_cover_background_urls as string[] | undefined)?.map((url) => (
+                          <button
+                            key={url}
+                            type="button"
+                            onClick={() => { setCoverBgUrl(url); setHasUnsavedChanges(true); }}
+                            className={`w-12 h-12 rounded-lg border-2 bg-cover bg-center flex-shrink-0 ${coverBgUrl === url ? 'border-white ring-2 ring-white' : 'border-white/40 hover:border-white/70'}`}
+                            style={{ backgroundImage: `url(${url})` }}
+                            title="Use this cover"
+                          />
+                        ))}
                       </div>
-                    </label>
+                    </div>
                   )}
 
                   {/* Cover Content */}
@@ -2729,7 +2870,7 @@ export default function QuoteDocumentPage() {
 
                 {/* Project Header - Canvas Style */}
                 <div className="space-y-6 pb-8 border-b border-neutral-100">
-                  <div className={`transition-colors duration-300 rounded-lg ${!projectName.trim() && isNewQuote ? 'bg-amber-50/60 -mx-3 px-3 py-2' : ''}`}>
+                  <div className={`transition-colors duration-300 rounded-lg -mx-3 px-3 py-2 ${!projectName.trim() && isNewQuote ? 'bg-amber-50/60' : 'bg-transparent'}`}>
                     <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Project</label>
                     <input
                       type="text"
@@ -3525,7 +3666,7 @@ Example:
           {currentStep === 5 && (
             <div className="space-y-3 bg-neutral-100/50 -mx-4 md:-mx-8 px-4 md:px-8 py-4 min-h-screen">
               {/* Action Buttons at Top - Floating Modern Bar */}
-              <div className="sticky top-2 z-40 mx-auto w-full max-w-[600px] mb-3">
+              <div className="sticky top-2 z-40 mx-auto w-full max-w-[816px] mb-3">
                 {isViewOnly && collaborationId ? (
                   /* Collaborator View Bar - Specific CTA to Respond */
                   <div className="bg-white/90 backdrop-blur-xl border border-purple-200/50 shadow-xl shadow-purple-900/5 rounded-full p-2 flex items-center justify-between gap-2">
@@ -3645,7 +3786,7 @@ Example:
 
               {/* Collaboration Status Panel - Show when viewing collaboration project */}
               {isCollaborationView && sentCollaborators.length > 0 && (
-                <div className="mx-auto w-full max-w-[600px] mb-3 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="mx-auto w-full max-w-[816px] mb-3 animate-in fade-in slide-in-from-top-4 duration-500">
                   <div className="bg-white border border-neutral-200 rounded-xl shadow-sm overflow-hidden">
                     {/* Header */}
                     <div className="px-5 py-4 border-b border-neutral-100 bg-neutral-50/50">
@@ -3856,13 +3997,22 @@ Example:
                         ) : null}
                       </div>
                       {quote?.status === 'sent' && !isCollaborationResponse && (
-                        <button
-                          onClick={() => setShowSendModal(true)}
-                          className="px-3 py-1.5 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors flex items-center gap-1"
-                        >
-                          <Bell className="w-3.5 h-3.5" />
-                          Send Reminder
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => { setSendModalMode('reminder'); setShowSendModal(true); }}
+                            className="px-3 py-1.5 text-xs font-medium bg-white text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors flex items-center gap-1"
+                          >
+                            <Bell className="w-3.5 h-3.5" />
+                            Send Reminder
+                          </button>
+                          <button
+                            onClick={() => { setSendModalMode('another_contact'); setSelectedContactId(''); setShowSendModal(true); }}
+                            className="px-3 py-1.5 text-xs font-medium bg-white text-[#476E66] border border-[#476E66]/30 rounded-lg hover:bg-[#476E66]/5 transition-colors flex items-center gap-1"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            Send to another contact
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -4100,7 +4250,7 @@ Example:
 
                         // Check for headers start
                         if ((i === 0 || remainingText[i - 1] === '\n') && char === '#') {
-                          penalty = 100; // Headers need more vertical space
+                          penalty = 180; // Headers need more vertical space
                         }
 
                         currentScore += penalty;
@@ -4142,7 +4292,7 @@ Example:
                     return chunks;
                   };
 
-                  const scopePages = hasScope ? paginateText(scopeOfWork, 2600) : [];
+                  const scopePages = hasScope ? paginateText(scopeOfWork, 3800) : [];
                   // If no scope but we have timeline, treat as 1 empty scope page to render timeline
                   if (scopePages.length === 0 && hasTimeline) scopePages.push('');
 
@@ -4220,58 +4370,7 @@ Example:
                             {/* Timeline (if fitting on this page) */}
                             {renderTimelineHere && (
                               <div className="pt-8 border-t border-neutral-100">
-                                <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
-                                <div className="bg-white p-6 border border-neutral-100">
-                                  {(() => {
-                                    const validItems = lineItems.filter(item => item.description.trim());
-                                    const computedOffsets = getComputedStartOffsets(validItems);
-                                    const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
-                                    const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimatedDays));
-                                    const timelineRange = maxEnd - minStart;
-                                    const totalDays = maxEnd || 1;
-                                    const dayMarkers = [minStart + 1];
-                                    const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
-                                    for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
-                                    if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
-
-                                    return (
-                                      <div className="space-y-6">
-                                        <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                          <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
-                                          <div className="flex-1 relative h-4">
-                                            {dayMarkers.map((day, idx) => {
-                                              const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
-                                              return (
-                                                <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
-                                                  <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                        <div className="space-y-3">
-                                          {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
-                                            const start = computedOffsets.get(item.id) || 0;
-                                            const left = ((start - minStart) / timelineRange) * 100;
-                                            const width = (item.estimatedDays / timelineRange) * 100;
-                                            return (
-                                              <div key={item.id} className="flex items-center gap-4">
-                                                <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
-                                                <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
-                                                  <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                        <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
-                                          <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
-                                          <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
+                                <TimelineView items={lineItems.filter(item => item.description.trim())} computedOffsets={getComputedStartOffsets(lineItems.filter(item => item.description.trim()))} />
                               </div>
                             )}
                           </div>
@@ -4303,58 +4402,8 @@ Example:
                           </div>
 
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-neutral-900 mb-4">Estimated Timeline</h3>
-                            <div className="bg-white p-6 border border-neutral-100">
-                              {/* Timeline Logic Duplicated for simplicity of isolation - simplified view */}
-                              {(() => {
-                                const validItems = lineItems.filter(item => item.description.trim());
-                                const computedOffsets = getComputedStartOffsets(validItems);
-                                const minStart = Math.min(...validItems.map(item => computedOffsets.get(item.id) || 0));
-                                const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimatedDays));
-                                const timelineRange = maxEnd - minStart;
-                                const totalDays = maxEnd || 1;
-                                const dayMarkers = [minStart + 1];
-                                const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
-                                for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
-                                if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
-
-                                return (
-                                  <div className="space-y-6">
-                                    <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100">
-                                      <div className="w-32 uppercase tracking-wider font-medium">Phase</div>
-                                      <div className="flex-1 relative h-4">
-                                        {dayMarkers.map((day, idx) => {
-                                          const pos = idx === 0 ? 0 : idx === dayMarkers.length - 1 ? 100 : ((day - minStart - 1) / timelineRange) * 100;
-                                          return (
-                                            <div key={day} className="absolute transform -translate-x-1/2 flex flex-col items-center" style={{ left: idx === 0 ? '0%' : idx === dayMarkers.length - 1 ? '100%' : `${pos}%` }}>
-                                              <span className="opacity-70">{idx === 0 ? 'Start' : `W${Math.ceil(day / 7)}`}</span>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                      {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
-                                        const start = computedOffsets.get(item.id) || 0;
-                                        const left = ((start - minStart) / timelineRange) * 100;
-                                        const width = (item.estimatedDays / timelineRange) * 100;
-                                        return (
-                                          <div key={item.id} className="flex items-center gap-4">
-                                            <div className="w-32 text-xs font-medium text-neutral-900 truncate">{item.description}</div>
-                                            <div className="flex-1 h-2 bg-neutral-100 rounded-full relative overflow-visible">
-                                              <div className={`absolute h-full rounded-full ${item.description.startsWith('[') ? 'bg-amber-500' : 'bg-neutral-800'}`} style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}></div>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
-                                      <span className="text-xs text-neutral-500">Visualization excludes non-working days</span>
-                                      <div className="text-sm font-bold text-neutral-900">Total: {totalDays} Days</div>
-                                    </div>
-                                  </div>
-                                );
-                              })()}
+                            <div className="flex-1">
+                              <TimelineView items={lineItems.filter(item => item.description.trim())} computedOffsets={getComputedStartOffsets(lineItems.filter(item => item.description.trim()))} />
                             </div>
                           </div>
 
@@ -5682,8 +5731,8 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       {showSections.scopeOfWork && scopeOfWork && (
                         <div className="mb-8">
                           <h3 className="text-sm font-semibold text-neutral-900 uppercase tracking-wider mb-3">Scope of Work</h3>
-                          <div className="text-neutral-700 whitespace-pre-line leading-relaxed border border-neutral-200 rounded-lg p-4">
-                            {scopeOfWork}
+                          <div className="border border-neutral-200 rounded-lg p-4">
+                            <SimpleMarkdownRenderer content={scopeOfWork} />
                           </div>
                         </div>
                       )}
@@ -6265,12 +6314,18 @@ Our team is dedicated to delivering high-quality results that meet your specific
                   <>
                     <div className="p-6 border-b">
                       <h2 className="text-xl font-semibold text-neutral-900">
-                        {quote?.status === 'sent' ? 'Send Reminder' : 'Send Proposal'}
+                        {sendModalMode === 'another_contact'
+                          ? 'Send to another contact'
+                          : quote?.status === 'sent'
+                            ? 'Send Reminder'
+                            : 'Send Proposal'}
                       </h2>
                       <p className="text-sm text-neutral-500 mt-1">
-                        {quote?.status === 'sent'
-                          ? 'Send a reminder email to your recipient'
-                          : `Send this proposal to your ${recipientType || 'recipient'} via email`}
+                        {sendModalMode === 'another_contact'
+                          ? 'Choose a contact at this company (e.g. project manager) to send this proposal to.'
+                          : quote?.status === 'sent'
+                            ? 'Send a reminder email to your recipient'
+                            : `Send this proposal to your ${recipientType || 'recipient'} via email`}
                       </p>
                     </div>
                     <div className="p-6 space-y-4">
@@ -6290,7 +6345,9 @@ Our team is dedicated to delivering high-quality results that meet your specific
                           <div className="space-y-2">
                             <p className="font-medium text-neutral-900">{client?.name}</p>
                             <div>
-                              <label className="block text-xs text-neutral-500 mb-1">Select Recipient</label>
+                              <label className="block text-xs text-neutral-500 mb-1">
+                                {sendModalMode === 'another_contact' ? 'Select contact to send to (e.g. project manager)' : 'Select Recipient'}
+                              </label>
                               <select
                                 value={selectedContactId}
                                 onChange={(e) => setSelectedContactId(e.target.value)}
@@ -6301,7 +6358,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                 </option>
                                 {clientContacts.map(contact => (
                                   <option key={contact.id} value={contact.id}>
-                                    {contact.name} ({contact.role === 'project_manager' ? 'PM' : contact.role}) - {contact.email}
+                                    {contact.name} ({contact.role === 'project_manager' ? 'Project Manager' : contact.role}) - {contact.email}
                                   </option>
                                 ))}
                               </select>
@@ -6317,6 +6374,10 @@ Our team is dedicated to delivering high-quality results that meet your specific
                               ) : null;
                             })()}
                           </div>
+                        ) : recipientType === 'client' && sendModalMode === 'another_contact' ? (
+                          <p className="text-sm text-neutral-500">
+                            No project contacts yet. Add project managers in Sales → select this client → Project Contacts, then return here to send to them.
+                          </p>
                         ) : (
                           <>
                             <p className="font-medium text-neutral-900">{displayClientName}</p>
@@ -6391,7 +6452,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                     <div className="p-6 bg-neutral-50 space-y-3">
                       <div className="flex gap-3">
                         <button
-                          onClick={() => { setShowSendModal(false); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
+                          onClick={() => { setShowSendModal(false); setSendModalMode(null); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
                           className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
                         >
                           Cancel
@@ -6406,7 +6467,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       </div>
                       <button
                         onClick={sendProposalEmail}
-                        disabled={sendingProposal}
+                        disabled={sendingProposal || (sendModalMode === 'another_contact' && recipientType === 'client' && clientContacts.length > 0 && !selectedContactId)}
                         className="w-full px-4 py-3 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
                       >
                         {sendingProposal ? (
@@ -6416,8 +6477,8 @@ Our team is dedicated to delivering high-quality results that meet your specific
                           </>
                         ) : (
                           <>
-                            {quote?.status === 'sent' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                            {quote?.status === 'sent' ? 'Send Reminder Now' : 'Send Proposal Now'}
+                            {sendModalMode === 'another_contact' ? <Send className="w-4 h-4" /> : quote?.status === 'sent' ? <Bell className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                            {sendModalMode === 'another_contact' ? 'Send to selected contact' : quote?.status === 'sent' ? 'Send Reminder Now' : 'Send Proposal Now'}
                           </>
                         )}
                       </button>
@@ -6444,7 +6505,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                   </div>
                   <div className="p-6 bg-neutral-50 space-y-3">
                     <button
-                      onClick={() => { setShowSendModal(false); setSentAccessCode(''); setShowEmailPreview(false); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
+                      onClick={() => { setShowSendModal(false); setSendModalMode(null); setSentAccessCode(''); setShowEmailPreview(false); setShowCcInput(false); setCcEmail(''); setCcName(''); }}
                       className="w-full px-4 py-2.5 bg-neutral-900 text-white rounded-xl hover:bg-neutral-800 transition-colors"
                     >
                       Done

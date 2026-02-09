@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell, BarChart2, FilePlus, Star, Columns3, MapPin, Globe } from 'lucide-react';
+import { Plus, Search, Filter, Download, MoreHorizontal, X, FileText, ArrowRight, Eye, Printer, Send, Check, XCircle, Mail, Trash2, List, LayoutGrid, ChevronDown, ChevronRight, ArrowLeft, Edit2, Loader2, Link2, Copy, User, Tag, Users, Phone, Building2, Calendar, DollarSign, Clock, FileSignature, CheckCircle2, Bell, BarChart2, FilePlus, Star, Columns3, MapPin, Globe, Archive, RotateCcw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
@@ -17,7 +17,7 @@ import { QuoteModal } from '../components/quotes';
 type Tab = 'leads' | 'clients' | 'proposals';
 type ProposalsSubTab = 'direct' | 'collaborations' | 'signed' | 'partners' | 'templates';
 type CollaborationsSubTab = 'my-projects' | 'invited';
-type DirectFilter = 'all' | 'drafts' | 'sent';
+type DirectFilter = 'all' | 'drafts' | 'sent' | 'archived';
 type LeadsViewMode = 'list' | 'kanban';
 
 type LeadStage = 'all' | 'new' | 'contacted' | 'qualified' | 'proposal_sent' | 'won' | 'lost';
@@ -119,6 +119,9 @@ export default function SalesPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [activeQuoteMenu, setActiveQuoteMenu] = useState<string | null>(null);
+  const [activeDirectQuoteMenu, setActiveDirectQuoteMenu] = useState<string | null>(null);
+  const [quoteToDelete, setQuoteToDelete] = useState<Quote | null>(null);
+  const [duplicatingQuoteId, setDuplicatingQuoteId] = useState<string | null>(null);
   const [quoteViewMode, setQuoteViewMode] = useState<'list' | 'client'>('client');
   const [quoteSourceTab, setQuoteSourceTab] = useState<'clients' | 'leads'>('clients');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -380,6 +383,13 @@ export default function SalesPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeQuoteMenu]);
 
+  useEffect(() => {
+    if (!activeDirectQuoteMenu) return;
+    const handleClickOutside = () => setActiveDirectQuoteMenu(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeDirectQuoteMenu]);
+
   // Track if we're currently loading to prevent duplicate calls
   const loadingRef = useRef(false);
   const hasCacheLoaded = useRef(false);
@@ -592,6 +602,7 @@ export default function SalesPage() {
       case 'review': return 'bg-blue-100 text-blue-700 bg-opacity-70 border border-blue-200';
       case 'approved': case 'accepted': return 'bg-emerald-50 text-emerald-600';
       case 'dropped': case 'rejected': case 'declined': return 'bg-red-50 text-red-600';
+      case 'archived': return 'bg-neutral-100 text-neutral-500';
       default: return 'bg-neutral-100 text-neutral-600';
     }
   };
@@ -682,6 +693,55 @@ export default function SalesPage() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
   }, []);
 
+  const handleArchiveQuote = useCallback(async (quote: Quote) => {
+    try {
+      await api.updateQuote(quote.id, { status: 'archived' });
+      showToast('Proposal archived', 'success');
+      loadData();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to archive proposal', 'error');
+    }
+    setActiveDirectQuoteMenu(null);
+  }, [showToast]);
+
+  const handleRestoreQuote = useCallback(async (quote: Quote) => {
+    try {
+      await api.updateQuote(quote.id, { status: 'draft' });
+      showToast('Proposal restored to drafts', 'success');
+      loadData();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to restore proposal', 'error');
+    }
+    setActiveDirectQuoteMenu(null);
+  }, [showToast]);
+
+  const handleDeleteQuote = useCallback(async (quote: Quote) => {
+    try {
+      await api.deleteQuote(quote.id);
+      showToast('Proposal deleted', 'success');
+      loadData();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to delete proposal', 'error');
+    }
+    setQuoteToDelete(null);
+    setActiveDirectQuoteMenu(null);
+  }, [showToast]);
+
+  const handleCreateRevision = useCallback(async (quote: Quote) => {
+    setDuplicatingQuoteId(quote.id);
+    try {
+      const revision = await api.duplicateQuoteAsRevision(quote.id);
+      showToast('Revision created. You can edit and send the new proposal.', 'success');
+      loadData();
+      setActiveDirectQuoteMenu(null);
+      navigate(`/quotes/${revision.id}/document`);
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to create revision', 'error');
+    } finally {
+      setDuplicatingQuoteId(null);
+    }
+  }, [showToast]);
+
   const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null);
 
   const handleConvertToProject = useCallback(async (quote: Quote) => {
@@ -704,19 +764,6 @@ export default function SalesPage() {
       setConvertingQuoteId(null);
     }
   }, [profile, clients, showToast]);
-
-  const handleDeleteQuote = useCallback(async (quoteId: string) => {
-    if (!confirm('Are you sure you want to delete this quote? This action cannot be undone.')) return;
-    try {
-      await api.deleteQuote(quoteId);
-      showToast('Quote deleted successfully', 'success');
-      await loadData();
-    } catch (error: any) {
-      console.error('Failed to delete quote:', error);
-      showToast(error?.message || 'Failed to delete quote', 'error');
-    }
-    setActiveQuoteMenu(null);
-  }, [showToast]);
 
   const handleRecreateQuote = useCallback(async (quote: Quote) => {
     if (!profile?.company_id) return;
@@ -2016,7 +2063,7 @@ export default function SalesPage() {
               <div className="col-span-3">Client</div>
               <div className="col-span-2">Value</div>
               <div className="col-span-2">Status</div>
-              <div className="col-span-1 text-right"></div>
+              <div className="col-span-1 text-right">Actions</div>
             </div>
           )}
 
@@ -2026,7 +2073,7 @@ export default function SalesPage() {
               {/* Minimal Filters */}
               <div className="flex items-center gap-6 mb-2 px-6 pt-4">
                 <span className="text-neutral-400 font-bold text-[10px] uppercase tracking-widest">Show:</span>
-                {(['all', 'drafts', 'sent'] as DirectFilter[]).map(filter => (
+                {(['all', 'drafts', 'sent', 'archived'] as DirectFilter[]).map(filter => (
                   <button
                     key={filter}
                     onClick={() => setDirectFilter(filter)}
@@ -2034,7 +2081,7 @@ export default function SalesPage() {
                       ? 'text-neutral-900 border-neutral-900'
                       : 'text-neutral-400 border-transparent hover:text-neutral-600'}`}
                   >
-                    {filter === 'all' ? 'All' : filter === 'drafts' ? 'Drafts' : 'Sent'}
+                    {filter === 'all' ? 'All' : filter === 'drafts' ? 'Drafts' : filter === 'sent' ? 'Sent' : 'Archived'}
                   </button>
                 ))}
               </div>
@@ -2045,6 +2092,9 @@ export default function SalesPage() {
                   const hasCollabs = sentCollaborations.some(c => c.parent_quote_id === q.id);
                   if (hasCollabs) return false;
                   if (q.status === 'accepted' || q.status === 'approved') return false;
+
+                  if (directFilter === 'archived') return q.status === 'archived';
+                  if (q.status === 'archived') return false;
 
                   if (directFilter === 'drafts') return q.status === 'draft' || q.status === 'pending';
                   if (directFilter === 'sent') return q.status === 'sent';
@@ -2069,7 +2119,7 @@ export default function SalesPage() {
                 return (
                   <div className="bg-white border-t border-b border-neutral-100 divide-y divide-neutral-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)]">
                     {directProposals.map((quote) => (
-                      <div key={quote.id} className="grid grid-cols-12 gap-6 px-6 py-5 items-center hover:bg-neutral-50/50 transition-all cursor-pointer group" onClick={() => navigate(`/quotes/${quote.id}/document`)}>
+                      <div key={quote.id} className="grid grid-cols-12 gap-6 px-6 py-5 items-center hover:bg-neutral-50/50 transition-all cursor-pointer group relative" onClick={() => !activeDirectQuoteMenu && navigate(`/quotes/${quote.id}/document`)}>
                         <div className="col-span-4 min-w-0">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-neutral-100 flex items-center justify-center text-neutral-400 group-hover:text-neutral-600 transition-colors">
@@ -2090,13 +2140,43 @@ export default function SalesPage() {
                         <div className="col-span-2">
                           <div className="flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${quote.status === 'sent' ? 'bg-neutral-900' :
-                              quote.status === 'draft' ? 'bg-neutral-400' : 'bg-neutral-300'
+                              quote.status === 'archived' ? 'bg-neutral-400' : quote.status === 'draft' ? 'bg-neutral-400' : 'bg-neutral-300'
                               }`}></span>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">{quote.status === 'pending' ? 'Draft' : quote.status}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-600">{quote.status === 'pending' ? 'Draft' : quote.status === 'archived' ? 'Archived' : quote.status}</span>
                           </div>
                           {quote.status === 'sent' && <p className="text-[9px] text-neutral-400 mt-0.5 ml-3.5 italic">Sent</p>}
                         </div>
-                        <div className="col-span-1 flex justify-end">
+                        <div className="col-span-1 flex justify-end items-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setActiveDirectQuoteMenu(activeDirectQuoteMenu === quote.id ? null : quote.id); }}
+                            className="p-2 rounded-md hover:bg-neutral-200 text-neutral-500 hover:text-neutral-700 transition-colors border border-transparent hover:border-neutral-200"
+                            aria-label="Proposal actions: Archive, Create revision, Delete"
+                            title="Actions (Archive, Create revision, Delete)"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                          {activeDirectQuoteMenu === quote.id && (
+                            <div className="absolute right-6 top-full mt-0.5 z-20 bg-white border border-neutral-200 rounded-lg shadow-lg py-1 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                              {quote.status === 'archived' ? (
+                                <button onClick={() => handleRestoreQuote(quote)} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50">
+                                  <RotateCcw className="w-3.5 h-3.5" /> Restore to drafts
+                                </button>
+                              ) : (
+                                <button onClick={() => handleArchiveQuote(quote)} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50">
+                                  <Archive className="w-3.5 h-3.5" /> Archive
+                                </button>
+                              )}
+                              {quote.status === 'sent' && (
+                                <button onClick={() => handleCreateRevision(quote)} disabled={duplicatingQuoteId === quote.id} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-[#476E66] hover:bg-[#476E66]/5">
+                                  {duplicatingQuoteId === quote.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />} Create revision
+                                </button>
+                              )}
+                              <div className="border-t border-neutral-100 my-1" />
+                              <button onClick={() => { setQuoteToDelete(quote); setActiveDirectQuoteMenu(null); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50">
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            </div>
+                          )}
                           <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
                         </div>
                       </div>
@@ -2930,6 +3010,24 @@ export default function SalesPage() {
           </div>
         )
       }
+
+      {/* Delete proposal confirmation */}
+      {quoteToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setQuoteToDelete(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-neutral-900 mb-2">Delete proposal?</h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                &ldquo;{quoteToDelete.title || 'Untitled Proposal'}&rdquo; will be permanently deleted. This cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setQuoteToDelete(null)} className="flex-1 px-4 py-2.5 border border-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-50 text-sm font-medium">Cancel</button>
+                <button onClick={() => handleDeleteQuote(quoteToDelete)} className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Template Preview Modal */}
       {

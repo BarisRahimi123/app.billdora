@@ -759,7 +759,7 @@ export default function ProposalPortalPage() {
 
           {/* PAGE 1: Cover Page */}
           {quote?.cover_background_url && (
-            <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
+            <div className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
               <div className="relative h-full">
                 {/* Background Image & Overlay */}
                 <div
@@ -854,7 +854,7 @@ export default function ProposalPortalPage() {
           )}
 
           {/* PAGE 2: Letter Page */}
-          <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+          <div className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
             <div className="p-12 pb-20">
               {/* Letterhead */}
               {/* HEADER - Logo Left, Company Info Right */}
@@ -966,7 +966,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
               const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
 
               return (
-                <div key={`scope-${idx}`} className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px' }}>
+                <div key={`scope-${idx}`} className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px' }}>
                   <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
                     {/* Header */}
                     <div className="flex items-center gap-4 mb-8 flex-shrink-0">
@@ -1064,34 +1064,32 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                     const width = (item.estimated_days / timelineRange) * 100;
 
                                     return (
-                                      <div key={item.id} className="relative h-12 flex items-center border-b border-neutral-50 mb-4">
-                                        {/* Background Guide Line */}
-                                        <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
-
-                                        {/* The Active Bar - Thinner and Centered */}
-                                        <div className="absolute inset-0 w-full h-full">
-                                          <div
-                                            className={`absolute top-1/2 -translate-y-1/2 h-8 rounded ${item.description.startsWith('[') ? 'bg-amber-100' : 'bg-neutral-200'}`}
-                                            style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                          >
-                                            {/* Collaborate Stripe */}
-                                            {item.description.startsWith('[') && (
-                                              <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
-                                            )}
-                                          </div>
+                                      <div key={item.id} className="border-b border-neutral-50 mb-4 pb-3">
+                                        {/* Text above bar - thin font */}
+                                        <div className="w-full flex justify-between items-center text-sm mb-1.5">
+                                          <span className="font-light text-neutral-500 truncate pr-4">{item.description}</span>
+                                          <span className="text-xs text-neutral-400 font-light whitespace-nowrap">{item.estimated_days} Days</span>
                                         </div>
-
-                                        {/* Text Content */}
-                                        <div className="relative z-10 w-full px-4 flex justify-between items-center text-sm">
-                                          <span className="font-medium text-neutral-900 truncate pr-4">{item.description}</span>
-                                          <span className="text-xs text-neutral-500 font-medium whitespace-nowrap">{item.estimated_days} Days</span>
+                                        {/* Bar row */}
+                                        <div className="relative h-10 w-full">
+                                          <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
+                                          <div className="absolute inset-0 w-full h-full">
+                                            <div
+                                              className={`absolute top-1/2 -translate-y-1/2 h-10 rounded-md ${item.description.startsWith('[') ? 'bg-amber-200' : 'bg-neutral-400'}`}
+                                              style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
+                                            >
+                                              {item.description.startsWith('[') && (
+                                                <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
+                                              )}
+                                            </div>
+                                          </div>
                                         </div>
                                       </div>
                                     );
                                   })}
                                 </div>
 
-                                <div className="flex justify-end pt-4 mt-2 border-t border-neutral-100">
+                                <div className="flex justify-end pt-4 mt-2 pb-2 border-t border-neutral-100 bg-white">
                                   <div className="text-sm font-bold text-neutral-900">Total Project Duration: {totalDays} Days</div>
                                 </div>
                               </div>
@@ -1121,7 +1119,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
             }).concat(
               // If we have a timeline but it didn't fit, render it on its own page
               (hasTimeline && (scopePages.length === 0 || scopePages[scopePages.length - 1].split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0) >= 2000)) ? [(
-                <div key="timeline-only" className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+                <div key="timeline-only" className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
                   <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
                     <div className="flex items-center gap-4 mb-8 flex-shrink-0">
                       <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Project Schedule</h2>
@@ -1158,38 +1156,32 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                 const width = (item.estimated_days / timelineRange) * 100;
 
                                 return (
-                                  <div key={item.id} className="relative h-12 flex items-center border-b border-neutral-50">
-                                    {/* Background Guide Line */}
-                                    <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
-
-                                    {/* The Active Bar - Thinner and Centered */}
-                                    <div className="absolute inset-0 w-full h-full">
-                                      <div
-                                        className={`absolute top-1/2 -translate-y-1/2 h-8 rounded ${item.description.startsWith('[') ? 'bg-amber-100' : 'bg-neutral-200'}`}
-                                        style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
-                                      >
-                                        {/* Collaborate Stripe */}
-                                        {item.description.startsWith('[') && (
-                                          <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
-                                        )}
-                                      </div>
+                                  <div key={item.id} className="border-b border-neutral-50 pb-3">
+                                    {/* Text above bar - thin font */}
+                                    <div className="w-full flex justify-between items-center text-sm mb-1.5">
+                                      <span className="font-light text-neutral-500 truncate pr-4">{item.description}</span>
+                                      <span className="text-xs text-neutral-400 font-light flex-shrink-0 whitespace-nowrap">{item.estimated_days} Days</span>
                                     </div>
-
-                                    {/* Text Content (Foreground Layer) - Full Width */}
-                                    <div className="relative z-10 w-full px-4 flex justify-between items-center">
-                                      <span className="font-medium text-neutral-900 truncate pr-4 text-sm">
-                                        {item.description}
-                                      </span>
-                                      <span className="text-xs text-neutral-500 flex-shrink-0 font-medium whitespace-nowrap">
-                                        {item.estimated_days} Days
-                                      </span>
+                                    {/* Bar row */}
+                                    <div className="relative h-10 w-full">
+                                      <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
+                                      <div className="absolute inset-0 w-full h-full">
+                                        <div
+                                          className={`absolute top-1/2 -translate-y-1/2 h-10 rounded-md ${item.description.startsWith('[') ? 'bg-amber-200' : 'bg-neutral-400'}`}
+                                          style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
+                                        >
+                                          {item.description.startsWith('[') && (
+                                            <div className="absolute top-0 bottom-0 left-0 w-1 bg-amber-500 rounded-l"></div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 );
                               })}
                             </div>
 
-                            <div className="flex justify-end pt-4 mt-2 border-t border-neutral-100">
+                            <div className="flex justify-end pt-4 mt-2 pb-8 border-t border-neutral-100 bg-white">
                               <div className="text-sm font-bold text-neutral-900">Total Project Duration: {totalDays} Days</div>
                             </div>
 
@@ -1220,7 +1212,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
           })()}
 
           {/* PAGE 4: Investment Breakdown */}
-          <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+          <div className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
             <div className="p-10 md:p-12 flex-1 flex flex-col h-full overflow-hidden">
               <div className="flex items-center gap-4 mb-6">
                 <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Investment Breakdown</h2>
@@ -1304,7 +1296,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
           </div>
 
           {/* PAGE 5: Terms & Acceptance */}
-          <div className="w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
+          <div className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
             <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
               <div className="flex items-center gap-4 mb-8">
                 <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Terms & Acceptance</h2>
@@ -1424,186 +1416,213 @@ Our team is dedicated to delivering high-quality results that meet your specific
       {/* Response Modal */}
       {
         step === 'respond' && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-neutral-900">Your Response</h2>
-                <button onClick={() => { setStep('view'); setResponseType(null); }} className="p-2 hover:bg-neutral-100 rounded-lg">
+          <div className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+            <div
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden animate-in zoom-in-95 duration-200"
+              style={{ fontSmooth: 'always', WebkitFontSmoothing: 'antialiased' }}
+            >
+              {/* Modal Header */}
+              <div className="px-8 py-6 border-b border-neutral-100 flex items-center justify-between sticky top-0 bg-white/90 backdrop-blur-md z-10">
+                <div>
+                  <h2 className="text-xl font-semibold text-neutral-900 tracking-tight">
+                    {!responseType ? 'Your Response' :
+                      responseType === 'accept' ? 'Finalize Acceptance' :
+                        'Submit Feedback'}
+                  </h2>
+                  <p className="text-xs text-neutral-500 font-medium tracking-wide mt-1 uppercase">
+                    {!responseType ? 'Select an option to proceed' :
+                      responseType === 'accept' ? 'Review & Sign' :
+                        'Send us your thoughts'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setStep('view'); setResponseType(null); }}
+                  className="p-2 -mr-2 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-full transition-all duration-200"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="p-6">
+              <div className="p-8">
                 {!responseType ? (
-                  <div className="space-y-3">
+                  <div className="grid gap-4">
+                    {/* Accept Option */}
                     <button
                       onClick={() => setResponseType('accept')}
-                      className="w-full p-4 border-2 border-green-200 bg-green-50 rounded-xl text-left hover:border-green-400 transition-colors"
+                      className="group relative p-6 border-2 border-neutral-100 hover:border-emerald-500/30 hover:bg-emerald-50/30 rounded-2xl text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center">
-                          <Check className="w-5 h-5 text-white" />
+                      <div className="flex items-start gap-5">
+                        <div className="w-12 h-12 bg-emerald-100/50 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                          <Check className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="font-semibold text-green-900">Accept & Sign</p>
-                          <p className="text-sm text-green-700">I approve this proposal and am ready to proceed</p>
+                          <p className="font-semibold text-neutral-900 text-lg mb-1 group-hover:text-emerald-700 transition-colors">Accept & Sign</p>
+                          <p className="text-sm text-neutral-500 leading-relaxed font-light">I approve this proposal and am ready to proceed with the project.</p>
                         </div>
                       </div>
                     </button>
 
+                    {/* Request Changes Option */}
                     <button
                       onClick={() => setResponseType('changes')}
-                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                      className="group relative p-6 border-2 border-neutral-100 hover:border-amber-500/30 hover:bg-amber-50/30 rounded-2xl text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                          <Pen className="w-5 h-5 text-white" />
+                      <div className="flex items-start gap-5">
+                        <div className="w-12 h-12 bg-amber-100/50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                          <Pen className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="font-semibold text-[#476E66]">Request Changes</p>
-                          <p className="text-sm text-[#476E66]/70">I'd like some modifications to the proposal</p>
+                          <p className="font-semibold text-neutral-900 text-lg mb-1 group-hover:text-amber-700 transition-colors">Request Changes</p>
+                          <p className="text-sm text-neutral-500 leading-relaxed font-light">I'd like to request some modifications to the scope or terms.</p>
                         </div>
                       </div>
                     </button>
 
+                    {/* Discuss Option */}
                     <button
                       onClick={() => setResponseType('discuss')}
-                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                      className="group relative p-6 border-2 border-neutral-100 hover:border-blue-500/30 hover:bg-blue-50/30 rounded-2xl text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                          <MessageSquare className="w-5 h-5 text-white" />
+                      <div className="flex items-start gap-5">
+                        <div className="w-12 h-12 bg-blue-100/50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                          <MessageSquare className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="font-semibold text-[#476E66]">Need to Discuss</p>
-                          <p className="text-sm text-[#476E66]/70">I'd like to talk before making a decision</p>
+                          <p className="font-semibold text-neutral-900 text-lg mb-1 group-hover:text-blue-700 transition-colors">Need to Discuss</p>
+                          <p className="text-sm text-neutral-500 leading-relaxed font-light">I have questions or want to talk before making a decision.</p>
                         </div>
                       </div>
                     </button>
 
+                    {/* Later Option */}
                     <button
                       onClick={() => setResponseType('later')}
-                      className="w-full p-4 border-2 border-[#476E66]/20 bg-[#476E66]/5 rounded-xl text-left hover:border-[#476E66]/40 transition-colors"
+                      className="group relative p-6 border-2 border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 rounded-2xl text-left transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#476E66] rounded-full flex items-center justify-center">
-                          <Clock className="w-5 h-5 text-white" />
+                      <div className="flex items-start gap-5">
+                        <div className="w-12 h-12 bg-neutral-100 text-neutral-500 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                          <Clock className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="font-semibold text-[#476E66]">Not Right Now</p>
-                          <p className="text-sm text-[#476E66]/70">The timing isn't right, but maybe later</p>
+                          <p className="font-semibold text-neutral-900 text-lg mb-1 transition-colors">Not Right Now</p>
+                          <p className="text-sm text-neutral-500 leading-relaxed font-light">The timing isn't right, but I'll keep this for later.</p>
                         </div>
                       </div>
                     </button>
                   </div>
                 ) : responseType === 'accept' ? (
-                  <div className="space-y-5">
-                    {/* Proposal Summary */}
-                    <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
+                  <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
+
+                    {/* Summary Card */}
+                    <div className="bg-neutral-50 rounded-2xl p-6 border border-neutral-100">
+                      <div className="flex justify-between items-start mb-4">
                         <div>
-                          <p className="text-sm text-neutral-500">Proposal</p>
-                          <p className="font-semibold text-neutral-900">{quote?.title}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-semibold mb-1">Project</p>
+                          <p className="font-semibold text-neutral-900 text-lg tracking-tight">{quote?.title}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm text-neutral-500">Total Amount</p>
-                          <p className="text-xl font-bold text-neutral-900">{formatCurrency(total)}</p>
+                          <p className="text-[10px] uppercase tracking-widest text-neutral-400 font-semibold mb-1">Total</p>
+                          <p className="text-xl font-bold text-neutral-900 tracking-tight">{formatCurrency(total)}</p>
                         </div>
                       </div>
-                      <p className="text-xs text-neutral-500">Proposal #{quote?.quote_number}</p>
+                      <div className="h-px bg-neutral-200 w-full mb-4"></div>
+                      <div className="flex justify-between items-center text-xs text-neutral-500">
+                        <span>Proposal #{quote?.quote_number}</span>
+                        <span>{formatDate(new Date().toISOString())}</span>
+                      </div>
                     </div>
 
-                    {/* Retainer Payment Notice */}
+                    {/* Retainer Notice */}
                     {quote?.retainer_enabled && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
-                            <span className="text-white text-sm font-bold">$</span>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-amber-900">Deposit Due Upon Signing</p>
-                            <p className="text-2xl font-bold text-amber-800 mt-1">
-                              {formatCurrency(quote.retainer_type === 'percentage'
-                                ? subtotal * (quote.retainer_percentage || 0) / 100
-                                : quote.retainer_amount || 0
-                              )}
-                            </p>
-                            <p className="text-sm text-amber-700 mt-1">
-                              You will be directed to payment after signing.
-                            </p>
-                          </div>
+                      <div className="bg-amber-50 rounded-2xl p-5 border border-amber-100 flex items-start gap-4">
+                        <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0">
+                          <span className="font-bold text-lg">$</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-amber-900 text-sm mb-1">Deposit Payment Required</p>
+                          <p className="text-2xl font-bold text-amber-800 tracking-tight mb-1">
+                            {formatCurrency(quote.retainer_type === 'percentage'
+                              ? subtotal * (quote.retainer_percentage || 0) / 100
+                              : quote.retainer_amount || 0
+                            )}
+                          </p>
+                          <p className="text-xs text-amber-700/80 leading-relaxed">
+                            You will be automatically redirected to a secure payment page after signing.
+                          </p>
                         </div>
                       </div>
                     )}
 
-                    {/* Signer Information */}
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Your Full Name *</label>
+                    {/* Signer Details Form */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider ml-1">Full Legal Name</label>
                         <input
                           type="text"
                           value={signerName}
                           onChange={(e) => setSignerName(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
-                          placeholder="Enter your full legal name"
+                          className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none transition-shadow text-neutral-900 placeholder:text-neutral-400"
+                          placeholder="e.g. John Smith"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-neutral-700 mb-1">Title (Optional)</label>
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-neutral-700 uppercase tracking-wider ml-1">Title <span className="text-neutral-400 font-normal normal-case tracking-normal">(Optional)</span></label>
                         <input
                           type="text"
                           value={signerTitle}
                           onChange={(e) => setSignerTitle(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
-                          placeholder="e.g., Owner, CEO, Manager"
+                          className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none transition-shadow text-neutral-900 placeholder:text-neutral-400"
+                          placeholder="e.g. CEO"
                         />
                       </div>
                     </div>
 
-                    {/* Legal Consent Checkbox - Primary Signing Method */}
-                    <div className={`border-2 rounded-lg p-4 transition-colors ${consentChecked ? 'border-green-500 bg-green-50' : 'border-neutral-200'}`}>
-                      <label className="flex items-start gap-3 cursor-pointer">
+                    {/* Digital Signature Consent */}
+                    <div className={`relative overflow-hidden rounded-2xl border-2 transition-all duration-300 ${consentChecked ? 'border-emerald-500 bg-emerald-50/50' : 'border-neutral-100 bg-white hover:border-neutral-200'}`}>
+                      <label className="flex items-start gap-4 p-5 cursor-pointer z-10 relative">
+                        <div className={`mt-0.5 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${consentChecked ? 'bg-emerald-500 border-emerald-500' : 'border-neutral-300 bg-white'}`}>
+                          {consentChecked && <Check className="w-4 h-4 text-white" />}
+                        </div>
                         <input
                           type="checkbox"
                           checked={consentChecked}
                           onChange={(e) => setConsentChecked(e.target.checked)}
-                          className="mt-1 w-5 h-5 rounded border-neutral-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                          className="hidden"
                         />
-                        <div className="text-sm">
-                          <p className="font-medium text-neutral-900 mb-1">
+                        <div className="flex-1">
+                          <p className={`font-semibold text-sm mb-2 ${consentChecked ? 'text-emerald-900' : 'text-neutral-900'}`}>
                             I agree to the terms of this proposal
                           </p>
-                          <p className="text-neutral-600 leading-relaxed">
-                            By checking this box, I, <span className="font-semibold">{signerName || '[Your Name]'}</span>,
+                          <p className="text-xs text-neutral-500 leading-relaxed">
+                            By checking this box, I, <span className="font-medium text-neutral-900">{signerName || 'the undersigned'}</span>,
                             confirm that I have reviewed and agree to the terms of Proposal #{quote?.quote_number}
-                            for <span className="font-semibold">{formatCurrency(total)}</span>.
-                            I authorize <span className="font-semibold">{company?.company_name}</span> to
-                            begin work as outlined in this proposal.
+                            for <span className="font-medium text-neutral-900">{formatCurrency(total)}</span>.
+                            I authorize <span className="font-medium text-neutral-900">{company?.company_name}</span> to
+                            begin work as outlined.
                           </p>
                         </div>
                       </label>
                     </div>
 
-                    {/* Optional Hand-Drawn Signature */}
-                    <div className="border-t border-neutral-200 pt-4">
+                    {/* Optional Signature Pad */}
+                    <div className="pt-2">
                       <button
                         type="button"
                         onClick={() => setShowOptionalSignature(!showOptionalSignature)}
-                        className="flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-700"
+                        className="flex items-center gap-2 text-xs font-medium text-neutral-400 hover:text-neutral-700 transition-colors ml-1"
                       >
-                        <Pen className="w-4 h-4" />
-                        {showOptionalSignature ? 'Hide' : 'Add'} hand-drawn signature (optional)
+                        <Pen className="w-3 h-3" />
+                        {showOptionalSignature ? 'Remove' : 'Add'} hand-drawn signature (optional)
                       </button>
 
                       {showOptionalSignature && (
-                        <div className="mt-3">
-                          <p className="text-xs text-neutral-500 mb-2">Draw your signature below (optional - the checkbox above is the legal signature)</p>
-                          <div className="border-2 border-dashed border-neutral-300 rounded-lg overflow-hidden bg-white">
+                        <div className="mt-4 animate-in slide-in-from-top-2 duration-200">
+                          <div className="border border-neutral-200 rounded-xl overflow-hidden bg-neutral-50 relative group">
                             <canvas
                               ref={canvasRef}
-                              width={400}
-                              height={120}
-                              className="w-full touch-none cursor-crosshair"
+                              width={500}
+                              height={160}
+                              className="w-full h-40 touch-none cursor-crosshair bg-white"
                               onMouseDown={startDrawing}
                               onMouseMove={draw}
                               onMouseUp={stopDrawing}
@@ -1612,92 +1631,99 @@ Our team is dedicated to delivering high-quality results that meet your specific
                               onTouchMove={draw}
                               onTouchEnd={stopDrawing}
                             />
+                            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={clearSignature}
+                                className="px-3 py-1 bg-white shadow-sm border border-neutral-200 rounded-md text-xs font-medium text-neutral-600 hover:text-red-600 hover:border-red-200 transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <div className="absolute bottom-2 left-3 pointer-events-none">
+                              <p className="text-[10px] text-neutral-300 font-medium uppercase tracking-widest">Sign Here</p>
+                            </div>
                           </div>
-                          <button onClick={clearSignature} className="text-xs text-neutral-500 hover:text-neutral-700 mt-1">
-                            Clear
-                          </button>
                         </div>
                       )}
                     </div>
 
-                    {/* Signing Metadata Preview */}
-                    <div className="bg-neutral-100 rounded-lg p-3 text-xs text-neutral-500">
-                      <p className="font-medium text-neutral-600 mb-1">Digital Signature Record</p>
-                      <p>Signed electronically on {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at {new Date().toLocaleTimeString()}</p>
-                      <p>Email: {client?.primary_contact_email || client?.email}</p>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 pt-2">
+                    {/* Action Bar */}
+                    <div className="flex items-center gap-4 pt-4 border-t border-neutral-100 mt-8">
                       <button
                         onClick={() => { setResponseType(null); setConsentChecked(false); setShowOptionalSignature(false); }}
-                        className="flex-1 px-4 py-3 border border-neutral-300 rounded-lg hover:bg-neutral-50 font-medium"
+                        className="px-6 py-3.5 border border-neutral-200 text-neutral-600 rounded-xl font-medium hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
                       >
                         Back
                       </button>
                       <button
                         onClick={submitResponse}
                         disabled={!signerName || !consentChecked || submitting}
-                        className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-1 px-6 py-3.5 bg-[#476E66] text-white rounded-xl font-semibold hover:bg-[#3A5B54] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#476E66]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2.5"
                       >
                         {submitting ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Signing...
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Processing...</span>
                           </>
                         ) : (
                           <>
                             <Check className="w-5 h-5" />
-                            Sign & Accept Proposal
+                            <span>Sign & Accept Proposal</span>
                           </>
                         )}
                       </button>
                     </div>
 
-                    {/* Legal Notice */}
-                    <p className="text-[10px] text-neutral-400 text-center leading-relaxed">
-                      By clicking "Sign & Accept Proposal", you agree that your electronic signature is the legal equivalent
-                      of your manual signature on this proposal. This agreement is legally binding under the
-                      Electronic Signatures in Global and National Commerce Act (ESIGN) and the Uniform Electronic Transactions Act (UETA).
+                    {/* Legal Footer */}
+                    <p className="text-[10px] text-neutral-400 text-center leading-relaxed px-4">
+                      By clicking "Sign & Accept", you agree that your electronic signature is legally binding under the
+                      ESIGN Act and UETA. An audit trail of this transaction will be recorded.
                     </p>
+
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1">
-                        {responseType === 'changes' ? 'What changes would you like?' :
-                          responseType === 'discuss' ? 'What would you like to discuss?' :
-                            'Any comments? (Optional)'}
+                  <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider ml-1">
+                        {responseType === 'changes' ? 'Requested Changes' :
+                          responseType === 'discuss' ? 'Topic of Discussion' :
+                            'Additional Comments'}
                       </label>
                       <textarea
                         value={comments}
                         onChange={(e) => setComments(e.target.value)}
-                        rows={4}
-                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none"
-                        placeholder={responseType === 'changes' ? 'Please describe the changes you need...' :
-                          responseType === 'discuss' ? 'What questions or concerns do you have?' :
-                            'Any additional comments...'}
+                        rows={6}
+                        className="w-full px-5 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-neutral-900 focus:border-transparent outline-none resize-none transition-shadow text-neutral-900 placeholder:text-neutral-400 leading-relaxed"
+                        placeholder={responseType === 'changes' ? 'Please describe the specific changes you would like to see...' :
+                          responseType === 'discuss' ? 'What specific questions or concerns would you like to discuss?' :
+                            'Is there anything else you\'d like to let us know?'}
                       />
                     </div>
-                    <div className="flex gap-3 pt-4">
+
+                    <div className="flex items-center gap-4 pt-4 border-t border-neutral-100">
                       <button
                         onClick={() => setResponseType(null)}
-                        className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50"
+                        className="px-6 py-3.5 border border-neutral-200 text-neutral-600 rounded-xl font-medium hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
                       >
                         Back
                       </button>
                       <button
                         onClick={submitResponse}
                         disabled={submitting}
-                        className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-lg font-medium hover:bg-[#3A5B54] disabled:opacity-50"
+                        className="flex-1 px-6 py-3.5 bg-[#476E66] text-white rounded-xl font-semibold hover:bg-[#3A5B54] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#476E66]/20 transition-all active:scale-[0.98]"
                       >
-                        {submitting ? 'Submitting...' : 'Submit Response'}
+                        {submitting ? 'Submitting...' : 'Submit Feedback'}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+                {error && (
+                  <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-700 animate-in fade-in slide-in-from-bottom-2">
+                    <X className="w-5 h-5 shrink-0" />
+                    <p className="text-sm font-medium">{error}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

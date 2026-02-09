@@ -320,9 +320,10 @@ export interface Quote {
   title: string;
   description?: string;
   billing_model?: string;
-  status?: string; // 'draft' | 'pending_collaborators' | 'sent' | 'accepted' | 'approved' | 'declined' | 'converted'
+  status?: string; // 'draft' | 'pending_collaborators' | 'sent' | 'accepted' | 'approved' | 'declined' | 'archived' | 'converted'
   total_amount?: number;
   valid_until?: string;
+  revision_of_quote_id?: string;
   cover_background_url?: string;
   cover_volume_number?: string;
   scope_of_work?: string;
@@ -438,6 +439,7 @@ export interface CompanySettings {
   stripe_account_id?: string;
   bigtime_api_token?: string | null;
   bigtime_firm_id?: string | null;
+  saved_cover_background_urls?: string[];
   created_at?: string;
 }
 
@@ -620,29 +622,69 @@ export const api = {
     });
   },
 
-  // Tasks
+  // Tasks: stable order (created_at then id) so list position never jumps when editing
   async getTasks(projectId: string) {
     const { data, error } = await supabase.from('tasks')
       .select('*')
       .eq('project_id', projectId)
-      .order('created_at');
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
     if (error) throw error;
     return data as Task[];
   },
 
   async getTasksWithBilling(projectId: string) {
-    const { data, error } = await supabase.from('tasks')
+    const { data: tasksData, error } = await supabase.from('tasks')
       .select('*')
       .eq('project_id', projectId)
-      .order('created_at');
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
     if (error) throw error;
-    // Calculate remaining amounts for each task
-    return (data as Task[]).map(task => ({
-      ...task,
-      billed_percentage: task.billed_percentage || 0,
-      billed_amount: task.billed_amount || 0,
-      total_budget: task.total_budget || task.estimated_fees || 0,
-    }));
+    const tasks = (tasksData || []) as Task[];
+
+    // Aggregate billed_percentage and billed_amount from invoice_line_items (only for existing invoices for this project).
+    // Two-step: get invoice IDs for project, then line items for those invoices. Deleted invoices are excluded.
+    const { data: projectInvoices } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('project_id', projectId);
+    const invoiceIds = (projectInvoices || []).map((r: { id: string }) => r.id);
+
+    const aggregatedByTask: Record<string, { billed_percentage: number; billed_amount: number }> = {};
+    if (invoiceIds.length > 0) {
+      const { data: lineItems } = await supabase
+        .from('invoice_line_items')
+        .select('task_id, billed_percentage, amount')
+        .in('invoice_id', invoiceIds)
+        .not('task_id', 'is', null);
+      if (lineItems) {
+        for (const item of lineItems as { task_id: string; billed_percentage: number | null; amount: number | null }[]) {
+          const tid = item.task_id;
+          if (!tid) continue;
+          const pct = Number(item.billed_percentage) || 0;
+          const amt = Number(item.amount) || 0;
+          if (!aggregatedByTask[tid]) {
+            aggregatedByTask[tid] = { billed_percentage: 0, billed_amount: 0 };
+          }
+          aggregatedByTask[tid].billed_percentage += pct;
+          aggregatedByTask[tid].billed_amount += amt;
+        }
+      }
+    }
+
+    return tasks.map(task => {
+      const agg = aggregatedByTask[task.id];
+      // Use only aggregated totals from invoice_line_items. If no line items exist for this task (e.g. draft invoice was deleted),
+      // show 0 so the user can bill again. We still update the task row on create/delete for consistency.
+      const billed_percentage = agg ? agg.billed_percentage : 0;
+      const billed_amount = agg ? agg.billed_amount : 0;
+      return {
+        ...task,
+        billed_percentage,
+        billed_amount,
+        total_budget: task.total_budget ?? task.estimated_fees ?? 0,
+      };
+    });
   },
 
   async updateTaskBilling(taskId: string, billedPercentage: number, billedAmount: number) {
@@ -1170,7 +1212,26 @@ export const api = {
 
   async deleteInvoice(id: string) {
     try {
-      // First clear invoice_id from time entries
+      // Fetch task-billing line items before delete so we can roll back tasks.billed_percentage / billed_amount
+      const { data: lineItems } = await supabase
+        .from('invoice_line_items')
+        .select('task_id, billed_percentage, amount')
+        .eq('invoice_id', id)
+        .not('task_id', 'is', null);
+      const byTask: Record<string, { billed_percentage: number; billed_amount: number }> = {};
+      if (lineItems) {
+        for (const item of lineItems as { task_id: string; billed_percentage: number | null; amount: number | null }[]) {
+          const tid = item.task_id;
+          if (!tid) continue;
+          const pct = Number(item.billed_percentage) || 0;
+          const amt = Number(item.amount) || 0;
+          if (!byTask[tid]) byTask[tid] = { billed_percentage: 0, billed_amount: 0 };
+          byTask[tid].billed_percentage += pct;
+          byTask[tid].billed_amount += amt;
+        }
+      }
+
+      // Clear invoice_id from time entries
       const { error: timeEntriesError } = await supabase.from('time_entries').update({ invoice_id: null }).eq('invoice_id', id);
       if (timeEntriesError) {
         console.error('Failed to clear time entries:', timeEntriesError);
@@ -1191,6 +1252,18 @@ export const api = {
         return { success: false, error, step: 'invoice' };
       }
 
+      // Roll back task billing so milestone/percentage calculator shows correct remaining
+      for (const [taskId, delta] of Object.entries(byTask)) {
+        const { data: task } = await supabase.from('tasks').select('billed_percentage, billed_amount').eq('id', taskId).single();
+        if (task) {
+          const currentPct = Number((task as { billed_percentage?: number }).billed_percentage) || 0;
+          const currentAmt = Number((task as { billed_amount?: number }).billed_amount) || 0;
+          const newPct = Math.max(0, currentPct - delta.billed_percentage);
+          const newAmt = Math.max(0, currentAmt - delta.billed_amount);
+          await supabase.from('tasks').update({ billed_percentage: newPct, billed_amount: newAmt }).eq('id', taskId);
+        }
+      }
+
       return { success: true };
     } catch (err) {
       console.error('Unexpected error deleting invoice:', err);
@@ -1200,7 +1273,28 @@ export const api = {
 
   async deleteInvoices(ids: string[]) {
     try {
-      // First clear invoice_id from time entries
+      if (ids.length === 0) return { success: true };
+
+      // Fetch task-billing line items for these invoices so we can roll back tasks
+      const { data: lineItems } = await supabase
+        .from('invoice_line_items')
+        .select('task_id, billed_percentage, amount')
+        .in('invoice_id', ids)
+        .not('task_id', 'is', null);
+      const byTask: Record<string, { billed_percentage: number; billed_amount: number }> = {};
+      if (lineItems) {
+        for (const item of lineItems as { task_id: string; billed_percentage: number | null; amount: number | null }[]) {
+          const tid = item.task_id;
+          if (!tid) continue;
+          const pct = Number(item.billed_percentage) || 0;
+          const amt = Number(item.amount) || 0;
+          if (!byTask[tid]) byTask[tid] = { billed_percentage: 0, billed_amount: 0 };
+          byTask[tid].billed_percentage += pct;
+          byTask[tid].billed_amount += amt;
+        }
+      }
+
+      // Clear invoice_id from time entries
       const { error: timeEntriesError } = await supabase.from('time_entries').update({ invoice_id: null }).in('invoice_id', ids);
       if (timeEntriesError) {
         console.error('Failed to clear time entries:', timeEntriesError);
@@ -1219,6 +1313,18 @@ export const api = {
       if (error) {
         console.error('Failed to delete invoices:', error);
         return { success: false, error, step: 'invoices' };
+      }
+
+      // Roll back task billing for each affected task
+      for (const [taskId, delta] of Object.entries(byTask)) {
+        const { data: task } = await supabase.from('tasks').select('billed_percentage, billed_amount').eq('id', taskId).single();
+        if (task) {
+          const currentPct = Number((task as { billed_percentage?: number }).billed_percentage) || 0;
+          const currentAmt = Number((task as { billed_amount?: number }).billed_amount) || 0;
+          const newPct = Math.max(0, currentPct - delta.billed_percentage);
+          const newAmt = Math.max(0, currentAmt - delta.billed_amount);
+          await supabase.from('tasks').update({ billed_percentage: newPct, billed_amount: newAmt }).eq('id', taskId);
+        }
       }
 
       return { success: true };
@@ -1393,6 +1499,68 @@ export const api = {
     // Then delete the quote
     const { error } = await supabase.from('quotes').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  /** Create a copy of a quote as a new draft (for client-requested revisions). Original is unchanged. */
+  async duplicateQuoteAsRevision(quoteId: string): Promise<Quote> {
+    const { data: quote, error: quoteErr } = await supabase.from('quotes')
+      .select('*')
+      .eq('id', quoteId)
+      .single();
+    if (quoteErr || !quote) throw new Error(quoteErr?.message || 'Quote not found');
+
+    const { data: lineItems } = await supabase.from('quote_line_items')
+      .select('*')
+      .eq('quote_id', quoteId)
+      .order('sort_order', { ascending: true });
+
+    const newQuote: Partial<Quote> = {
+      company_id: quote.company_id,
+      client_id: quote.client_id,
+      lead_id: quote.lead_id,
+      title: (quote.title || 'Proposal').replace(/\s*\(Revision.*\)$/i, '') + ' (Revision)',
+      description: quote.description,
+      billing_model: quote.billing_model,
+      status: 'draft',
+      total_amount: quote.total_amount,
+      valid_until: quote.valid_until,
+      cover_background_url: quote.cover_background_url,
+      cover_volume_number: quote.cover_volume_number,
+      scope_of_work: quote.scope_of_work,
+      letter_content: quote.letter_content,
+      revision_of_quote_id: quoteId,
+      retainer_enabled: quote.retainer_enabled,
+      retainer_type: quote.retainer_type,
+      retainer_percentage: quote.retainer_percentage,
+      retainer_amount: quote.retainer_amount,
+    };
+    const { data: created, error: createErr } = await supabase.from('quotes')
+      .insert(newQuote)
+      .select()
+      .single();
+    if (createErr || !created) throw new Error(createErr?.message || 'Failed to create revision');
+
+    if (lineItems?.length) {
+      const newItems = lineItems.map((item: any) => ({
+        quote_id: created.id,
+        description: item.description,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+        amount: item.amount,
+        unit: item.unit,
+        taxed: item.taxed,
+        task_type: item.task_type,
+        staff_role: item.staff_role,
+        sort_order: item.sort_order,
+        estimated_days: item.estimated_days,
+        start_offset: item.start_offset,
+        start_type: item.start_type,
+        depends_on: item.depends_on,
+        overlap_days: item.overlap_days,
+      }));
+      await supabase.from('quote_line_items').insert(newItems);
+    }
+    return created as Quote;
   },
 
   async convertQuoteToProject(quoteId: string, companyId: string): Promise<{ projectId: string; projectName: string; tasksCreated: number }> {
@@ -1644,6 +1812,27 @@ export const api = {
       .single();
     if (error) throw error;
     return data as CompanySettings;
+  },
+
+  async uploadCoverBackground(companyId: string, file: File): Promise<string> {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const fileName = `${companyId}/cover-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('cover-backgrounds')
+      .upload(fileName, file, { cacheControl: '3600', upsert: false });
+    if (error) throw error;
+    const { data } = supabase.storage.from('cover-backgrounds').getPublicUrl(fileName);
+    const url = data.publicUrl;
+    const settings = await this.getCompanySettings(companyId);
+    const existing = (settings?.saved_cover_background_urls as string[] | undefined) || [];
+    if (!existing.includes(url)) {
+      await this.upsertCompanySettings({
+        ...(settings || { company_id: companyId }),
+        company_id: companyId,
+        saved_cover_background_urls: [...existing, url],
+      });
+    }
+    return url;
   },
 
   // Hierarchical Tasks
