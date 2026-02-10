@@ -91,6 +91,7 @@ export interface Project {
   end_date?: string;
   category?: string;
   created_at?: string;
+  updated_at?: string;
   client?: Client;
   // New detail fields
   display_as?: string;
@@ -345,6 +346,10 @@ export interface Quote {
   retainer_paid?: boolean;
   retainer_paid_at?: string;
   retainer_stripe_payment_id?: string;
+  // Recipient tracking - who the proposal was sent TO
+  recipient_name?: string;
+  recipient_email?: string;
+  last_sent_at?: string;
 }
 
 export interface QuoteLineItem {
@@ -544,6 +549,20 @@ export const api = {
         .select()
         .single();
       if (error) throw error;
+
+      // Auto-populate client's primary_contact_name if empty
+      if (contact.client_id && contact.name) {
+        const { data: clientData } = await supabase.from('clients')
+          .select('primary_contact_name')
+          .eq('id', contact.client_id)
+          .single();
+        if (clientData && (!clientData.primary_contact_name || clientData.primary_contact_name.trim() === '')) {
+          await supabase.from('clients')
+            .update({ primary_contact_name: contact.name })
+            .eq('id', contact.client_id);
+        }
+      }
+
       return data as ClientContact;
     });
   },
@@ -1518,7 +1537,7 @@ export const api = {
       company_id: quote.company_id,
       client_id: quote.client_id,
       lead_id: quote.lead_id,
-      title: (quote.title || 'Proposal').replace(/\s*\(Revision.*\)$/i, '') + ' (Revision)',
+      title: (quote.title || 'Proposal').replace(/\s*\(Revision.*\)$/i, ''),
       description: quote.description,
       billing_model: quote.billing_model,
       status: 'draft',
@@ -1533,6 +1552,8 @@ export const api = {
       retainer_type: quote.retainer_type,
       retainer_percentage: quote.retainer_percentage,
       retainer_amount: quote.retainer_amount,
+      recipient_name: quote.recipient_name,
+      recipient_email: quote.recipient_email,
     };
     const { data: created, error: createErr } = await supabase.from('quotes')
       .insert(newQuote)
@@ -2834,6 +2855,7 @@ export interface BankStatement {
   id: string;
   company_id: string;
   file_path: string;
+  file_name: string;
   original_filename?: string;
   account_name?: string;
   account_number?: string;
@@ -2841,10 +2863,7 @@ export interface BankStatement {
   period_end?: string;
   beginning_balance?: number;
   ending_balance?: number;
-  total_deposits?: number;
-  total_withdrawals?: number;
-  status: 'pending' | 'processing' | 'processed' | 'error';
-  error_message?: string;
+  status: 'pending' | 'parsed' | 'reconciled' | 'error';
   created_at?: string;
   updated_at?: string;
 }
@@ -2852,17 +2871,29 @@ export interface BankStatement {
 export interface BankTransaction {
   id: string;
   statement_id: string;
+  company_id?: string;
   transaction_date: string;
   description?: string;
   amount: number;
-  transaction_type: 'deposit' | 'withdrawal' | 'check' | 'fee' | 'interest' | 'transfer';
+  type?: 'credit' | 'debit';
   check_number?: string;
   matched_expense_id?: string;
-  match_status: 'matched' | 'unmatched' | 'discrepancy' | 'ignored';
-  match_notes?: string;
+  matched_invoice_id?: string;
+  matched_type?: string;
+  match_status: 'matched' | 'unmatched' | 'suggested' | 'ignored' | 'discrepancy';
+  category?: string;
+  category_source?: 'auto' | 'manual' | 'ai' | null;
+  subcategory?: string;
+  project_id?: string;
+  payee_id?: string;
+  notes?: string;
+  is_cleared?: boolean;
+  reconciled_at?: string;
   created_at?: string;
   // Joined data
   matched_expense?: CompanyExpense;
+  project?: { id: string; name: string };
+  payee?: { id: string; full_name: string; employment_type: string | null };
 }
 
 export const bankStatementsApi = {
@@ -2918,7 +2949,7 @@ export const bankStatementsApi = {
 
   async getTransactions(statementId: string) {
     const { data, error } = await supabase.from('bank_transactions')
-      .select('*')
+      .select('*, project:projects(id, name), payee:profiles!bank_transactions_payee_id_fkey(id, full_name, employment_type)')
       .eq('statement_id', statementId)
       .order('transaction_date', { ascending: true });
     if (error) throw error;
@@ -4195,4 +4226,70 @@ export const projectCollaboratorsApi = {
       their_client_name: clientName
     });
   }
+};
+
+// ─── Transaction Categories (Accounting) ────────────────────────────
+
+export const TAX_CLASSIFICATIONS = [
+  { value: 'business_expense', label: 'Business Expense', description: 'Deductible operating expense' },
+  { value: 'personal_draw', label: 'Personal / Owner Draw', description: 'Not deductible — owner withdrawal' },
+  { value: 'owner_contribution', label: 'Owner Contribution', description: 'Capital invested by owner' },
+  { value: 'income', label: 'Business Income', description: 'Revenue from sales and services' },
+  { value: 'cost_of_goods', label: 'Cost of Goods Sold', description: 'Direct costs tied to projects/services' },
+  { value: 'payroll', label: 'Payroll', description: 'Wages, salaries, and employee benefits' },
+  { value: 'tax_payment', label: 'Tax Payment', description: 'Business taxes, licensing, permits' },
+  { value: 'transfer', label: 'Transfer (Excluded)', description: 'Internal transfers — excluded from P&L' },
+] as const;
+
+export interface TransactionCategory {
+  id: string;
+  company_id: string;
+  value: string;
+  label: string;
+  tax_classification: string;
+  description?: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const transactionCategoryApi = {
+  async getAll(companyId: string, includeInactive = false): Promise<TransactionCategory[]> {
+    let query = supabase
+      .from('transaction_categories')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('sort_order', { ascending: true });
+    if (!includeInactive) query = query.eq('is_active', true);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []) as TransactionCategory[];
+  },
+
+  async create(category: Partial<TransactionCategory> & { company_id: string; value: string; label: string }): Promise<TransactionCategory> {
+    const { data, error } = await supabase
+      .from('transaction_categories')
+      .insert({ ...category, updated_at: new Date().toISOString() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as TransactionCategory;
+  },
+
+  async update(id: string, updates: Partial<TransactionCategory>): Promise<TransactionCategory> {
+    const { data, error } = await supabase
+      .from('transaction_categories')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as TransactionCategory;
+  },
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase.from('transaction_categories').delete().eq('id', id);
+    if (error) throw error;
+  },
 };

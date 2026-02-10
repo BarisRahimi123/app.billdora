@@ -66,7 +66,7 @@ export default function SalesPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile, loading: authLoading, authReady, resumeCount } = useAuth();
-  const { isAdmin } = usePermissions();
+  const { isAdmin, canView, canCreate, canViewFinancials, loading: permLoading } = usePermissions();
   const { checkAndProceed } = useFeatureGating();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('leads');
@@ -803,6 +803,15 @@ export default function SalesPage() {
     return (
       <div className="p-12 text-center">
         <p className="text-neutral-500">Unable to load data. Please log in again.</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin && !canView('quotes') && !canViewFinancials) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view sales and proposals. Contact your administrator.</p>
       </div>
     );
   }

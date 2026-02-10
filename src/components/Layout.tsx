@@ -10,8 +10,10 @@ import { DEFAULT_HOURLY_RATE, MIN_TIMER_SAVE_SECONDS, NOTIFICATIONS_LIMIT, SEARC
 import { useDebounce } from '../hooks/useDebounce';
 import {
   LayoutDashboard, Users, FolderKanban, Clock, FileText, Calendar, BarChart3, Settings, LogOut,
-  Search, Bell, ChevronDown, ChevronRight, X, Play, Pause, Square, Menu, PieChart, ArrowLeft, Wallet, FileSpreadsheet, Camera
+  Search, Bell, ChevronDown, ChevronRight, X, Play, Pause, Square, Menu, PieChart, ArrowLeft, Wallet, FileSpreadsheet, Camera,
+  Sparkles
 } from 'lucide-react';
+import { AiChatSidebar } from '../ai/components/AiChatSidebar';
 
 const mainNavItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -38,7 +40,7 @@ interface SearchResult {
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
-  const { canViewFinancials, isAdmin } = usePermissions();
+  const { canViewFinancials, isAdmin, canView } = usePermissions();
   const { upgradeModalState, hideUpgradeModal } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,6 +54,9 @@ export default function Layout() {
   const debouncedSearchQuery = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // AI Chat Sidebar
+  const [aiChatOpen, setAiChatOpen] = useState(false);
 
   // Floating Timer State
   const [timerRunning, setTimerRunning] = useState(false);
@@ -394,8 +399,9 @@ export default function Layout() {
           <nav className="flex-1 py-6 px-3 overflow-y-auto space-y-1">
             {/* Main Nav Items */}
             {mainNavItems.filter(item => {
-              if (!canViewFinancials && (item.path === '/invoicing' || item.path === '/sales')) return false;
-              if (!isAdmin && item.path === '/resourcing') return false;
+              if (item.path === '/invoicing' && !isAdmin && !canView('invoicing') && !canViewFinancials) return false;
+              if (item.path === '/sales' && !isAdmin && !canView('quotes') && !canViewFinancials) return false;
+              if (item.path === '/resourcing' && !isAdmin && !canView('team')) return false;
               return true;
             }).map((item) => (
               <NavLink
@@ -412,7 +418,7 @@ export default function Layout() {
             ))}
 
             {/* Financials Section (Expandable) */}
-            {isAdmin && (
+            {(isAdmin || canViewFinancials) && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={() => setFinancialsExpanded(!financialsExpanded)}
@@ -455,7 +461,7 @@ export default function Layout() {
           </nav>
 
           <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            {isAdmin && (
+            {(isAdmin || canView('settings')) && (
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>
@@ -777,6 +783,21 @@ export default function Layout() {
           </div>
         )}
       </div>
+
+      {/* Floating AI Chat Button */}
+      <button
+        onClick={() => setAiChatOpen(true)}
+        className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full bg-[#476E66] text-white shadow-lg hover:bg-[#3a5c55] transition-all hover:scale-105 flex items-center justify-center print:hidden"
+        title="AI Assistant"
+      >
+        <Sparkles className="w-5 h-5" />
+      </button>
+
+      {/* AI Chat Sidebar */}
+      <AiChatSidebar
+        isOpen={aiChatOpen}
+        onClose={() => setAiChatOpen(false)}
+      />
 
       {/* Global Upgrade Modal */}
       <UpgradeModal

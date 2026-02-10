@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Lock, Check, MessageSquare, Clock, FileText, Printer, Pen, X } from 'lucide-react';
-import { formatCurrency, formatDate, paginateText } from '../lib/utils';
+import { formatCurrency, formatDate, paginateText, normalizeBulletText } from '../lib/utils';
 
 interface Quote {
   id: string;
@@ -23,6 +23,9 @@ interface Quote {
   letter_content?: string;
   terms?: string;
   tax_rate?: number;
+  recipient_name?: string;
+  recipient_email?: string;
+  revision_of_quote_id?: string;
 }
 
 interface LineItem {
@@ -251,8 +254,10 @@ export default function ProposalPortalPage() {
           }
         }
 
-        // Pre-fill signer name
-        if (data.client?.primary_contact_name) {
+        // Pre-fill signer name — prefer stored recipient (the person it was sent TO)
+        if (data.quote?.recipient_name) {
+          setSignerName(data.quote.recipient_name);
+        } else if (data.client?.primary_contact_name) {
           setSignerName(data.client.primary_contact_name);
         } else if (data.client?.name) {
           setSignerName(data.client.name);
@@ -700,21 +705,19 @@ export default function ProposalPortalPage() {
   // Main proposal view - NEW REFINED TEMPLATE v2.1 (Feb 5 2026)
 
   // Pre-calculate page counts for accurate numbering
-  const hasScope = !!quote?.scope_of_work;
   const hasTimeline = lineItems.some(item => item.estimated_days > 0);
-  const rawScopePages = hasScope ? paginateText(quote?.scope_of_work || '') : [];
-  // If no scope but timeline exists, we have at least 1 page
+  const hasScope = !!quote?.scope_of_work;
+  // Score of 4200 calibrated to fill ~90% of 1100px page with p-12/p-16 padding, header & footer
+  const SCOPE_PAGE_SCORE = 4200;
+  const rawScopePages = hasScope ? paginateText(quote?.scope_of_work || '', SCOPE_PAGE_SCORE) : [];
   if (rawScopePages.length === 0 && hasTimeline) rawScopePages.push('');
 
-  // Check timeline overflow
   let timelineOverflows = false;
   if (hasTimeline && rawScopePages.length > 0) {
     const lastPageContent = rawScopePages[rawScopePages.length - 1];
     const pageScore = lastPageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0);
-    // If score >= 2000, timeline moves to next page
-    if (pageScore >= 2000) timelineOverflows = true;
+    if (pageScore >= SCOPE_PAGE_SCORE * 0.65) timelineOverflows = true;
   }
-
   const totalScopePages = rawScopePages.length + (timelineOverflows ? 1 : 0);
 
   return (
@@ -815,11 +818,16 @@ export default function ProposalPortalPage() {
                         <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-medium">PROJECT</p>
                       </div>
                       <h1 className="text-7xl font-bold text-white mb-4 leading-none tracking-tight">
-                        {quote?.title || 'Project Proposal'}
+                        {(quote?.title || 'Project Proposal').replace(/\s*\(Revision.*\)$/i, '')}
                       </h1>
                       <p className="text-2xl font-light text-white/80">
                         Professional Services Proposal
                       </p>
+                      {quote?.revision_of_quote_id && (
+                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded border border-white/20">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/80">Revised Proposal</span>
+                        </div>
+                      )}
                     </div>
 
                   </div>
@@ -893,7 +901,7 @@ export default function ProposalPortalPage() {
               {/* Title Section */}
               <div className="mb-12 border-b border-neutral-100 pb-12">
                 <h1 className="text-2xl font-bold text-neutral-900 mb-2">
-                  Project Proposal: {quote?.title || 'Project'}
+                  Project Proposal: {(quote?.title || 'Project').replace(/\s*\(Revision.*\)$/i, '')}
                 </h1>
                 <p className="text-lg text-neutral-500 font-light">
                   Prepared for {client?.name}
@@ -903,7 +911,7 @@ export default function ProposalPortalPage() {
               {/* Main Letter Body */}
               <div className="mb-16">
                 <p className="font-semibold text-neutral-900 mb-6">
-                  Dear {client?.primary_contact_name?.trim().split(' ')[0] || 'Client'},
+                  Dear {(quote?.recipient_name || client?.primary_contact_name)?.trim().split(' ')[0] || 'Client'},
                 </p>
 
                 <div className="text-neutral-600 font-light leading-relaxed whitespace-pre-line text-lg">
@@ -946,28 +954,22 @@ Our team is dedicated to delivering high-quality results that meet your specific
             </div>
           </div>
 
-          {/* PAGE 3: Scope & Timeline Sheets - Auto Paginated */}
+          {/* PAGE 3+: Scope & Timeline Sheets - Paginated into 8.5x11 pages */}
           {(() => {
-            const hasScope = !!quote?.scope_of_work;
-            const hasTimeline = lineItems.some(item => item.estimated_days > 0);
-
             if (!hasScope && !hasTimeline) return null;
 
-            const scopeContent = quote?.scope_of_work || '';
-            const scopePages = hasScope ? paginateText(scopeContent, 2600) : [];
-            // If no scope but we have timeline, treat as 1 empty scope page to render timeline
+            const scopeContent = normalizeBulletText(quote?.scope_of_work || '');
+            const scopePages = hasScope ? paginateText(scopeContent, SCOPE_PAGE_SCORE) : [];
             if (scopePages.length === 0 && hasTimeline) scopePages.push('');
 
             return scopePages.map((pageContent, idx) => {
               const isLastPage = idx === scopePages.length - 1;
-
-              // improved check for remaining space on page
               const pageScore = pageContent.split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0);
-              const renderTimelineHere = hasTimeline && isLastPage && pageScore < 2000;
+              const renderTimelineHere = hasTimeline && isLastPage && pageScore < SCOPE_PAGE_SCORE * 0.65;
 
               return (
-                <div key={`scope-${idx}`} className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px' }}>
-                  <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+                <div key={`scope-${idx}`} className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
+                  <div className="p-12 md:p-16 flex-1 flex flex-col">
                     {/* Header */}
                     <div className="flex items-center gap-4 mb-8 flex-shrink-0">
                       <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">
@@ -976,29 +978,24 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       <div className="h-px bg-neutral-200 flex-1"></div>
                     </div>
 
-                    <div className="flex-1 overflow-hidden relative flex flex-col">
-                      {/* FADE OUT for overflow if calculation fails slightly */}
-                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent pointer-events-none z-10"></div>
-
+                    <div className="flex-1 flex flex-col">
                       {/* Scope Content Chunk */}
                       {pageContent && (
-                        <div className="mb-8">
+                        <div className="mb-6">
                           {idx === 0 && <h3 className="text-lg font-semibold text-neutral-900 mb-4">Project Scope</h3>}
                           <div className="text-neutral-700">
                             {pageContent.split('\n').map((line, lineIdx) => {
                               const trimmed = line.trim();
-                              if (!trimmed) return <div key={lineIdx} className="h-4" />; // Empty line spacer
+                              if (!trimmed) return <div key={lineIdx} className="h-3" />;
 
-                              // Header 1 (#)
                               if (trimmed.startsWith('# ')) {
                                 return (
-                                  <h3 key={lineIdx} className="text-xl font-bold text-neutral-900 mt-6 mb-3 tracking-tight">
+                                  <h3 key={lineIdx} className="text-xl font-bold text-neutral-900 mt-5 mb-2 tracking-tight">
                                     {trimmed.substring(2)}
                                   </h3>
                                 );
                               }
 
-                              // Header 2 (##)
                               if (trimmed.startsWith('## ')) {
                                 return (
                                   <h4 key={lineIdx} className="text-lg font-semibold text-neutral-800 mt-4 mb-2 tracking-tight">
@@ -1007,20 +1004,26 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                 );
                               }
 
-                              // Bullet List (•, -, *)
+                              if (trimmed.startsWith('### ')) {
+                                return (
+                                  <h5 key={lineIdx} className="text-base font-semibold text-neutral-700 mt-3 mb-1.5">
+                                    {trimmed.substring(4)}
+                                  </h5>
+                                );
+                              }
+
                               if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
                                 const content = trimmed.substring(2);
                                 return (
-                                  <div key={lineIdx} className="flex items-start gap-3 mb-2 ml-1">
+                                  <div key={lineIdx} className="flex items-start gap-3 mb-1.5 ml-1">
                                     <div className="w-1.5 h-1.5 rounded-full bg-neutral-400 mt-2 flex-shrink-0" />
                                     <span className="leading-relaxed text-neutral-600 font-light text-base">{content}</span>
                                   </div>
                                 );
                               }
 
-                              // Regular Paragraph with Letter styling
                               return (
-                                <p key={lineIdx} className="mb-2 leading-relaxed text-neutral-600 font-light text-base">
+                                <p key={lineIdx} className="mb-1.5 leading-relaxed text-neutral-600 font-light text-base">
                                   {line}
                                 </p>
                               );
@@ -1031,7 +1034,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
 
                       {/* Timeline (if fitting on this page) */}
                       {renderTimelineHere && (
-                        <div className="pt-8 mt-auto">
+                        <div className="pt-6 mt-auto border-t border-neutral-100">
                           <h3 className="text-lg font-semibold text-neutral-900 mb-6">Estimated Timeline</h3>
                           {(() => {
                             const validItems = lineItems.filter(item => item.description.trim());
@@ -1040,14 +1043,9 @@ Our team is dedicated to delivering high-quality results that meet your specific
                             const maxEnd = Math.max(...validItems.map(item => (computedOffsets.get(item.id) || 0) + item.estimated_days));
                             const timelineRange = maxEnd - minStart;
                             const totalDays = maxEnd || 1;
-                            const dayMarkers = [minStart + 1];
-                            const step = timelineRange > 20 ? 5 : timelineRange > 10 ? 4 : 2;
-                            for (let day = minStart + step; day < maxEnd; day += step) dayMarkers.push(day + 1);
-                            if (dayMarkers[dayMarkers.length - 1] !== maxEnd) dayMarkers.push(maxEnd);
 
                             return (
-                              <div className="flex-1 flex flex-col pt-8">
-                                {/* Header */}
+                              <div>
                                 <div className="flex items-center text-[10px] text-neutral-400 pb-2 border-b border-neutral-100 mb-6">
                                   <span className="w-32">PROJECT SCHEDULE</span>
                                   <div className="flex-1 relative h-4">
@@ -1056,7 +1054,6 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                   </div>
                                 </div>
 
-                                {/* Timeline Rows */}
                                 <div className="space-y-6">
                                   {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
                                     const start = computedOffsets.get(item.id) || 0;
@@ -1065,12 +1062,10 @@ Our team is dedicated to delivering high-quality results that meet your specific
 
                                     return (
                                       <div key={item.id} className="border-b border-neutral-50 mb-4 pb-3">
-                                        {/* Text above bar - thin font */}
                                         <div className="w-full flex justify-between items-center text-sm mb-1.5">
                                           <span className="font-light text-neutral-500 truncate pr-4">{item.description}</span>
                                           <span className="text-xs text-neutral-400 font-light whitespace-nowrap">{item.estimated_days} Days</span>
                                         </div>
-                                        {/* Bar row */}
                                         <div className="relative h-10 w-full">
                                           <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
                                           <div className="absolute inset-0 w-full h-full">
@@ -1089,7 +1084,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                                   })}
                                 </div>
 
-                                <div className="flex justify-end pt-4 mt-2 pb-2 border-t border-neutral-100 bg-white">
+                                <div className="flex justify-end pt-4 mt-2 pb-2 border-t border-neutral-100">
                                   <div className="text-sm font-bold text-neutral-900">Total Project Duration: {totalDays} Days</div>
                                 </div>
                               </div>
@@ -1099,9 +1094,8 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       )}
                     </div>
 
-                    {/* Footer - Stick to bottom */}
-                    {/* Footer - Stick to bottom */}
-                    <div className="mt-auto pt-8 border-t border-neutral-100/50 flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase flex-shrink-0">
+                    {/* Footer */}
+                    <div className="mt-auto pt-6 border-t border-neutral-100/50 flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase flex-shrink-0">
                       <div className="flex items-center gap-4">
                         <span>{company?.company_name}</span>
                         <span className="text-neutral-300">|</span>
@@ -1110,17 +1104,17 @@ Our team is dedicated to delivering high-quality results that meet your specific
                       <div className="flex gap-4">
                         <span>Proposal #{quote?.quote_number}</span>
                         <span className="text-neutral-300">•</span>
-                        <span>Page {idx + 2}</span>
+                        <span>Page {idx + 3}</span>
                       </div>
                     </div>
                   </div>
                 </div>
               );
             }).concat(
-              // If we have a timeline but it didn't fit, render it on its own page
-              (hasTimeline && (scopePages.length === 0 || scopePages[scopePages.length - 1].split('').reduce((acc, char) => acc + (char === '\n' ? 120 : 1), 0) >= 2000)) ? [(
-                <div key="timeline-only" className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative" style={{ minHeight: '1100px' }}>
-                  <div className="p-12 md:p-16 flex-1 flex flex-col h-full">
+              // If timeline didn't fit on last scope page, render on its own page
+              (hasTimeline && timelineOverflows) ? [(
+                <div key="timeline-only" className="proposal-page w-[850px] max-w-full bg-white shadow-xl print:shadow-none print:w-full print:max-w-none relative flex flex-col" style={{ minHeight: '1100px', aspectRatio: '8.5/11' }}>
+                  <div className="p-12 md:p-16 flex-1 flex flex-col">
                     <div className="flex items-center gap-4 mb-8 flex-shrink-0">
                       <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Project Schedule</h2>
                       <div className="h-px bg-neutral-200 flex-1"></div>
@@ -1137,9 +1131,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                         const totalDays = maxEnd || 1;
 
                         return (
-                          <div className="flex-1 flex flex-col">
-
-                            {/* Header with Day Markers */}
+                          <div>
                             <div className="flex items-center text-[10px] text-neutral-400 mb-6 border-b border-neutral-100 pb-2">
                               <span className="w-32">PROJECT SCHEDULE</span>
                               <div className="flex-1 relative h-4">
@@ -1148,8 +1140,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                               </div>
                             </div>
 
-                            {/* Timeline Rows */}
-                            <div className="space-y-6 flex-1">
+                            <div className="space-y-6">
                               {[...validItems].sort((a, b) => (computedOffsets.get(a.id) || 0) - (computedOffsets.get(b.id) || 0)).map((item) => {
                                 const start = computedOffsets.get(item.id) || 0;
                                 const left = ((start - minStart) / timelineRange) * 100;
@@ -1157,12 +1148,10 @@ Our team is dedicated to delivering high-quality results that meet your specific
 
                                 return (
                                   <div key={item.id} className="border-b border-neutral-50 pb-3">
-                                    {/* Text above bar - thin font */}
                                     <div className="w-full flex justify-between items-center text-sm mb-1.5">
                                       <span className="font-light text-neutral-500 truncate pr-4">{item.description}</span>
                                       <span className="text-xs text-neutral-400 font-light flex-shrink-0 whitespace-nowrap">{item.estimated_days} Days</span>
                                     </div>
-                                    {/* Bar row */}
                                     <div className="relative h-10 w-full">
                                       <div className="absolute top-1/2 left-[128px] right-0 h-px bg-neutral-100 -translate-y-1/2"></div>
                                       <div className="absolute inset-0 w-full h-full">
@@ -1181,29 +1170,26 @@ Our team is dedicated to delivering high-quality results that meet your specific
                               })}
                             </div>
 
-                            <div className="flex justify-end pt-4 mt-2 pb-8 border-t border-neutral-100 bg-white">
+                            <div className="flex justify-end pt-4 mt-2 pb-2 border-t border-neutral-100">
                               <div className="text-sm font-bold text-neutral-900">Total Project Duration: {totalDays} Days</div>
                             </div>
-
-                            {/* Footer - Stick to bottom */}
-                            <div className="absolute bottom-0 left-0 right-0 px-12 py-8 border-t border-neutral-100/50 bg-white">
-                              <div className="flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase">
-                                <div className="flex items-center gap-4">
-                                  <span>{company?.company_name}</span>
-                                  <span className="text-neutral-300">|</span>
-                                  <span>{company?.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
-                                </div>
-                                <div className="flex gap-4">
-                                  <span>PROPOSAL #{quote?.quote_number || 'NEW'}</span>
-                                  <span className="text-neutral-300">•</span>
-                                  <span>PAGE {scopePages.length + 2}</span>
-                                </div>
-                              </div>
-                            </div>
-
                           </div>
                         );
                       })()}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="mt-auto pt-6 border-t border-neutral-100/50 flex justify-between items-center text-[10px] tracking-widest text-neutral-400 uppercase flex-shrink-0">
+                      <div className="flex items-center gap-4">
+                        <span>{company?.company_name}</span>
+                        <span className="text-neutral-300">|</span>
+                        <span>{company?.website?.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                      </div>
+                      <div className="flex gap-4">
+                        <span>Proposal #{quote?.quote_number}</span>
+                        <span className="text-neutral-300">•</span>
+                        <span>Page {rawScopePages.length + 3}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1288,7 +1274,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                   <div className="flex gap-4">
                     <span>Proposal #{quote?.quote_number}</span>
                     <span className="text-neutral-300">•</span>
-                    <span>Page {totalScopePages + 2}</span>
+                    <span>Page {totalScopePages + 3}</span>
                   </div>
                 </div>
               </div>
@@ -1384,7 +1370,7 @@ Our team is dedicated to delivering high-quality results that meet your specific
                   <div className="flex gap-4">
                     <span>Proposal #{quote?.quote_number}</span>
                     <span className="text-neutral-300">•</span>
-                    <span>Page {totalScopePages + 3}</span>
+                    <span>Page {totalScopePages + 4}</span>
                   </div>
                 </div>
               </div>

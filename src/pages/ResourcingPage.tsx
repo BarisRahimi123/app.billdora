@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search, Mail, Phone, Edit2, X, UserCheck, UserX, Clock, DollarSign, Activity, UsersRound, Shield, User, ChevronRight, Calendar, Briefcase, CheckCircle2, MoreVertical, Trash2, UserPlus, Send, ArrowLeft, LogOut, ListTodo, TrendingUp, Wallet } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { api, userManagementApi, UserProfile, Role, TimeEntry, Expense, Task } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
@@ -10,6 +11,16 @@ type TabType = 'activity' | 'tasks' | 'time' | 'performance' | 'personal' | 'com
 export default function ResourcingPage() {
   const navigate = useNavigate();
   const { profile, signOut, loading: authLoading } = useAuth();
+  const { isAdmin, canView, loading: permLoading } = usePermissions();
+
+  if (!permLoading && !isAdmin && !canView('team')) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to access team management. Contact your administrator.</p>
+      </div>
+    );
+  }
   const [staff, setStaff] = useState<UserProfile[]>([]);
   // CRITICAL: Start with loading=false to prevent spinner on iOS resume
   const [loading, setLoading] = useState(false);

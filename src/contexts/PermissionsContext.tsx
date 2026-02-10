@@ -14,6 +14,8 @@ export type Permissions = {
   time: ModulePermission;
   invoicing: ModulePermission;
   quotes: ModulePermission;
+  clients: ModulePermission;
+  team: ModulePermission;
   settings: ModulePermission;
   approvals: { view: boolean; approve: boolean };
   canViewFinancials: boolean;
@@ -24,6 +26,8 @@ const defaultPermissions: Permissions = {
   time: { view: false, create: false, edit: false, delete: false },
   invoicing: { view: false, create: false, edit: false, delete: false },
   quotes: { view: false, create: false, edit: false, delete: false },
+  clients: { view: false, create: false, edit: false, delete: false },
+  team: { view: false, create: false, edit: false, delete: false },
   settings: { view: false, create: false, edit: false, delete: false },
   approvals: { view: false, approve: false },
   canViewFinancials: false,
@@ -35,6 +39,8 @@ const adminPermissions: Permissions = {
   time: { view: true, create: true, edit: true, delete: true },
   invoicing: { view: true, create: true, edit: true, delete: true },
   quotes: { view: true, create: true, edit: true, delete: true },
+  clients: { view: true, create: true, edit: true, delete: true },
+  team: { view: true, create: true, edit: true, delete: true },
   settings: { view: true, create: true, edit: true, delete: true },
   approvals: { view: true, approve: true },
   canViewFinancials: true,

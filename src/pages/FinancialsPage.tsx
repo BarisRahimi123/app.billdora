@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { DollarSign, TrendingUp, TrendingDown, FileText, Calendar, AlertCircle, Users, Wallet, ArrowUpRight, ArrowDownRight, Plus, Upload, X, Check, Link2, Edit2, Trash2, Building2, CreditCard, RefreshCw, ChevronDown, ChevronRight, Search, Filter, Download, Printer, BarChart3, PieChart, ClipboardList, Landmark, Monitor, Megaphone, Briefcase, Shield, Plane, Phone, Car, MoreHorizontal, Eye, EyeOff } from 'lucide-react';
 import BankStatementsPage from './BankStatementsPage';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Invoice, Expense, companyExpensesApi, CompanyExpense } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
@@ -59,7 +60,17 @@ type FinancialTab = 'pnl' | 'bank' | 'transactions' | 'reports' | 'taxreports' |
 
 export default function FinancialsPage() {
   const { profile } = useAuth();
+  const { isAdmin, canViewFinancials, loading: permLoading } = usePermissions();
   const [searchParams] = useSearchParams();
+
+  if (!isAdmin && !canViewFinancials) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view financial data. Contact your administrator.</p>
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(true);
   const initialTab = (searchParams.get('tab') as FinancialTab) || 'pnl';
   const [activeTab, setActiveTab] = useState<FinancialTab>(initialTab);
@@ -109,21 +120,17 @@ export default function FinancialsPage() {
       // Get payroll data from profiles
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('salary, salary_type')
+        .select('annual_salary, hourly_pay_rate, salary_type')
         .eq('company_id', profile.company_id)
         .eq('is_active', true);
 
       let monthlyPayroll = 0;
       if (profiles) {
-        profiles.forEach(p => {
-          if (p.salary) {
-            if (p.salary_type === 'hourly') {
-              monthlyPayroll += p.salary * 160;
-            } else if (p.salary_type === 'annual') {
-              monthlyPayroll += p.salary / 12;
-            } else {
-              monthlyPayroll += p.salary;
-            }
+        profiles.forEach((p: any) => {
+          if (p.salary_type === 'hourly' && p.hourly_pay_rate) {
+            monthlyPayroll += p.hourly_pay_rate * 160; // ~160 hours/month
+          } else if (p.annual_salary) {
+            monthlyPayroll += p.annual_salary / 12;
           }
         });
         setPayrollData({ totalMonthly: monthlyPayroll, employeeCount: profiles.length });
@@ -378,6 +385,7 @@ export default function FinancialsPage() {
           expenses={expenses}
           companyExpenses={companyExpenses}
           payrollData={payrollData}
+          bankAccounts={bankAccounts}
           formatCurrency={formatCurrency}
         />
       )}
@@ -1527,141 +1535,174 @@ function ReportsTab({ monthlyData, invoices, expenses, companyExpenses, payrollD
 }
 
 
+// IRS Schedule C category mapping for expense classification
+const IRS_CATEGORY_MAP: Record<string, string> = {
+  'software': 'Office Expense', 'office': 'Office Expense', 'marketing': 'Advertising',
+  'professional': 'Legal & Professional Services', 'insurance': 'Insurance',
+  'travel': 'Travel', 'payroll': 'Wages & Salaries', 'banking': 'Other Expenses',
+  'equipment': 'Depreciation / Equipment', 'telecom': 'Utilities',
+  'vehicles': 'Car & Truck Expenses', 'other': 'Other Expenses',
+  'meals': 'Meals (50% deductible)', 'rent': 'Rent or Lease', 'supplies': 'Supplies',
+  'repairs': 'Repairs & Maintenance', 'taxes': 'Taxes & Licenses',
+  'education': 'Education & Training', 'Uncategorized': 'Other Expenses', 'Overhead': 'Other Expenses',
+};
+const IRS_LINE_ORDER = [
+  'Advertising', 'Car & Truck Expenses', 'Insurance', 'Legal & Professional Services',
+  'Office Expense', 'Rent or Lease', 'Repairs & Maintenance', 'Supplies', 'Taxes & Licenses',
+  'Travel', 'Meals (50% deductible)', 'Utilities', 'Wages & Salaries',
+  'Depreciation / Equipment', 'Education & Training', 'Other Expenses',
+];
+
 // Tax Reports Tab - CPA-Ready Tax Reports
-function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, formatCurrency }: {
+function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, bankAccounts, formatCurrency }: {
   invoices: Invoice[];
   expenses: Expense[];
   companyExpenses: any[];
   payrollData: PayrollData;
+  bankAccounts: { id: string; balance: number; account_name: string; account_type: string }[];
   formatCurrency: (n: number) => string;
 }) {
   const currentYear = new Date().getFullYear();
   const [selectedPeriod, setSelectedPeriod] = useState<'Q1' | 'Q2' | 'Q3' | 'Q4' | 'Annual'>('Annual');
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [activeReport, setActiveReport] = useState<'pnl' | 'income' | 'expense' | 'receivables'>('pnl');
+  const [activeReport, setActiveReport] = useState<'pnl' | 'income' | 'expense_irs' | 'ar_aging' | 'balance_sheet' | 'receivables'>('pnl');
 
-  // Calculate date range based on period selection
   const getDateRange = () => {
     const year = selectedYear;
-    if (selectedPeriod === 'Annual') {
-      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31, 23, 59, 59) };
-    }
-    const quarterMap: Record<string, { startMonth: number; endMonth: number }> = {
-      Q1: { startMonth: 0, endMonth: 2 },
-      Q2: { startMonth: 3, endMonth: 5 },
-      Q3: { startMonth: 6, endMonth: 8 },
-      Q4: { startMonth: 9, endMonth: 11 }
-    };
-    const q = quarterMap[selectedPeriod];
-    return {
-      start: new Date(year, q.startMonth, 1),
-      end: new Date(year, q.endMonth + 1, 0, 23, 59, 59)
-    };
+    if (selectedPeriod === 'Annual') return { start: new Date(year, 0, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+    const qm: Record<string, [number, number]> = { Q1: [0, 2], Q2: [3, 5], Q3: [6, 8], Q4: [9, 11] };
+    const [s, e] = qm[selectedPeriod];
+    return { start: new Date(year, s, 1), end: new Date(year, e + 1, 0, 23, 59, 59) };
   };
-
   const { start, end } = getDateRange();
 
-  // Filter data by period
-  const periodInvoices = invoices.filter(inv => {
-    const d = new Date(inv.created_at || '');
-    return d >= start && d <= end;
-  });
+  const periodInvoices = invoices.filter(inv => { const d = new Date(inv.created_at || ''); return d >= start && d <= end; });
+  const periodExpenses = expenses.filter(exp => { const d = new Date(exp.date); return d >= start && d <= end; });
+  const periodCompanyExpenses = companyExpenses.filter((exp: any) => { const d = new Date(exp.date); return d >= start && d <= end; });
 
-  const periodExpenses = expenses.filter(exp => {
-    const d = new Date(exp.date);
-    return d >= start && d <= end;
-  });
-
-  const periodCompanyExpenses = companyExpenses.filter((exp: any) => {
-    const d = new Date(exp.date);
-    return d >= start && d <= end;
-  });
-
-  // Calculate P&L
+  // Enhanced P&L with COGS / Gross Profit
   const pnlData = useMemo(() => {
     const revenue = periodInvoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-    const projectExp = periodExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
-    const compExp = periodCompanyExpenses.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
+    const projectExp = periodExpenses.filter(exp => exp.billable).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+    const nonBillableExp = periodExpenses.filter(exp => !exp.billable).reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
     const months = selectedPeriod === 'Annual' ? 12 : 3;
     const payroll = payrollData.totalMonthly * months;
-    const totalExpenses = projectExp + compExp + payroll;
-    return { revenue, projectExp, compExp, payroll, totalExpenses, netProfit: revenue - totalExpenses };
+    const cogs = projectExp + payroll; // Direct costs
+    const grossProfit = revenue - cogs;
+    const compExp = periodCompanyExpenses.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
+    const operatingExp = compExp + nonBillableExp;
+    const netProfit = grossProfit - operatingExp;
+    return { revenue, cogs, projectExp, payroll, grossProfit, operatingExp, compExp, nonBillableExp, netProfit, totalExpenses: cogs + operatingExp };
   }, [periodInvoices, periodExpenses, periodCompanyExpenses, payrollData, selectedPeriod]);
 
-  // Income by client/project
+  // Income by client
   const incomeByClient = useMemo(() => {
     const byClient: Record<string, { name: string; total: number; count: number }> = {};
     periodInvoices.filter(inv => inv.status === 'paid').forEach(inv => {
-      const clientId = inv.client_id || 'unknown';
-      const clientName = (inv as any).client?.name || (inv as any).client_name || 'Unknown Client';
-      if (!byClient[clientId]) {
-        byClient[clientId] = { name: clientName, total: 0, count: 0 };
-      }
-      byClient[clientId].total += Number(inv.total || 0);
-      byClient[clientId].count += 1;
+      const cid = inv.client_id || 'unknown';
+      const cn = (inv as any).client?.name || (inv as any).client_name || 'Unknown Client';
+      if (!byClient[cid]) byClient[cid] = { name: cn, total: 0, count: 0 };
+      byClient[cid].total += Number(inv.total || 0);
+      byClient[cid].count += 1;
     });
     return Object.values(byClient).sort((a, b) => b.total - a.total);
   }, [periodInvoices]);
 
-  // Expense by category
-  const expenseByCategory = useMemo(() => {
-    const byCategory: Record<string, number> = {};
+  // Expense by IRS Schedule C category
+  const expenseByIRS = useMemo(() => {
+    const byIRS: Record<string, number> = {};
     periodExpenses.forEach(exp => {
-      const cat = exp.category || 'Uncategorized';
-      byCategory[cat] = (byCategory[cat] || 0) + Number(exp.amount || 0);
+      const irsCategory = IRS_CATEGORY_MAP[exp.category || 'Uncategorized'] || 'Other Expenses';
+      byIRS[irsCategory] = (byIRS[irsCategory] || 0) + Number(exp.amount || 0);
     });
     periodCompanyExpenses.forEach((exp: any) => {
-      const cat = exp.category || 'Overhead';
-      byCategory[cat] = (byCategory[cat] || 0) + Number(exp.amount || 0);
+      const irsCategory = IRS_CATEGORY_MAP[exp.category || 'Overhead'] || 'Other Expenses';
+      byIRS[irsCategory] = (byIRS[irsCategory] || 0) + Number(exp.amount || 0);
     });
     const months = selectedPeriod === 'Annual' ? 12 : 3;
-    if (payrollData.totalMonthly > 0) {
-      byCategory['Labor/Payroll'] = payrollData.totalMonthly * months;
-    }
-    return Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+    if (payrollData.totalMonthly > 0) byIRS['Wages & Salaries'] = (byIRS['Wages & Salaries'] || 0) + payrollData.totalMonthly * months;
+    return IRS_LINE_ORDER.filter(cat => byIRS[cat]).map(cat => [cat, byIRS[cat]] as [string, number]);
   }, [periodExpenses, periodCompanyExpenses, payrollData, selectedPeriod]);
 
-  // Outstanding receivables
-  const outstandingReceivables = useMemo(() => {
-    return periodInvoices
-      .filter(inv => inv.status === 'sent' || inv.status === 'overdue')
-      .sort((a, b) => new Date(a.due_date || '').getTime() - new Date(b.due_date || '').getTime());
-  }, [periodInvoices]);
+  // AR Aging buckets
+  const arAging = useMemo(() => {
+    const now = new Date();
+    const outstanding = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue');
+    const buckets: Record<string, { current: number; days31: number; days61: number; days91: number; total: number; count: number }> = {};
+    outstanding.forEach(inv => {
+      const cn = (inv as any).client?.name || (inv as any).client_name || 'Unknown';
+      if (!buckets[cn]) buckets[cn] = { current: 0, days31: 0, days61: 0, days91: 0, total: 0, count: 0 };
+      const dueDate = inv.due_date ? new Date(inv.due_date) : new Date(inv.created_at || '');
+      const daysOld = Math.max(0, Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const amt = Number(inv.total || 0);
+      buckets[cn].total += amt;
+      buckets[cn].count += 1;
+      if (daysOld <= 30) buckets[cn].current += amt;
+      else if (daysOld <= 60) buckets[cn].days31 += amt;
+      else if (daysOld <= 90) buckets[cn].days61 += amt;
+      else buckets[cn].days91 += amt;
+    });
+    return Object.entries(buckets).sort((a, b) => b[1].total - a[1].total);
+  }, [invoices]);
+  const arTotals = useMemo(() => arAging.reduce((t, [, b]) => ({
+    current: t.current + b.current, days31: t.days31 + b.days31,
+    days61: t.days61 + b.days61, days91: t.days91 + b.days91, total: t.total + b.total
+  }), { current: 0, days31: 0, days61: 0, days91: 0, total: 0 }), [arAging]);
 
+  // Balance Sheet
+  const balanceSheet = useMemo(() => {
+    const cashOnHand = bankAccounts.reduce((s, a) => s + (a.balance || 0), 0);
+    const ar = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue').reduce((s, inv) => s + Number(inv.total || 0), 0);
+    const retainersHeld = invoices.filter(inv => (inv as any).retainer_amount_paid > 0).reduce((s, inv) => s + Number((inv as any).retainer_amount_paid || 0), 0);
+    const totalAssets = cashOnHand + ar;
+    const totalLiabilities = retainersHeld; // Deferred revenue
+    const equity = totalAssets - totalLiabilities;
+    return { cashOnHand, ar, totalAssets, retainersHeld, totalLiabilities, equity };
+  }, [bankAccounts, invoices]);
+
+  // Outstanding receivables (existing)
+  const outstandingReceivables = useMemo(() => periodInvoices
+    .filter(inv => inv.status === 'sent' || inv.status === 'overdue')
+    .sort((a, b) => new Date(a.due_date || '').getTime() - new Date(b.due_date || '').getTime()), [periodInvoices]);
   const totalOutstanding = outstandingReceivables.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
 
   const periodLabel = selectedPeriod === 'Annual' ? `${selectedYear}` : `${selectedPeriod} ${selectedYear}`;
 
-  // Export to CSV
+  // Universal CSV export
   const exportCSV = (type: string) => {
     let csv = '';
-    const dateStr = new Date().toISOString().split('T')[0];
-
+    const d = new Date().toISOString().split('T')[0];
     if (type === 'pnl') {
-      csv = `Profit & Loss Statement - ${periodLabel}\nGenerated: ${dateStr}\n\nCategory,Amount\n`;
-      csv += `Revenue,${pnlData.revenue}\n`;
-      csv += `Project Expenses,${pnlData.projectExp}\n`;
-      csv += `Company Expenses,${pnlData.compExp}\n`;
-      csv += `Payroll,${pnlData.payroll}\n`;
-      csv += `Total Expenses,${pnlData.totalExpenses}\n`;
-      csv += `Net Profit,${pnlData.netProfit}\n`;
+      csv = `Profit & Loss Statement - ${periodLabel}\nGenerated: ${d}\n\nCategory,Amount\n`;
+      csv += `Revenue (Gross Receipts),${pnlData.revenue}\nCost of Goods Sold,${pnlData.cogs}\n`;
+      csv += `  Direct Project Costs,${pnlData.projectExp}\n  Labor/Payroll,${pnlData.payroll}\n`;
+      csv += `Gross Profit,${pnlData.grossProfit}\nOperating Expenses,${pnlData.operatingExp}\n`;
+      csv += `  Company/Overhead,${pnlData.compExp}\n  Non-Billable Expenses,${pnlData.nonBillableExp}\n`;
+      csv += `Net Ordinary Income,${pnlData.netProfit}\n`;
     } else if (type === 'income') {
-      csv = `Income Summary - ${periodLabel}\nGenerated: ${dateStr}\n\nClient,Invoices,Total\n`;
-      incomeByClient.forEach(c => {
-        csv += `"${c.name}",${c.count},${c.total}\n`;
-      });
-    } else if (type === 'expense') {
-      csv = `Expense Summary - ${periodLabel}\nGenerated: ${dateStr}\n\nCategory,Amount\n`;
-      expenseByCategory.forEach(([cat, amt]) => {
-        csv += `"${cat}",${amt}\n`;
-      });
+      csv = `Revenue by Client - ${periodLabel}\nGenerated: ${d}\n\nClient,Invoices,Total\n`;
+      incomeByClient.forEach(c => csv += `"${c.name}",${c.count},${c.total}\n`);
+      csv += `\nTotal,${incomeByClient.reduce((s, c) => s + c.count, 0)},${incomeByClient.reduce((s, c) => s + c.total, 0)}\n`;
+    } else if (type === 'expense_irs') {
+      csv = `Expense Summary (Schedule C) - ${periodLabel}\nGenerated: ${d}\n\nIRS Category,Amount\n`;
+      expenseByIRS.forEach(([cat, amt]) => csv += `"${cat}",${amt}\n`);
+      csv += `\nTotal,${expenseByIRS.reduce((s, [, a]) => s + a, 0)}\n`;
+    } else if (type === 'ar_aging') {
+      csv = `Accounts Receivable Aging\nGenerated: ${d}\n\nClient,Current (0-30),31-60 Days,61-90 Days,90+ Days,Total\n`;
+      arAging.forEach(([cn, b]) => csv += `"${cn}",${b.current},${b.days31},${b.days61},${b.days91},${b.total}\n`);
+      csv += `\nTotal,${arTotals.current},${arTotals.days31},${arTotals.days61},${arTotals.days91},${arTotals.total}\n`;
+    } else if (type === 'balance_sheet') {
+      csv = `Balance Sheet\nGenerated: ${d}\n\nItem,Amount\n`;
+      csv += `ASSETS\nCash & Bank Accounts,${balanceSheet.cashOnHand}\nAccounts Receivable,${balanceSheet.ar}\n`;
+      csv += `Total Assets,${balanceSheet.totalAssets}\n\nLIABILITIES\nDeferred Revenue (Retainers),${balanceSheet.retainersHeld}\n`;
+      csv += `Total Liabilities,${balanceSheet.totalLiabilities}\n\nEQUITY\nNet Assets,${balanceSheet.equity}\n`;
     } else if (type === 'receivables') {
-      csv = `Outstanding Receivables - ${periodLabel}\nGenerated: ${dateStr}\n\nInvoice #,Due Date,Amount,Status\n`;
+      csv = `Outstanding Receivables - ${periodLabel}\nGenerated: ${d}\n\nInvoice #,Client,Due Date,Amount,Status\n`;
       outstandingReceivables.forEach(inv => {
-        csv += `${inv.invoice_number || '-'},${inv.due_date || '-'},${inv.total},${inv.status}\n`;
+        const cn = (inv as any).client?.name || (inv as any).client_name || '-';
+        csv += `${inv.invoice_number || '-'},"${cn}",${inv.due_date || '-'},${inv.total},${inv.status}\n`;
       });
     }
-
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1671,176 +1712,145 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
     URL.revokeObjectURL(url);
   };
 
-  // Export to PDF (opens print dialog)
+  // Universal PDF export
   const exportPDF = (type: string) => {
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const styles = `<style>
+      body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;max-width:900px;margin:0 auto;color:#333}
+      .header{text-align:center;margin-bottom:30px;border-bottom:2px solid #476E66;padding-bottom:20px}
+      h1{margin:0;color:#476E66;font-size:22px} h2{color:#476E66;font-size:16px;margin:24px 0 12px;border-bottom:1px solid #e5e5e5;padding-bottom:6px}
+      .subtitle{color:#666;margin-top:6px;font-size:13px}
+      .period-badge{display:inline-block;padding:5px 14px;background:#476E66;color:white;border-radius:20px;font-size:11px;font-weight:600;margin-top:10px}
+      table{width:100%;border-collapse:collapse;margin:16px 0}
+      th,td{padding:10px 14px;text-align:left;border-bottom:1px solid #e5e5e5;font-size:13px}
+      th{background:#f9fafb;font-weight:600;color:#374151;text-transform:uppercase;font-size:10px;letter-spacing:.5px}
+      .amount{text-align:right;font-family:'Courier New',monospace} .positive{color:#059669} .negative{color:#dc2626}
+      .total-row{background:#f3f4f6;font-weight:bold} .total-row td{border-top:2px solid #d1d5db}
+      .section-row td{font-weight:600;background:#f0fdf4;color:#166534;font-size:12px}
+      .indent td:first-child{padding-left:32px;color:#555}
+      .summary-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:20px 0}
+      .summary-item{padding:16px;background:#f9fafb;border-radius:8px;text-align:center}
+      .summary-label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}
+      .summary-value{font-size:20px;font-weight:bold;margin-top:6px}
+      .footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e5e5;text-align:center;color:#999;font-size:10px}
+      .cpa-notice{background:#fef3cd;border:1px solid #ffc107;padding:10px 14px;border-radius:8px;margin:16px 0;font-size:11px;color:#856404}
+      @media print{body{padding:20px} .cpa-notice{break-inside:avoid}}
+    </style>`;
+    const hdr = (title: string, sub: string) => `<div class="header"><h1>${title}</h1><p class="subtitle">${sub}</p><span class="period-badge">${periodLabel}</span></div><div class="cpa-notice">This report is generated for tax preparation purposes. Please review with your CPA.</div>`;
+    const ftr = `<div class="footer">Generated by Billdora | ${dateStr}</div>`;
     let content = '';
 
-    const styles = `
-      <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; color: #333; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #476E66; padding-bottom: 20px; }
-        h1 { margin: 0; color: #476E66; font-size: 24px; }
-        .subtitle { color: #666; margin-top: 8px; font-size: 14px; }
-        .period-badge { display: inline-block; padding: 6px 16px; background: #476E66; color: white; border-radius: 20px; font-size: 12px; font-weight: 600; margin-top: 12px; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e5e5e5; }
-        th { background: #f9fafb; font-weight: 600; color: #374151; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-        .amount { text-align: right; font-family: 'Courier New', monospace; }
-        .positive { color: #059669; }
-        .negative { color: #dc2626; }
-        .total-row { background: #f3f4f6; font-weight: bold; }
-        .total-row td { border-top: 2px solid #d1d5db; }
-        .summary-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0; }
-        .summary-item { padding: 20px; background: #f9fafb; border-radius: 8px; text-align: center; }
-        .summary-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-        .summary-value { font-size: 24px; font-weight: bold; margin-top: 8px; }
-        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center; color: #999; font-size: 11px; }
-        .cpa-notice { background: #fef3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 8px; margin: 20px 0; font-size: 12px; color: #856404; }
-        @media print { body { padding: 20px; } .cpa-notice { break-inside: avoid; } }
-      </style>
-    `;
-
     if (type === 'pnl') {
-      content = `<!DOCTYPE html><html><head><title>P&L Statement - ${periodLabel}</title>${styles}</head><body>
-        <div class="header">
-          <h1>PROFIT & LOSS STATEMENT</h1>
-          <p class="subtitle">Tax Report</p>
-          <span class="period-badge">${periodLabel}</span>
-        </div>
-        <div class="cpa-notice">This report is generated for tax preparation purposes. Please review with your CPA.</div>
+      content = `<!DOCTYPE html><html><head><title>P&L - ${periodLabel}</title>${styles}</head><body>${hdr('PROFIT & LOSS STATEMENT', 'Enhanced CPA Report')}
         <div class="summary-box">
-          <div class="summary-item"><div class="summary-label">Total Revenue</div><div class="summary-value positive">${formatCurrency(pnlData.revenue)}</div></div>
-          <div class="summary-item"><div class="summary-label">Total Expenses</div><div class="summary-value negative">${formatCurrency(pnlData.totalExpenses)}</div></div>
-          <div class="summary-item"><div class="summary-label">Net Profit</div><div class="summary-value ${pnlData.netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(pnlData.netProfit)}</div></div>
+          <div class="summary-item"><div class="summary-label">Revenue</div><div class="summary-value positive">${formatCurrency(pnlData.revenue)}</div></div>
+          <div class="summary-item"><div class="summary-label">Gross Profit</div><div class="summary-value" style="color:#476E66">${formatCurrency(pnlData.grossProfit)}</div></div>
+          <div class="summary-item"><div class="summary-label">Net Income</div><div class="summary-value ${pnlData.netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(pnlData.netProfit)}</div></div>
         </div>
-        <table>
-          <thead><tr><th>Category</th><th class="amount">Amount</th></tr></thead>
-          <tbody>
-            <tr><td>Revenue (Paid Invoices)</td><td class="amount positive">${formatCurrency(pnlData.revenue)}</td></tr>
-            <tr><td>Project Expenses</td><td class="amount negative">${formatCurrency(pnlData.projectExp)}</td></tr>
-            <tr><td>Company/Overhead Expenses</td><td class="amount negative">${formatCurrency(pnlData.compExp)}</td></tr>
-            <tr><td>Payroll</td><td class="amount negative">${formatCurrency(pnlData.payroll)}</td></tr>
-            <tr class="total-row"><td>Total Expenses</td><td class="amount negative">${formatCurrency(pnlData.totalExpenses)}</td></tr>
-            <tr class="total-row"><td>Net Profit</td><td class="amount ${pnlData.netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(pnlData.netProfit)}</td></tr>
-          </tbody>
-        </table>
-        <div class="footer">Generated by Billdora | ${dateStr}</div>
-      </body></html>`;
+        <table><thead><tr><th>Category</th><th class="amount">Amount</th></tr></thead><tbody>
+          <tr class="section-row"><td>REVENUE</td><td></td></tr>
+          <tr class="indent"><td>Gross Receipts (Paid Invoices)</td><td class="amount positive">${formatCurrency(pnlData.revenue)}</td></tr>
+          <tr class="section-row"><td>COST OF GOODS SOLD</td><td></td></tr>
+          <tr class="indent"><td>Direct Project Costs (Billable)</td><td class="amount negative">${formatCurrency(pnlData.projectExp)}</td></tr>
+          <tr class="indent"><td>Direct Labor / Payroll</td><td class="amount negative">${formatCurrency(pnlData.payroll)}</td></tr>
+          <tr class="total-row"><td>Total COGS</td><td class="amount negative">${formatCurrency(pnlData.cogs)}</td></tr>
+          <tr class="total-row" style="background:#e8f5e9"><td>GROSS PROFIT</td><td class="amount" style="color:#476E66">${formatCurrency(pnlData.grossProfit)}</td></tr>
+          <tr class="section-row"><td>OPERATING EXPENSES</td><td></td></tr>
+          <tr class="indent"><td>Company / Overhead</td><td class="amount negative">${formatCurrency(pnlData.compExp)}</td></tr>
+          <tr class="indent"><td>Non-Billable Project Expenses</td><td class="amount negative">${formatCurrency(pnlData.nonBillableExp)}</td></tr>
+          <tr class="total-row"><td>Total Operating Expenses</td><td class="amount negative">${formatCurrency(pnlData.operatingExp)}</td></tr>
+          <tr class="total-row" style="background:#e8f5e9"><td>NET ORDINARY INCOME</td><td class="amount ${pnlData.netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(pnlData.netProfit)}</td></tr>
+        </tbody></table>${ftr}</body></html>`;
     } else if (type === 'income') {
-      const totalIncome = incomeByClient.reduce((sum, c) => sum + c.total, 0);
-      content = `<!DOCTYPE html><html><head><title>Income Summary - ${periodLabel}</title>${styles}</head><body>
-        <div class="header">
-          <h1>INCOME SUMMARY</h1>
-          <p class="subtitle">Breakdown by Client/Project</p>
-          <span class="period-badge">${periodLabel}</span>
-        </div>
-        <div class="cpa-notice">This report is generated for tax preparation purposes. Please review with your CPA.</div>
-        <div class="summary-box">
-          <div class="summary-item"><div class="summary-label">Total Income</div><div class="summary-value positive">${formatCurrency(totalIncome)}</div></div>
-          <div class="summary-item"><div class="summary-label">Clients</div><div class="summary-value">${incomeByClient.length}</div></div>
-          <div class="summary-item"><div class="summary-label">Invoices</div><div class="summary-value">${incomeByClient.reduce((s, c) => s + c.count, 0)}</div></div>
-        </div>
-        <table>
-          <thead><tr><th>Client</th><th class="amount">Invoices</th><th class="amount">Total</th></tr></thead>
-          <tbody>
-            ${incomeByClient.map(c => `<tr><td>${c.name}</td><td class="amount">${c.count}</td><td class="amount positive">${formatCurrency(c.total)}</td></tr>`).join('')}
-            <tr class="total-row"><td>Total</td><td class="amount">${incomeByClient.reduce((s, c) => s + c.count, 0)}</td><td class="amount positive">${formatCurrency(totalIncome)}</td></tr>
-          </tbody>
-        </table>
-        <div class="footer">Generated by Billdora | ${dateStr}</div>
-      </body></html>`;
-    } else if (type === 'expense') {
-      const totalExp = expenseByCategory.reduce((sum, [, amt]) => sum + amt, 0);
-      content = `<!DOCTYPE html><html><head><title>Expense Summary - ${periodLabel}</title>${styles}</head><body>
-        <div class="header">
-          <h1>EXPENSE SUMMARY</h1>
-          <p class="subtitle">Breakdown by Category</p>
-          <span class="period-badge">${periodLabel}</span>
-        </div>
-        <div class="cpa-notice">This report is generated for tax preparation purposes. Please review with your CPA.</div>
-        <div class="summary-box">
-          <div class="summary-item"><div class="summary-label">Total Expenses</div><div class="summary-value negative">${formatCurrency(totalExp)}</div></div>
-          <div class="summary-item"><div class="summary-label">Categories</div><div class="summary-value">${expenseByCategory.length}</div></div>
-          <div class="summary-item"><div class="summary-label">Largest Category</div><div class="summary-value" style="font-size:14px">${expenseByCategory[0]?.[0] || 'N/A'}</div></div>
-        </div>
-        <table>
-          <thead><tr><th>Category</th><th class="amount">Amount</th><th class="amount">% of Total</th></tr></thead>
-          <tbody>
-            ${expenseByCategory.map(([cat, amt]) => `<tr><td>${cat}</td><td class="amount negative">${formatCurrency(amt)}</td><td class="amount">${((amt / totalExp) * 100).toFixed(1)}%</td></tr>`).join('')}
-            <tr class="total-row"><td>Total</td><td class="amount negative">${formatCurrency(totalExp)}</td><td class="amount">100%</td></tr>
-          </tbody>
-        </table>
-        <div class="footer">Generated by Billdora | ${dateStr}</div>
-      </body></html>`;
+      const tot = incomeByClient.reduce((s, c) => s + c.total, 0);
+      content = `<!DOCTYPE html><html><head><title>Revenue by Client - ${periodLabel}</title>${styles}</head><body>${hdr('REVENUE BY CLIENT', 'Annual Income Summary')}
+        <div class="summary-box"><div class="summary-item"><div class="summary-label">Total Revenue</div><div class="summary-value positive">${formatCurrency(tot)}</div></div>
+        <div class="summary-item"><div class="summary-label">Clients</div><div class="summary-value">${incomeByClient.length}</div></div>
+        <div class="summary-item"><div class="summary-label">Invoices Paid</div><div class="summary-value">${incomeByClient.reduce((s, c) => s + c.count, 0)}</div></div></div>
+        <table><thead><tr><th>Client</th><th class="amount">Invoices</th><th class="amount">Total Revenue</th><th class="amount">% of Total</th></tr></thead><tbody>
+        ${incomeByClient.map(c => `<tr><td>${c.name}</td><td class="amount">${c.count}</td><td class="amount positive">${formatCurrency(c.total)}</td><td class="amount">${((c.total / tot) * 100).toFixed(1)}%</td></tr>`).join('')}
+        <tr class="total-row"><td>Total</td><td class="amount">${incomeByClient.reduce((s, c) => s + c.count, 0)}</td><td class="amount positive">${formatCurrency(tot)}</td><td class="amount">100%</td></tr>
+        </tbody></table>${ftr}</body></html>`;
+    } else if (type === 'expense_irs') {
+      const tot = expenseByIRS.reduce((s, [, a]) => s + a, 0);
+      content = `<!DOCTYPE html><html><head><title>Schedule C Expenses - ${periodLabel}</title>${styles}</head><body>${hdr('EXPENSE SUMMARY', 'IRS Schedule C Categories')}
+        <div class="summary-box"><div class="summary-item"><div class="summary-label">Total Deductions</div><div class="summary-value negative">${formatCurrency(tot)}</div></div>
+        <div class="summary-item"><div class="summary-label">Categories</div><div class="summary-value">${expenseByIRS.length}</div></div></div>
+        <table><thead><tr><th>Schedule C Line</th><th class="amount">Amount</th><th class="amount">%</th></tr></thead><tbody>
+        ${expenseByIRS.map(([cat, amt]) => `<tr><td>${cat}</td><td class="amount negative">${formatCurrency(amt)}</td><td class="amount">${((amt / tot) * 100).toFixed(1)}%</td></tr>`).join('')}
+        <tr class="total-row"><td>Total Deductions</td><td class="amount negative">${formatCurrency(tot)}</td><td class="amount">100%</td></tr>
+        </tbody></table>${ftr}</body></html>`;
+    } else if (type === 'ar_aging') {
+      content = `<!DOCTYPE html><html><head><title>AR Aging Report</title>${styles}</head><body>${hdr('ACCOUNTS RECEIVABLE AGING', 'Outstanding Invoice Analysis')}
+        <div class="summary-box"><div class="summary-item"><div class="summary-label">Total AR</div><div class="summary-value" style="color:#d97706">${formatCurrency(arTotals.total)}</div></div>
+        <div class="summary-item"><div class="summary-label">Current (0-30)</div><div class="summary-value positive">${formatCurrency(arTotals.current)}</div></div>
+        <div class="summary-item"><div class="summary-label">Past Due (31+)</div><div class="summary-value negative">${formatCurrency(arTotals.days31 + arTotals.days61 + arTotals.days91)}</div></div></div>
+        <table><thead><tr><th>Client</th><th class="amount">Current</th><th class="amount">31-60</th><th class="amount">61-90</th><th class="amount">90+</th><th class="amount">Total</th></tr></thead><tbody>
+        ${arAging.map(([cn, b]) => `<tr><td>${cn}</td><td class="amount">${formatCurrency(b.current)}</td><td class="amount">${b.days31 ? `<span class="negative">${formatCurrency(b.days31)}</span>` : '-'}</td><td class="amount">${b.days61 ? `<span class="negative">${formatCurrency(b.days61)}</span>` : '-'}</td><td class="amount">${b.days91 ? `<span class="negative">${formatCurrency(b.days91)}</span>` : '-'}</td><td class="amount" style="font-weight:600">${formatCurrency(b.total)}</td></tr>`).join('')}
+        <tr class="total-row"><td>Total</td><td class="amount">${formatCurrency(arTotals.current)}</td><td class="amount">${formatCurrency(arTotals.days31)}</td><td class="amount">${formatCurrency(arTotals.days61)}</td><td class="amount">${formatCurrency(arTotals.days91)}</td><td class="amount">${formatCurrency(arTotals.total)}</td></tr>
+        </tbody></table>${ftr}</body></html>`;
+    } else if (type === 'balance_sheet') {
+      content = `<!DOCTYPE html><html><head><title>Balance Sheet</title>${styles}</head><body>${hdr('BALANCE SHEET', 'Financial Position')}
+        <div class="summary-box"><div class="summary-item"><div class="summary-label">Total Assets</div><div class="summary-value positive">${formatCurrency(balanceSheet.totalAssets)}</div></div>
+        <div class="summary-item"><div class="summary-label">Total Liabilities</div><div class="summary-value negative">${formatCurrency(balanceSheet.totalLiabilities)}</div></div>
+        <div class="summary-item"><div class="summary-label">Net Equity</div><div class="summary-value" style="color:#476E66">${formatCurrency(balanceSheet.equity)}</div></div></div>
+        <table><thead><tr><th>Account</th><th class="amount">Amount</th></tr></thead><tbody>
+        <tr class="section-row"><td>ASSETS</td><td></td></tr>
+        <tr class="indent"><td>Cash & Bank Accounts</td><td class="amount positive">${formatCurrency(balanceSheet.cashOnHand)}</td></tr>
+        <tr class="indent"><td>Accounts Receivable</td><td class="amount positive">${formatCurrency(balanceSheet.ar)}</td></tr>
+        <tr class="total-row"><td>Total Assets</td><td class="amount positive">${formatCurrency(balanceSheet.totalAssets)}</td></tr>
+        <tr class="section-row"><td>LIABILITIES</td><td></td></tr>
+        <tr class="indent"><td>Deferred Revenue (Retainers Held)</td><td class="amount negative">${formatCurrency(balanceSheet.retainersHeld)}</td></tr>
+        <tr class="total-row"><td>Total Liabilities</td><td class="amount negative">${formatCurrency(balanceSheet.totalLiabilities)}</td></tr>
+        <tr class="section-row"><td>EQUITY</td><td></td></tr>
+        <tr class="total-row" style="background:#e8f5e9"><td>Net Assets (Owner's Equity)</td><td class="amount" style="color:#476E66">${formatCurrency(balanceSheet.equity)}</td></tr>
+        </tbody></table>${ftr}</body></html>`;
     } else if (type === 'receivables') {
-      content = `<!DOCTYPE html><html><head><title>Outstanding Receivables - ${periodLabel}</title>${styles}</head><body>
-        <div class="header">
-          <h1>OUTSTANDING RECEIVABLES</h1>
-          <p class="subtitle">Unpaid Invoices</p>
-          <span class="period-badge">${periodLabel}</span>
-        </div>
-        <div class="cpa-notice">This report is generated for tax preparation purposes. Please review with your CPA.</div>
-        <div class="summary-box">
-          <div class="summary-item"><div class="summary-label">Total Outstanding</div><div class="summary-value" style="color:#d97706">${formatCurrency(totalOutstanding)}</div></div>
-          <div class="summary-item"><div class="summary-label">Invoices</div><div class="summary-value">${outstandingReceivables.length}</div></div>
-          <div class="summary-item"><div class="summary-label">Overdue</div><div class="summary-value negative">${outstandingReceivables.filter(inv => inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date())).length}</div></div>
-        </div>
-        <table>
-          <thead><tr><th>Invoice #</th><th>Due Date</th><th>Status</th><th class="amount">Amount</th></tr></thead>
-          <tbody>
-            ${outstandingReceivables.length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#999;padding:24px">No outstanding receivables</td></tr>' : outstandingReceivables.map(inv => {
-        const isOverdue = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
-        return `<tr><td>${inv.invoice_number || '-'}</td><td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td><td><span style="padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;${isOverdue ? 'background:#fee2e2;color:#dc2626' : 'background:#dbeafe;color:#1d4ed8'}">${isOverdue ? 'OVERDUE' : 'SENT'}</span></td><td class="amount">${formatCurrency(Number(inv.total || 0))}</td></tr>`;
+      content = `<!DOCTYPE html><html><head><title>Receivables - ${periodLabel}</title>${styles}</head><body>${hdr('OUTSTANDING RECEIVABLES', 'Unpaid Invoices')}
+        <div class="summary-box"><div class="summary-item"><div class="summary-label">Total Outstanding</div><div class="summary-value" style="color:#d97706">${formatCurrency(totalOutstanding)}</div></div>
+        <div class="summary-item"><div class="summary-label">Invoices</div><div class="summary-value">${outstandingReceivables.length}</div></div>
+        <div class="summary-item"><div class="summary-label">Overdue</div><div class="summary-value negative">${outstandingReceivables.filter(inv => inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date())).length}</div></div></div>
+        <table><thead><tr><th>Invoice #</th><th>Client</th><th>Due Date</th><th>Status</th><th class="amount">Amount</th></tr></thead><tbody>
+        ${outstandingReceivables.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:#999;padding:24px">No outstanding receivables</td></tr>' : outstandingReceivables.map(inv => {
+        const od = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
+        const cn = (inv as any).client?.name || (inv as any).client_name || '-';
+        return `<tr><td>${inv.invoice_number || '-'}</td><td>${cn}</td><td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td><td><span style="padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600;${od ? 'background:#fee2e2;color:#dc2626' : 'background:#dbeafe;color:#1d4ed8'}">${od ? 'OVERDUE' : 'SENT'}</span></td><td class="amount">${formatCurrency(Number(inv.total || 0))}</td></tr>`;
       }).join('')}
-            ${outstandingReceivables.length > 0 ? `<tr class="total-row"><td colspan="3">Total Outstanding</td><td class="amount" style="color:#d97706">${formatCurrency(totalOutstanding)}</td></tr>` : ''}
-          </tbody>
-        </table>
-        <div class="footer">Generated by Billdora | ${dateStr}</div>
-      </body></html>`;
+        ${outstandingReceivables.length > 0 ? `<tr class="total-row"><td colspan="4">Total</td><td class="amount" style="color:#d97706">${formatCurrency(totalOutstanding)}</td></tr>` : ''}
+        </tbody></table>${ftr}</body></html>`;
     }
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(content);
-      printWindow.document.close();
-    }
+    const pw = window.open('', '_blank');
+    if (pw) { pw.document.write(content); pw.document.close(); }
   };
 
   const reports = [
-    { id: 'pnl', label: 'P&L', icon: BarChart3 },
-    { id: 'income', label: 'Income', icon: TrendingUp },
-    { id: 'expense', label: 'Expense', icon: TrendingDown },
-    { id: 'receivables', label: 'Receivables', icon: FileText }
+    { id: 'pnl', label: 'P&L', icon: BarChart3, desc: 'Profit & Loss with COGS' },
+    { id: 'income', label: 'Revenue', icon: TrendingUp, desc: 'Income by client' },
+    { id: 'expense_irs', label: 'Sched. C', icon: ClipboardList, desc: 'IRS category expenses' },
+    { id: 'ar_aging', label: 'AR Aging', icon: Calendar, desc: 'Receivables by age' },
+    { id: 'balance_sheet', label: 'Balance Sheet', icon: Landmark, desc: 'Assets & liabilities' },
+    { id: 'receivables', label: 'Open Inv.', icon: FileText, desc: 'Unpaid invoices' },
   ];
 
   return (
     <div className="space-y-2">
-      {/* Period Selector - Compact */}
       <div className="bg-white rounded-lg p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-neutral-900">Tax Reports</h3>
-            <p className="text-[10px] text-neutral-500">Quarterly or annual for tax prep</p>
+            <h3 className="text-sm font-semibold text-neutral-900">CPA Tax Reports</h3>
+            <p className="text-[10px] text-neutral-500">Quarterly or annual — ready for your accountant</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex gap-0.5 p-0.5 bg-neutral-100 rounded-lg">
               {(['Q1', 'Q2', 'Q3', 'Q4', 'Annual'] as const).map(period => (
-                <button
-                  key={period}
-                  onClick={() => setSelectedPeriod(period)}
-                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${selectedPeriod === period ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-                    }`}
-                >
+                <button key={period} onClick={() => setSelectedPeriod(period)}
+                  className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${selectedPeriod === period ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'}`}>
                   {period}
                 </button>
               ))}
             </div>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-2 py-1 border border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-white"
-            >
+            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="px-2 py-1 border border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-white">
               {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3].map(yr => (
                 <option key={yr} value={yr}>{yr}</option>
               ))}
@@ -1849,54 +1859,35 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
         </div>
       </div>
 
-      {/* Report Type Tabs - Compact Inline */}
-      <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-        {reports.map(report => (
-          <button
-            key={report.id}
-            onClick={() => setActiveReport(report.id as any)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${activeReport === report.id
-                ? 'bg-[#476E66] text-white'
-                : 'bg-white border border-neutral-200 text-neutral-700 hover:border-[#476E66]'
-              }`}
-            style={activeReport !== report.id ? { boxShadow: 'var(--shadow-card)' } : {}}
-          >
-            <report.icon className="w-3 h-3" />
-            {report.label}
+      {/* Report Tabs */}
+      <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+        {reports.map(r => (
+          <button key={r.id} onClick={() => setActiveReport(r.id as any)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${activeReport === r.id ? 'bg-[#476E66] text-white' : 'bg-white border border-neutral-200 text-neutral-700 hover:border-[#476E66]'}`}
+            style={activeReport !== r.id ? { boxShadow: 'var(--shadow-card)' } : {}}>
+            <r.icon className="w-3 h-3" /> {r.label}
           </button>
         ))}
       </div>
 
-      {/* Report Content - Compact */}
+      {/* Report Content */}
       <div className="bg-white rounded-lg overflow-hidden" style={{ boxShadow: 'var(--shadow-card)' }}>
         <div className="px-3 py-2 border-b border-neutral-100 flex items-center justify-between">
           <div>
-            <h3 className="text-xs font-semibold text-neutral-900">
-              {reports.find(r => r.id === activeReport)?.label} - {periodLabel}
-            </h3>
-            <p className="text-[9px] text-neutral-500">
-              {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
+            <h3 className="text-xs font-semibold text-neutral-900">{reports.find(r => r.id === activeReport)?.desc} — {periodLabel}</h3>
+            <p className="text-[9px] text-neutral-500">{start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => exportCSV(activeReport)}
-              className="flex items-center gap-1 px-2 py-1 border border-neutral-200 rounded-md text-[10px] font-medium text-neutral-700 hover:bg-neutral-50"
-            >
-              <Download className="w-3 h-3" />
-              CSV
+            <button onClick={() => exportCSV(activeReport)} className="flex items-center gap-1 px-2 py-1 border border-neutral-200 rounded-md text-[10px] font-medium text-neutral-700 hover:bg-neutral-50">
+              <Download className="w-3 h-3" /> CSV
             </button>
-            <button
-              onClick={() => exportPDF(activeReport)}
-              className="flex items-center gap-1 px-2 py-1 bg-[#476E66] text-white rounded-md text-[10px] font-medium hover:bg-[#3A5B54]"
-            >
-              <Printer className="w-3 h-3" />
-              PDF
+            <button onClick={() => exportPDF(activeReport)} className="flex items-center gap-1 px-2 py-1 bg-[#476E66] text-white rounded-md text-[10px] font-medium hover:bg-[#3A5B54]">
+              <Printer className="w-3 h-3" /> PDF
             </button>
           </div>
         </div>
 
-        {/* P&L Report - Compact */}
+        {/* Enhanced P&L */}
         {activeReport === 'pnl' && (
           <div className="p-3">
             <div className="grid grid-cols-3 gap-2 mb-3">
@@ -1904,97 +1895,62 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
                 <p className="text-[9px] text-[#476E66] font-medium uppercase">Revenue</p>
                 <p className="text-sm font-bold text-[#476E66] mt-0.5">{formatCurrency(pnlData.revenue)}</p>
               </div>
-              <div className="p-2 bg-red-50 rounded-lg text-center">
-                <p className="text-[9px] text-red-600 font-medium uppercase">Expenses</p>
-                <p className="text-sm font-bold text-red-700 mt-0.5">{formatCurrency(pnlData.totalExpenses)}</p>
+              <div className="p-2 bg-emerald-50 rounded-lg text-center">
+                <p className="text-[9px] text-emerald-600 font-medium uppercase">Gross Profit</p>
+                <p className="text-sm font-bold text-emerald-700 mt-0.5">{formatCurrency(pnlData.grossProfit)}</p>
               </div>
-              <div className={`p-2 rounded-lg text-center ${pnlData.netProfit >= 0 ? 'bg-[#476E66]/10' : 'bg-amber-50'}`}>
-                <p className={`text-[9px] font-medium uppercase ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-amber-600'}`}>Net Profit</p>
-                <p className={`text-sm font-bold mt-0.5 ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-amber-700'}`}>{formatCurrency(pnlData.netProfit)}</p>
+              <div className={`p-2 rounded-lg text-center ${pnlData.netProfit >= 0 ? 'bg-[#476E66]/10' : 'bg-red-50'}`}>
+                <p className={`text-[9px] font-medium uppercase ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-red-600'}`}>Net Income</p>
+                <p className={`text-sm font-bold mt-0.5 ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-red-700'}`}>{formatCurrency(pnlData.netProfit)}</p>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[300px]">
-                <thead className="bg-neutral-50">
-                  <tr>
-                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Category</th>
-                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th>
-                  </tr>
-                </thead>
+                <thead className="bg-neutral-50"><tr><th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Category</th><th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th></tr></thead>
                 <tbody className="divide-y divide-neutral-50 text-xs">
-                  <tr><td className="px-2 py-1.5">Revenue (Paid Invoices)</td><td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(pnlData.revenue)}</td></tr>
-                  <tr><td className="px-2 py-1.5">Project Expenses</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.projectExp)}</td></tr>
-                  <tr><td className="px-2 py-1.5">Company Expenses</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.compExp)}</td></tr>
-                  <tr><td className="px-2 py-1.5">Payroll</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.payroll)}</td></tr>
-                  <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total Expenses</td><td className="px-2 py-1.5 text-right text-red-700">{formatCurrency(pnlData.totalExpenses)}</td></tr>
-                  <tr className="bg-neutral-100 font-bold"><td className="px-2 py-1.5">Net Profit</td><td className={`px-2 py-1.5 text-right ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-red-700'}`}>{formatCurrency(pnlData.netProfit)}</td></tr>
+                  <tr className="bg-emerald-50/50"><td className="px-2 py-1.5 font-semibold text-emerald-800">REVENUE</td><td></td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Gross Receipts (Paid Invoices)</td><td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(pnlData.revenue)}</td></tr>
+                  <tr className="bg-amber-50/50"><td className="px-2 py-1.5 font-semibold text-amber-800">COST OF GOODS SOLD</td><td></td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Direct Project Costs</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.projectExp)}</td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Direct Labor / Payroll</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.payroll)}</td></tr>
+                  <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total COGS</td><td className="px-2 py-1.5 text-right text-red-700">{formatCurrency(pnlData.cogs)}</td></tr>
+                  <tr className="bg-emerald-50 font-bold"><td className="px-2 py-1.5 text-emerald-800">GROSS PROFIT</td><td className="px-2 py-1.5 text-right text-emerald-700">{formatCurrency(pnlData.grossProfit)}</td></tr>
+                  <tr className="bg-orange-50/50"><td className="px-2 py-1.5 font-semibold text-orange-800">OPERATING EXPENSES</td><td></td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Company / Overhead</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.compExp)}</td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Non-Billable Expenses</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(pnlData.nonBillableExp)}</td></tr>
+                  <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total Operating Expenses</td><td className="px-2 py-1.5 text-right text-red-700">{formatCurrency(pnlData.operatingExp)}</td></tr>
+                  <tr className="bg-neutral-100 font-bold text-sm"><td className="px-2 py-2">NET ORDINARY INCOME</td><td className={`px-2 py-2 text-right ${pnlData.netProfit >= 0 ? 'text-[#476E66]' : 'text-red-700'}`}>{formatCurrency(pnlData.netProfit)}</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* Income Summary - Compact */}
+        {/* Revenue by Client */}
         {activeReport === 'income' && (
           <div className="p-3">
             <div className="mb-3 p-2 bg-[#476E66]/10 rounded-lg text-center">
-              <p className="text-[9px] text-[#476E66] font-medium uppercase">Total Income</p>
+              <p className="text-[9px] text-[#476E66] font-medium uppercase">Total Revenue</p>
               <p className="text-sm font-bold text-[#476E66] mt-0.5">{formatCurrency(incomeByClient.reduce((s, c) => s + c.total, 0))}</p>
             </div>
-            {incomeByClient.length === 0 ? (
-              <div className="text-center py-6 text-neutral-500 text-xs">No paid invoices in this period</div>
-            ) : (
+            {incomeByClient.length === 0 ? <div className="text-center py-6 text-neutral-500 text-xs">No paid invoices in this period</div> : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[300px]">
-                  <thead className="bg-neutral-50">
-                    <tr>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Client</th>
-                      <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Inv.</th>
-                      <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Total</th>
-                    </tr>
-                  </thead>
+                <table className="w-full min-w-[340px]">
+                  <thead className="bg-neutral-50"><tr>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Client</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Inv.</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Total</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden sm:table-cell">%</th>
+                  </tr></thead>
                   <tbody className="divide-y divide-neutral-50 text-xs">
-                    {incomeByClient.map((client, idx) => (
-                      <tr key={idx} className="hover:bg-neutral-50">
-                        <td className="px-2 py-1.5 font-medium text-neutral-900 truncate max-w-[150px]">{client.name}</td>
-                        <td className="px-2 py-1.5 text-right text-neutral-600">{client.count}</td>
-                        <td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(client.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Expense Summary - Compact */}
-        {activeReport === 'expense' && (
-          <div className="p-3">
-            <div className="mb-3 p-2 bg-amber-50 rounded-lg text-center">
-              <p className="text-[9px] text-amber-600 font-medium uppercase">Total Expenses</p>
-              <p className="text-sm font-bold text-amber-700 mt-0.5">{formatCurrency(expenseByCategory.reduce((s, [, amt]) => s + amt, 0))}</p>
-            </div>
-            {expenseByCategory.length === 0 ? (
-              <div className="text-center py-6 text-neutral-500 text-xs">No expenses in this period</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[300px]">
-                  <thead className="bg-neutral-50">
-                    <tr>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Category</th>
-                      <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th>
-                      <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden sm:table-cell">%</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-50 text-xs">
-                    {expenseByCategory.map(([cat, amt], idx) => {
-                      const total = expenseByCategory.reduce((s, [, a]) => s + a, 0);
+                    {incomeByClient.map((c, idx) => {
+                      const tot = incomeByClient.reduce((s, x) => s + x.total, 0);
                       return (
                         <tr key={idx} className="hover:bg-neutral-50">
-                          <td className="px-2 py-1.5 font-medium text-neutral-900 truncate max-w-[120px]">{cat}</td>
-                          <td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(amt)}</td>
-                          <td className="px-2 py-1.5 text-right text-neutral-500 hidden sm:table-cell">{((amt / total) * 100).toFixed(0)}%</td>
+                          <td className="px-2 py-1.5 font-medium text-neutral-900 truncate max-w-[150px]">{c.name}</td>
+                          <td className="px-2 py-1.5 text-right text-neutral-600">{c.count}</td>
+                          <td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(c.total)}</td>
+                          <td className="px-2 py-1.5 text-right text-neutral-500 hidden sm:table-cell">{((c.total / tot) * 100).toFixed(0)}%</td>
                         </tr>
                       );
                     })}
@@ -2005,38 +1961,133 @@ function TaxReportsTab({ invoices, expenses, companyExpenses, payrollData, forma
           </div>
         )}
 
-        {/* Outstanding Receivables - Compact */}
+        {/* Schedule C Expenses */}
+        {activeReport === 'expense_irs' && (
+          <div className="p-3">
+            <div className="mb-3 p-2 bg-amber-50 rounded-lg text-center">
+              <p className="text-[9px] text-amber-600 font-medium uppercase">Total Deductions</p>
+              <p className="text-sm font-bold text-amber-700 mt-0.5">{formatCurrency(expenseByIRS.reduce((s, [, a]) => s + a, 0))}</p>
+            </div>
+            {expenseByIRS.length === 0 ? <div className="text-center py-6 text-neutral-500 text-xs">No expenses in this period</div> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[300px]">
+                  <thead className="bg-neutral-50"><tr>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">IRS Schedule C Line</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide hidden sm:table-cell">%</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-neutral-50 text-xs">
+                    {expenseByIRS.map(([cat, amt], idx) => {
+                      const tot = expenseByIRS.reduce((s, [, a]) => s + a, 0);
+                      return (
+                        <tr key={idx} className="hover:bg-neutral-50">
+                          <td className="px-2 py-1.5 font-medium text-neutral-900">{cat}</td>
+                          <td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(amt)}</td>
+                          <td className="px-2 py-1.5 text-right text-neutral-500 hidden sm:table-cell">{((amt / tot) * 100).toFixed(0)}%</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total Deductions</td><td className="px-2 py-1.5 text-right text-red-700">{formatCurrency(expenseByIRS.reduce((s, [, a]) => s + a, 0))}</td><td className="hidden sm:table-cell"></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AR Aging */}
+        {activeReport === 'ar_aging' && (
+          <div className="p-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              <div className="p-2 bg-emerald-50 rounded-lg text-center"><p className="text-[9px] text-emerald-600 font-medium uppercase">Current</p><p className="text-sm font-bold text-emerald-700 mt-0.5">{formatCurrency(arTotals.current)}</p></div>
+              <div className="p-2 bg-amber-50 rounded-lg text-center"><p className="text-[9px] text-amber-600 font-medium uppercase">31–60 Days</p><p className="text-sm font-bold text-amber-700 mt-0.5">{formatCurrency(arTotals.days31)}</p></div>
+              <div className="p-2 bg-orange-50 rounded-lg text-center"><p className="text-[9px] text-orange-600 font-medium uppercase">61–90 Days</p><p className="text-sm font-bold text-orange-700 mt-0.5">{formatCurrency(arTotals.days61)}</p></div>
+              <div className="p-2 bg-red-50 rounded-lg text-center"><p className="text-[9px] text-red-600 font-medium uppercase">90+ Days</p><p className="text-sm font-bold text-red-700 mt-0.5">{formatCurrency(arTotals.days91)}</p></div>
+            </div>
+            {arAging.length === 0 ? <div className="text-center py-6 text-neutral-500 text-xs">No outstanding receivables</div> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px]">
+                  <thead className="bg-neutral-50"><tr>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Client</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Current</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">31–60</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">61–90</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">90+</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Total</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-neutral-50 text-xs">
+                    {arAging.map(([cn, b], idx) => (
+                      <tr key={idx} className="hover:bg-neutral-50">
+                        <td className="px-2 py-1.5 font-medium text-neutral-900 truncate max-w-[140px]">{cn}</td>
+                        <td className="px-2 py-1.5 text-right text-emerald-600">{b.current ? formatCurrency(b.current) : '-'}</td>
+                        <td className="px-2 py-1.5 text-right text-amber-600">{b.days31 ? formatCurrency(b.days31) : '-'}</td>
+                        <td className="px-2 py-1.5 text-right text-orange-600">{b.days61 ? formatCurrency(b.days61) : '-'}</td>
+                        <td className="px-2 py-1.5 text-right text-red-600">{b.days91 ? formatCurrency(b.days91) : '-'}</td>
+                        <td className="px-2 py-1.5 text-right font-semibold">{formatCurrency(b.total)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total</td><td className="px-2 py-1.5 text-right">{formatCurrency(arTotals.current)}</td><td className="px-2 py-1.5 text-right">{formatCurrency(arTotals.days31)}</td><td className="px-2 py-1.5 text-right">{formatCurrency(arTotals.days61)}</td><td className="px-2 py-1.5 text-right">{formatCurrency(arTotals.days91)}</td><td className="px-2 py-1.5 text-right">{formatCurrency(arTotals.total)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Balance Sheet */}
+        {activeReport === 'balance_sheet' && (
+          <div className="p-3">
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="p-2 bg-[#476E66]/10 rounded-lg text-center"><p className="text-[9px] text-[#476E66] font-medium uppercase">Total Assets</p><p className="text-sm font-bold text-[#476E66] mt-0.5">{formatCurrency(balanceSheet.totalAssets)}</p></div>
+              <div className="p-2 bg-red-50 rounded-lg text-center"><p className="text-[9px] text-red-600 font-medium uppercase">Liabilities</p><p className="text-sm font-bold text-red-700 mt-0.5">{formatCurrency(balanceSheet.totalLiabilities)}</p></div>
+              <div className="p-2 bg-emerald-50 rounded-lg text-center"><p className="text-[9px] text-emerald-600 font-medium uppercase">Equity</p><p className="text-sm font-bold text-emerald-700 mt-0.5">{formatCurrency(balanceSheet.equity)}</p></div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[300px]">
+                <thead className="bg-neutral-50"><tr><th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Account</th><th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th></tr></thead>
+                <tbody className="divide-y divide-neutral-50 text-xs">
+                  <tr className="bg-emerald-50/50"><td className="px-2 py-1.5 font-semibold text-emerald-800">ASSETS</td><td></td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Cash & Bank Accounts</td><td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(balanceSheet.cashOnHand)}</td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Accounts Receivable</td><td className="px-2 py-1.5 text-right text-[#476E66] font-medium">{formatCurrency(balanceSheet.ar)}</td></tr>
+                  <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total Assets</td><td className="px-2 py-1.5 text-right text-[#476E66]">{formatCurrency(balanceSheet.totalAssets)}</td></tr>
+                  <tr className="bg-red-50/50"><td className="px-2 py-1.5 font-semibold text-red-800">LIABILITIES</td><td></td></tr>
+                  <tr><td className="px-2 py-1.5 pl-6 text-neutral-600">Deferred Revenue (Retainers Held)</td><td className="px-2 py-1.5 text-right text-red-600">{formatCurrency(balanceSheet.retainersHeld)}</td></tr>
+                  <tr className="bg-neutral-50 font-semibold"><td className="px-2 py-1.5">Total Liabilities</td><td className="px-2 py-1.5 text-right text-red-700">{formatCurrency(balanceSheet.totalLiabilities)}</td></tr>
+                  <tr className="bg-emerald-50/50"><td className="px-2 py-1.5 font-semibold text-emerald-800">EQUITY</td><td></td></tr>
+                  <tr className="bg-neutral-100 font-bold"><td className="px-2 py-1.5">Net Assets (Owner's Equity)</td><td className="px-2 py-1.5 text-right text-emerald-700">{formatCurrency(balanceSheet.equity)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Outstanding Receivables */}
         {activeReport === 'receivables' && (
           <div className="p-3">
             <div className="mb-3 p-2 bg-amber-50 rounded-lg text-center">
               <p className="text-[9px] text-amber-600 font-medium uppercase">Total Outstanding</p>
               <p className="text-sm font-bold text-amber-700 mt-0.5">{formatCurrency(totalOutstanding)}</p>
             </div>
-            {outstandingReceivables.length === 0 ? (
-              <div className="text-center py-6 text-neutral-500 text-xs">No outstanding receivables</div>
-            ) : (
+            {outstandingReceivables.length === 0 ? <div className="text-center py-6 text-neutral-500 text-xs">No outstanding receivables</div> : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[350px]">
-                  <thead className="bg-neutral-50">
-                    <tr>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Invoice</th>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Due</th>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Status</th>
-                      <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th>
-                    </tr>
-                  </thead>
+                <table className="w-full min-w-[380px]">
+                  <thead className="bg-neutral-50"><tr>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Invoice</th>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Client</th>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Due</th>
+                    <th className="text-left px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Status</th>
+                    <th className="text-right px-2 py-1.5 text-[10px] font-medium text-neutral-600 uppercase tracking-wide">Amount</th>
+                  </tr></thead>
                   <tbody className="divide-y divide-neutral-50 text-xs">
                     {outstandingReceivables.map(inv => {
                       const isOverdue = inv.status === 'overdue' || (inv.due_date && new Date(inv.due_date) < new Date());
+                      const cn = (inv as any).client?.name || (inv as any).client_name || '-';
                       return (
                         <tr key={inv.id} className="hover:bg-neutral-50">
                           <td className="px-2 py-1.5 font-medium text-neutral-900">{inv.invoice_number || '-'}</td>
+                          <td className="px-2 py-1.5 text-neutral-600 truncate max-w-[100px]">{cn}</td>
                           <td className="px-2 py-1.5 text-neutral-600">{inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                          <td className="px-2 py-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${isOverdue ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-[#476E66]/10 text-[#476E66]'}`}>
-                              {isOverdue ? 'Overdue' : 'Sent'}
-                            </span>
-                          </td>
+                          <td className="px-2 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${isOverdue ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-[#476E66]/10 text-[#476E66]'}`}>{isOverdue ? 'Overdue' : 'Sent'}</span></td>
                           <td className="px-2 py-1.5 text-right font-medium text-amber-600">{formatCurrency(Number(inv.total || 0))}</td>
                         </tr>
                       );

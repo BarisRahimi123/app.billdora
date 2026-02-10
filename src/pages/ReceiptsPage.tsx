@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Camera, Upload, Image as ImageIcon, X, Check, Link2, RefreshCw, Trash2, Eye } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { useToast } from '../components/Toast';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -21,7 +22,17 @@ interface Receipt {
 
 export default function ReceiptsPage() {
   const { profile } = useAuth();
+  const { isAdmin, canViewFinancials } = usePermissions();
   const { showToast } = useToast();
+
+  if (!isAdmin && !canViewFinancials) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view receipts. Contact your administrator.</p>
+      </div>
+    );
+  }
   const [searchParams] = useSearchParams();
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading] = useState(true);

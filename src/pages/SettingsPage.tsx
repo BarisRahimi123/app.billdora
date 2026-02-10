@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../components/Toast';
-import { Settings, Building2, Users, FileText, Bell, Link, Shield, Package, Plus, Edit2, Trash2, X, Upload, Camera, Mail, UserCheck, UserX, MoreVertical, Check, User, Receipt, MapPin, Calculator, FileType, Send, Tag, List, Activity, Target, GripVertical, ArrowLeft, LogOut, CreditCard, Loader2, AlertTriangle, Star, ChevronRight, Download, FolderUp, FileSpreadsheet } from 'lucide-react';
+import { Settings, Building2, Users, FileText, Bell, Link, Shield, Package, Plus, Edit2, Trash2, X, Upload, Camera, Mail, UserCheck, UserX, MoreVertical, Check, User, Receipt, MapPin, Calculator, FileType, Send, Tag, List, Activity, Target, GripVertical, ArrowLeft, LogOut, CreditCard, Loader2, AlertTriangle, Star, ChevronRight, Download, FolderUp, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { AiUsageMeter } from '../ai/components/AiUsageMeter';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { api, Service, CompanySettings, userManagementApi, Role, UserProfile, CompanyInvitation, settingsApi, Category, ExpenseCode, InvoiceTerm, FieldValue, StatusCode, CostCenter, emailTemplatesApi, EmailTemplate, collaboratorCategoryApi, CollaboratorCategory } from '../lib/api';
+import { api, Service, CompanySettings, userManagementApi, Role, UserProfile, CompanyInvitation, settingsApi, Category, ExpenseCode, InvoiceTerm, FieldValue, StatusCode, CostCenter, emailTemplatesApi, EmailTemplate, collaboratorCategoryApi, CollaboratorCategory, transactionCategoryApi, TransactionCategory, TAX_CLASSIFICATIONS } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
 const CATEGORIES = ['Scanning', 'Modeling', 'Drafting', 'GIS', 'Consulting', 'Other'];
@@ -85,6 +86,7 @@ export default function SettingsPage() {
       label: 'Configuration',
       tabs: [
         { id: 'services', label: 'Products & Services', icon: Package, adminOnly: true },
+        { id: 'accounting', label: 'Accounting Categories', icon: Calculator, adminOnly: true },
         { id: 'codes-fields', label: 'Catalog & Fields', icon: Tag, adminOnly: true },
         { id: 'templates', label: 'Templates', icon: FileText, adminOnly: true },
         { id: 'invoicing', label: 'Invoicing', icon: Receipt, adminOnly: true },
@@ -96,6 +98,7 @@ export default function SettingsPage() {
       tabs: [
         { id: 'import-export', label: 'Import / Export', icon: FolderUp, adminOnly: true },
         { id: 'integrations', label: 'Integrations', icon: Link, adminOnly: true },
+        { id: 'ai', label: 'AI Assistant', icon: Sparkles, adminOnly: true },
       ]
     }
   ];
@@ -698,6 +701,10 @@ export default function SettingsPage() {
               <InvoicingSettingsTab companyId={profile.company_id} />
             )}
 
+            {activeTab === 'accounting' && (
+              <AccountingCategoriesTab companyId={profile.company_id} />
+            )}
+
             {activeTab === 'codes-fields' && (
               <CodesAndFieldsTab companyId={profile.company_id} />
             )}
@@ -725,7 +732,46 @@ export default function SettingsPage() {
               />
             )}
 
-            {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && activeTab !== 'import-export' && (
+            {activeTab === 'ai' && (
+              <div className="bg-white rounded-sm border border-neutral-200">
+                <div className="px-4 py-3 border-b border-neutral-100">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#476E66]" />
+                    <h3 className="text-sm font-semibold text-neutral-900">AI Assistant</h3>
+                  </div>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">
+                    AI-powered features for document parsing, proposal generation, and more.
+                  </p>
+                </div>
+                <div className="p-4">
+                  <AiUsageMeter />
+                  <div className="mt-6 pt-4 border-t border-neutral-100">
+                    <h4 className="text-xs font-semibold text-neutral-700 mb-2">AI Features</h4>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'Bank Statement Parsing', desc: 'Extract transactions from PDF statements', status: 'active' },
+                        { name: 'Receipt OCR', desc: 'Automatically read receipt images', status: 'active' },
+                        { name: 'Proposal Generation', desc: 'Generate scope of work with AI', status: 'active' },
+                        { name: 'AI Chat Assistant', desc: 'Ask questions about your data', status: 'active' },
+                        { name: 'Auto-Categorization', desc: 'Categorize expenses automatically', status: 'active' },
+                      ].map((feature) => (
+                        <div key={feature.name} className="flex items-center justify-between px-3 py-2 bg-neutral-50 rounded-lg">
+                          <div>
+                            <p className="text-xs font-medium text-neutral-800">{feature.name}</p>
+                            <p className="text-[10px] text-neutral-500">{feature.desc}</p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-700">
+                            Active
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab !== 'profile' && activeTab !== 'subscription' && activeTab !== 'company' && activeTab !== 'services' && activeTab !== 'users' && activeTab !== 'invoicing' && activeTab !== 'codes-fields' && activeTab !== 'integrations' && activeTab !== 'templates' && activeTab !== 'collaborators' && activeTab !== 'notifications' && activeTab !== 'import-export' && activeTab !== 'ai' && (
               <div className="bg-white rounded-sm p-12 border border-neutral-200 text-center">
                 <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Settings className="w-8 h-8 text-neutral-400" />
@@ -1647,7 +1693,7 @@ function RoleModal({ role, companyId, onClose, onSave }: {
   onClose: () => void;
   onSave: () => void;
 }) {
-  const modules = ['projects', 'time', 'invoicing', 'quotes', 'settings'];
+  const modules = ['projects', 'time', 'invoicing', 'quotes', 'clients', 'team', 'settings'];
   const actions = ['view', 'create', 'edit', 'delete'];
 
   const [name, setName] = useState(role?.name || '');
@@ -1701,6 +1747,8 @@ function RoleModal({ role, companyId, onClose, onSave }: {
         time: { view: true, create: true, edit: true, delete: true },
         invoicing: { view: true, create: true, edit: true, delete: false },
         quotes: { view: true, create: true, edit: true, delete: false },
+        clients: { view: true, create: true, edit: true, delete: false },
+        team: { view: true, create: false, edit: false, delete: false },
         settings: { view: true, create: false, edit: false, delete: false },
       });
     } else if (preset === 'team_member') {
@@ -1712,6 +1760,8 @@ function RoleModal({ role, companyId, onClose, onSave }: {
         time: { view: true, create: true, edit: true, delete: true },
         invoicing: { view: false, create: false, edit: false, delete: false },
         quotes: { view: false, create: false, edit: false, delete: false },
+        clients: { view: true, create: false, edit: false, delete: false },
+        team: { view: false, create: false, edit: false, delete: false },
         settings: { view: false, create: false, edit: false, delete: false },
       });
     }
@@ -1862,7 +1912,9 @@ function RoleModal({ role, companyId, onClose, onSave }: {
                     const allChecked = actions.every(a => permissions[module]?.[a]);
                     return (
                       <tr key={module} className="hover:bg-neutral-50">
-                        <td className="px-4 py-3 font-medium text-neutral-900 capitalize">{module}</td>
+                        <td className="px-4 py-3 font-medium text-neutral-900 capitalize">
+                          {{ projects: 'Projects', time: 'Time & Expense', invoicing: 'Invoicing', quotes: 'Proposals', clients: 'Clients', team: 'Team Management', settings: 'Settings' }[module] || module}
+                        </td>
                         {actions.map(action => (
                           <td key={action} className="text-center px-3 py-3">
                             <input
@@ -1900,7 +1952,7 @@ function RoleModal({ role, companyId, onClose, onSave }: {
               />
               <div>
                 <span className="font-medium text-neutral-900">Can View Financial Data</span>
-                <p className="text-sm text-neutral-500">Allow access to dollar amounts, rates, invoicing, and budget information</p>
+                <p className="text-sm text-neutral-500">Allow access to dollar amounts, rates, invoicing totals, budget information, financials section, reports, and receipts</p>
               </div>
             </label>
           </div>
@@ -7063,6 +7115,287 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
           <li>• Duplicate clients (same name) will be skipped</li>
           <li>• <strong>Hourly rates</strong> are set per employee, not per project</li>
         </ul>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accounting Categories Tab ──────────────────────────────────────
+function AccountingCategoriesTab({ companyId }: { companyId: string }) {
+  const { showToast } = useToast();
+  const [categories, setCategories] = useState<TransactionCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [newCategory, setNewCategory] = useState({ value: '', label: '', tax_classification: 'business_expense', description: '' });
+
+  useEffect(() => {
+    loadCategories();
+  }, [companyId, includeInactive]);
+
+  async function loadCategories() {
+    setLoading(true);
+    try {
+      const data = await transactionCategoryApi.getAll(companyId, includeInactive);
+      setCategories(data);
+    } catch (e) {
+      console.error('Failed to load transaction categories:', e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUpdate(id: string, updates: Partial<TransactionCategory>) {
+    setSaving(true);
+    try {
+      const updated = await transactionCategoryApi.update(id, updates);
+      setCategories(prev => prev.map(c => c.id === id ? updated : c));
+      setEditingId(null);
+      showToast('Category updated', 'success');
+    } catch (e) {
+      console.error('Failed to update category:', e);
+      showToast('Failed to update category', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAdd() {
+    if (!newCategory.value.trim() || !newCategory.label.trim()) return;
+    setSaving(true);
+    try {
+      const slug = newCategory.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      const created = await transactionCategoryApi.create({
+        company_id: companyId,
+        value: slug,
+        label: newCategory.label.trim(),
+        tax_classification: newCategory.tax_classification,
+        description: newCategory.description.trim() || null,
+        sort_order: categories.length + 1,
+      });
+      setCategories(prev => [...prev, created]);
+      setNewCategory({ value: '', label: '', tax_classification: 'business_expense', description: '' });
+      setShowAddForm(false);
+      showToast('Category added', 'success');
+    } catch (e: any) {
+      if (e?.code === '23505') showToast('A category with that slug already exists', 'error');
+      else showToast('Failed to add category', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this category? Transactions already tagged with it will keep their current value.')) return;
+    try {
+      await transactionCategoryApi.delete(id);
+      setCategories(prev => prev.filter(c => c.id !== id));
+      showToast('Category deleted', 'success');
+    } catch (e) {
+      showToast('Failed to delete category', 'error');
+    }
+  }
+
+  function getTaxClassBadge(classification: string) {
+    const cls = TAX_CLASSIFICATIONS.find(t => t.value === classification);
+    const colorMap: Record<string, string> = {
+      business_expense: 'bg-blue-50 text-blue-700 border-blue-200',
+      personal_draw: 'bg-orange-50 text-orange-700 border-orange-200',
+      owner_contribution: 'bg-purple-50 text-purple-700 border-purple-200',
+      income: 'bg-green-50 text-green-700 border-green-200',
+      cost_of_goods: 'bg-amber-50 text-amber-700 border-amber-200',
+      payroll: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      tax_payment: 'bg-red-50 text-red-700 border-red-200',
+      transfer: 'bg-neutral-100 text-neutral-500 border-neutral-200',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorMap[classification] || 'bg-neutral-100 text-neutral-600 border-neutral-200'}`}>
+        {cls?.label || classification}
+      </span>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-base sm:text-lg font-semibold text-neutral-900 mb-1">Accounting Categories</h2>
+          <p className="text-neutral-500 text-xs">
+            Manage transaction categories and assign their tax classification for P&L reporting.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeInactive}
+              onChange={(e) => setIncludeInactive(e.target.checked)}
+              className="rounded border-neutral-300"
+            />
+            Show inactive
+          </label>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 text-white text-xs font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Category
+          </button>
+        </div>
+      </div>
+
+      {/* Add Form */}
+      {showAddForm && (
+        <div className="border border-neutral-200 rounded-lg p-4 bg-neutral-50 space-y-3">
+          <h3 className="text-sm font-semibold text-neutral-900">New Category</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-600 mb-1">Label *</label>
+              <input
+                type="text"
+                placeholder="e.g. Office Rent"
+                value={newCategory.label}
+                onChange={(e) => setNewCategory({ ...newCategory, label: e.target.value, value: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '_') })}
+                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+              />
+              {newCategory.value && (
+                <p className="text-[10px] text-neutral-400 mt-1">Slug: {newCategory.value.toLowerCase().replace(/[^a-z0-9]+/g, '_')}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-neutral-600 mb-1">Tax Classification *</label>
+              <select
+                value={newCategory.tax_classification}
+                onChange={(e) => setNewCategory({ ...newCategory, tax_classification: e.target.value })}
+                className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+              >
+                {TAX_CLASSIFICATIONS.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-neutral-600 mb-1">Description</label>
+            <input
+              type="text"
+              placeholder="Optional description"
+              value={newCategory.description}
+              onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+            />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 text-xs text-neutral-500 hover:text-neutral-900">Cancel</button>
+            <button
+              onClick={handleAdd}
+              disabled={saving || !newCategory.label.trim()}
+              className="px-4 py-1.5 bg-[#476E66] text-white text-xs font-medium rounded-lg hover:bg-[#3a5b54] disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Add Category'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info Bar */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+        <p className="text-xs text-blue-700">
+          <strong>Tax Classification</strong> determines how each category is treated on your Profit & Loss report.
+          Business expenses are deductible, personal draws are owner withdrawals, and transfers are excluded from P&L entirely.
+        </p>
+      </div>
+
+      {/* Table */}
+      <div className="border border-neutral-200 rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-neutral-50 border-b border-neutral-200">
+              <th className="text-left px-4 py-2.5 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Category</th>
+              <th className="text-left px-4 py-2.5 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden sm:table-cell">Tax Classification</th>
+              <th className="text-left px-4 py-2.5 text-[10px] font-bold text-neutral-500 uppercase tracking-widest hidden md:table-cell">Description</th>
+              <th className="text-center px-4 py-2.5 text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Status</th>
+              <th className="w-20"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {categories.map(cat => (
+              <tr key={cat.id} className={`hover:bg-neutral-50/50 ${!cat.is_active ? 'opacity-50' : ''}`}>
+                <td className="px-4 py-2.5">
+                  <p className="text-xs font-semibold text-neutral-900">{cat.label}</p>
+                  <p className="text-[10px] text-neutral-400 font-mono">{cat.value}</p>
+                </td>
+                <td className="px-4 py-2.5 hidden sm:table-cell">
+                  {editingId === cat.id ? (
+                    <select
+                      defaultValue={cat.tax_classification}
+                      onChange={(e) => handleUpdate(cat.id, { tax_classification: e.target.value })}
+                      className="px-2 py-1 text-xs border border-neutral-200 rounded-lg focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+                      autoFocus
+                      onBlur={() => setEditingId(null)}
+                    >
+                      {TAX_CLASSIFICATIONS.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button onClick={() => setEditingId(cat.id)} className="hover:opacity-70 transition-opacity" title="Click to change">
+                      {getTaxClassBadge(cat.tax_classification)}
+                    </button>
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-neutral-500 hidden md:table-cell max-w-[200px] truncate">
+                  {cat.description || '—'}
+                </td>
+                <td className="px-4 py-2.5 text-center">
+                  <button
+                    onClick={() => handleUpdate(cat.id, { is_active: !cat.is_active })}
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cat.is_active ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-400'}`}
+                  >
+                    {cat.is_active ? 'Active' : 'Inactive'}
+                  </button>
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <button
+                    onClick={() => handleDelete(cat.id)}
+                    className="p-1 text-neutral-400 hover:text-red-500 transition-colors"
+                    title="Delete category"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {categories.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-neutral-400 text-xs">
+                  No categories found. Add your first category above.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {TAX_CLASSIFICATIONS.map(t => (
+          <div key={t.value} className="flex items-start gap-2 p-2.5 border border-neutral-100 rounded-lg">
+            {getTaxClassBadge(t.value)}
+            <p className="text-[10px] text-neutral-500 leading-tight">{t.description}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

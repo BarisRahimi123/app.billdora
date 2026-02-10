@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, Send, Upload, Plus, Trash2, Check, Save, X, Package, UserPlus, Settings, Eye, EyeOff, Image, Users, FileText, Calendar, ClipboardList, ChevronRight, Bookmark, Info, Bell, Lock, FileSignature, Timer, Layout, Link, ArrowRight, User, CheckCircle2, Loader2, Heading1, Heading2, List } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Quote, Client, ClientContact, QuoteLineItem, CompanySettings, Service, Lead, leadsApi, ProposalTemplate, collaboratorCategoryApi, CollaboratorCategory, collaborationApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notificationService';
@@ -123,6 +124,7 @@ export default function QuoteDocumentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, loading: authLoading } = useAuth();
+  const { isAdmin, canView, canCreate, canEdit, canViewFinancials, loading: permLoading } = usePermissions();
   const { showToast } = useToast();
   const isNewQuote = quoteId === 'new';
 
@@ -359,9 +361,11 @@ export default function QuoteDocumentPage() {
   const displayClientEmail = recipientType === 'lead'
     ? (selectedLead?.email || '')
     : (client?.email || '');
-  const displayContactName = recipientType === 'lead'
-    ? (selectedLead?.name || '')
-    : (client?.primary_contact_name || '');
+  // Prefer stored recipient_name (persisted when sent), fall back to current contact, then first known contact
+  const displayContactName = quote?.recipient_name
+    || (recipientType === 'lead'
+      ? (selectedLead?.name || '')
+      : (client?.primary_contact_name || clientContacts?.[0]?.name || ''));
   const displayLeadName = recipientType === 'lead'
     ? (selectedLead?.name || '')
     : (client?.primary_contact_name || '');
@@ -821,6 +825,7 @@ export default function QuoteDocumentPage() {
           const foundClient = clientsData.find(c => c.id === foundQuote.client_id);
           setClient(foundClient || null);
           if (foundClient) {
+            setSelectedClientId(foundClient.id);
             setRecipientType('client');
           } else if (foundQuote.lead_id) {
             // Check if it's a lead-based quote
@@ -1619,6 +1624,9 @@ export default function QuoteDocumentPage() {
     try {
       let savedQuoteId = quoteId;
 
+      // Always resolve the best recipient name for the greeting
+      const resolvedRecipientName = displayContactName || client?.primary_contact_name || clientContacts?.[0]?.name || selectedLead?.name || '';
+
       if (isNewQuote) {
         // Create new quote
         const newQuote = await api.createQuote({
@@ -1639,11 +1647,12 @@ export default function QuoteDocumentPage() {
           retainer_type: retainerType,
           retainer_percentage: retainerType === 'percentage' ? retainerPercentage : undefined,
           retainer_amount: retainerType === 'fixed' ? retainerAmount : (retainerType === 'percentage' ? (total * retainerPercentage / 100) : undefined),
+          recipient_name: resolvedRecipientName || undefined,
         });
         savedQuoteId = newQuote.id;
         setQuote(newQuote);
       } else if (quoteId && quoteId !== 'new') {
-        // Update existing quote
+        // Update existing quote — always keep recipient_name in sync
         await api.updateQuote(quoteId, {
           title: documentTitle.trim(),
           description: description || '',
@@ -1659,6 +1668,7 @@ export default function QuoteDocumentPage() {
           retainer_type: retainerType,
           retainer_percentage: retainerType === 'percentage' ? retainerPercentage : undefined,
           retainer_amount: retainerType === 'fixed' ? retainerAmount : (retainerType === 'percentage' ? (total * retainerPercentage / 100) : undefined),
+          recipient_name: resolvedRecipientName || undefined,
         });
         savedQuoteId = quoteId;
       }
@@ -1746,6 +1756,8 @@ export default function QuoteDocumentPage() {
       // First save the quote to get an ID
       let savedQuoteId = quoteId;
 
+      const collabRecipientName = displayContactName || client?.primary_contact_name || clientContacts?.[0]?.name || selectedLead?.name || '';
+
       if (isNewQuote || !quote?.id) {
         // Create new quote first
         const newQuote = await api.createQuote({
@@ -1764,7 +1776,8 @@ export default function QuoteDocumentPage() {
           status: 'pending_collaborators',
           collaborators_invited: pendingCollaborators.length,
           collaborators_responded: 0,
-          collaborator_invitations_sent_at: new Date().toISOString()
+          collaborator_invitations_sent_at: new Date().toISOString(),
+          recipient_name: collabRecipientName || undefined,
         });
         savedQuoteId = newQuote.id;
         setQuote(newQuote);
@@ -1787,7 +1800,8 @@ export default function QuoteDocumentPage() {
           status: 'pending_collaborators',
           collaborators_invited: pendingCollaborators.length,
           collaborators_responded: 0,
-          collaborator_invitations_sent_at: new Date().toISOString()
+          collaborator_invitations_sent_at: new Date().toISOString(),
+          recipient_name: collabRecipientName || undefined,
         });
         savedQuoteId = quote.id;
       }
@@ -1998,11 +2012,18 @@ export default function QuoteDocumentPage() {
       if (data.error) throw new Error(data.error);
 
       setSentAccessCode(data.accessCode);
+      // Determine the actual recipient name to persist (the person the proposal is addressed TO)
+      const persistedRecipientName = recipientType === 'lead'
+        ? (selectedLead?.name || recipientName)
+        : (selectedContact?.name || client?.primary_contact_name || recipientName);
       await api.updateQuote(quote.id, {
-        status: 'sent'
+        status: 'sent',
+        recipient_name: persistedRecipientName,
+        recipient_email: recipientEmail,
+        last_sent_at: new Date().toISOString(),
       });
       // Update local state to reflect the sent status immediately
-      setQuote(prev => prev ? { ...prev, status: 'sent' } : null);
+      setQuote(prev => prev ? { ...prev, status: 'sent', recipient_name: persistedRecipientName, recipient_email: recipientEmail } : null);
       showToast('Proposal sent successfully!', 'success');
     } catch (error: any) {
       console.error('Failed to send proposal:', error);
@@ -2020,10 +2041,21 @@ export default function QuoteDocumentPage() {
     return new Date(dateStr).toLocaleDateString();
   };
 
-  if (authLoading || loading) {
+  if (authLoading || loading || permLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-100">
         <div className="animate-spin w-8 h-8 border-2 border-neutral-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!isAdmin && !canView('quotes') && !canViewFinancials) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-100">
+        <div className="text-center">
+          <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+          <p className="text-neutral-400 text-sm mt-2">You don't have permission to view proposals. Contact your administrator.</p>
+        </div>
       </div>
     );
   }
@@ -4151,8 +4183,13 @@ Example:
                           <div className="w-24 h-px bg-white/30"></div>
                           <div>
                             <p className="text-white/70 text-sm uppercase tracking-widest mb-3 pl-1 border-l-2 border-white">Project</p>
-                            <h1 className="text-6xl font-bold leading-tight mb-2">{projectName || documentTitle || 'PROJECT NAME'}</h1>
+                            <h1 className="text-6xl font-bold leading-tight mb-2">{(projectName || documentTitle || 'PROJECT NAME').replace(/\s*\(Revision.*\)$/i, '')}</h1>
                             <p className="text-2xl text-white/80 font-light">{description || 'Professional Services Proposal'}</p>
+                            {quote?.revision_of_quote_id && (
+                              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded border border-white/20">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/80">Revised Proposal</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -4190,7 +4227,7 @@ Example:
                       <div className="space-y-6 max-w-2xl flex-1">
                         <div>
                           <p className="text-neutral-500 text-sm mb-8">{formatDate(quote?.created_at)}</p>
-                          <h2 className="text-2xl font-bold text-neutral-900 mb-1">Project Proposal: {documentTitle || projectName}</h2>
+                          <h2 className="text-2xl font-bold text-neutral-900 mb-1">Project Proposal: {(documentTitle || projectName).replace(/\s*\(Revision.*\)$/i, '')}</h2>
                           <p className="text-neutral-600">Prepared for {displayClientName}</p>
                         </div>
 
@@ -4234,10 +4271,18 @@ Example:
 
                   // Helper to split text into pages based on visual weight (accounting for newlines)
                   // Returns array of string chunks
+                  // Normalize bullets: ensure each • starts on its own line
+                  const normBullets = (t: string) => {
+                    if (!t) return t;
+                    let r = t.replace(/([^\n])•/g, '$1\n•');
+                    r = r.replace(/•(?=\S)/g, '• ');
+                    return r;
+                  };
+
                   const paginateText = (text: string, maxScore: number = 3200): string[] => {
                     if (!text) return [];
                     const chunks: string[] = [];
-                    let remainingText = text;
+                    let remainingText = normBullets(text);
 
                     while (remainingText.length > 0) {
                       let currentScore = 0;
@@ -5590,11 +5635,16 @@ Example:
                               <p className="text-[10px] uppercase tracking-[0.2em] text-white/70 font-medium">PROJECT</p>
                             </div>
                             <h1 className="text-7xl font-bold text-white mb-4 leading-none tracking-tight">
-                              {projectName || documentTitle || 'Project Proposal'}
+                              {(projectName || documentTitle || 'Project Proposal').replace(/\s*\(Revision.*\)$/i, '')}
                             </h1>
                             <p className="text-2xl font-light text-white/80">
                               Professional Services Proposal
                             </p>
+                            {quote?.revision_of_quote_id && (
+                              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded border border-white/20">
+                                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/80">Revised Proposal</span>
+                              </div>
+                            )}
                           </div>
 
                         </div>
@@ -5669,7 +5719,7 @@ Example:
                       {/* Title Section */}
                       <div className="mb-12 border-b border-neutral-100 pb-12">
                         <h1 className="text-2xl font-bold text-neutral-900 mb-2">
-                          Project Proposal: {projectName || documentTitle}
+                          Project Proposal: {(projectName || documentTitle).replace(/\s*\(Revision.*\)$/i, '')}
                         </h1>
                         <p className="text-lg text-neutral-500 font-light">
                           Prepared for {displayClientName}

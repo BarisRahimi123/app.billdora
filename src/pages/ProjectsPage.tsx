@@ -11,7 +11,8 @@ import {
   Plus, Search, Filter, Download, ChevronLeft, ArrowLeft, Copy,
   FolderKanban, Clock, DollarSign, Users, FileText, CheckSquare, X, Trash2, Edit2,
   MoreVertical, ChevronDown, ChevronRight, RefreshCw, Check, ExternalLink, Info, Settings, UserPlus,
-  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2, Star, Activity, Tag, Flag
+  List, LayoutGrid, Columns3, Loader2, User, Calendar, CheckCircle2, Building2, Star, Activity, Tag, Flag,
+  ArrowUpDown
 } from 'lucide-react';
 import { FieldError } from '../components/ErrorBoundary';
 import { validateEmail } from '../lib/validation';
@@ -114,6 +115,10 @@ export default function ProjectsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(true);
+  const [sortBy, setSortBy] = useState<'priority' | 'recent' | 'updated' | 'name_asc' | 'name_desc'>(() => {
+    return (localStorage.getItem('projectsSortBy') as any) || 'priority';
+  });
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   // Priority dropdown state
   const [openPriorityDropdown, setOpenPriorityDropdown] = useState<string | null>(null);
@@ -595,14 +600,25 @@ export default function ProjectsPage() {
 
       return true;
     }).sort((a, b) => {
-      // Sort by priority first (1 > 2 > 3 > null)
-      const aPriority = a.priority || 999;
-      const bPriority = b.priority || 999;
-      if (aPriority !== bPriority) return aPriority - bPriority;
-      // Then by name
-      return a.name.localeCompare(b.name);
+      switch (sortBy) {
+        case 'recent':
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        case 'updated':
+          return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
+        case 'name_asc':
+          return a.name.localeCompare(b.name);
+        case 'name_desc':
+          return b.name.localeCompare(a.name);
+        case 'priority':
+        default: {
+          const aPriority = a.priority || 999;
+          const bPriority = b.priority || 999;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return a.name.localeCompare(b.name);
+        }
+      }
     });
-  }, [projects, sharedProjects, projectSource, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats, showActiveOnly]);
+  }, [projects, sharedProjects, projectSource, searchTerm, statusFilter, clientFilter, categoryFilter, billingFilter, projectBillingStats, showActiveOnly, sortBy]);
 
   // Count active filters
   const activeFilterCount = [statusFilter, clientFilter, billingFilter, categoryFilter].filter(f => f !== 'all').length;
@@ -1682,6 +1698,52 @@ export default function ProjectsPage() {
             )}
           </div>
 
+
+          {/* Sort Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowSortDropdown(!showSortDropdown); setShowFiltersDropdown(false); setShowColumnsDropdown(false); setShowActionsMenu(false); }}
+              className={`hidden sm:flex items-center gap-2 px-4 py-2.5 border rounded-sm transition-all group ${sortBy !== 'priority' ? 'bg-[#476E66]/10 border-[#476E66]/30 hover:bg-[#476E66]/20' : 'bg-white border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'}`}
+            >
+              <ArrowUpDown className={`w-4 h-4 ${sortBy !== 'priority' ? 'text-[#476E66]' : 'text-neutral-400 group-hover:text-neutral-600'}`} />
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${sortBy !== 'priority' ? 'text-[#476E66]' : 'text-neutral-600 group-hover:text-neutral-900'}`}>
+                {sortBy === 'priority' ? 'Sort' : sortBy === 'recent' ? 'Newest' : sortBy === 'updated' ? 'Updated' : sortBy === 'name_asc' ? 'A–Z' : 'Z–A'}
+              </span>
+            </button>
+            {showSortDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSortDropdown(false)} />
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-sm border border-neutral-200 z-50 py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-4 py-2 border-b border-neutral-100">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66]">Sort Projects</p>
+                  </div>
+                  {([
+                    { value: 'priority', label: 'Priority', desc: 'Starred projects first' },
+                    { value: 'recent', label: 'Recently Added', desc: 'Newest projects first' },
+                    { value: 'updated', label: 'Recently Updated', desc: 'Latest activity first' },
+                    { value: 'name_asc', label: 'Name (A → Z)', desc: 'Alphabetical order' },
+                    { value: 'name_desc', label: 'Name (Z → A)', desc: 'Reverse alphabetical' },
+                  ] as const).map(option => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setSortBy(option.value);
+                        localStorage.setItem('projectsSortBy', option.value);
+                        setShowSortDropdown(false);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-neutral-50 transition-colors ${sortBy === option.value ? 'bg-neutral-50' : ''}`}
+                    >
+                      <div>
+                        <p className={`text-[11px] font-bold ${sortBy === option.value ? 'text-[#476E66]' : 'text-neutral-700'}`}>{option.label}</p>
+                        <p className="text-[9px] text-neutral-400 mt-0.5">{option.desc}</p>
+                      </div>
+                      {sortBy === option.value && <Check className="w-3.5 h-3.5 text-[#476E66] flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Active Only Toggle */}
           <button

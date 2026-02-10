@@ -1,6 +1,18 @@
 import { BarChart3, PieChart, TrendingUp, FileBarChart } from 'lucide-react';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 export default function AnalyticsPage() {
+  const { isAdmin, canViewFinancials } = usePermissions();
+
+  if (!isAdmin && !canViewFinancials) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view analytics. Contact your administrator.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>

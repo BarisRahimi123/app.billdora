@@ -31,13 +31,28 @@ function textScore(s: string): number {
   return n;
 }
 
+/**
+ * Normalise bullet text: ensure each • / - / * bullet starts on its own line.
+ * Handles pasted text where bullets are concatenated inline (e.g. "text•bullet1•bullet2").
+ */
+export function normalizeBulletText(text: string): string {
+  if (!text) return text;
+  // 1. Add newline before any • that appears mid-line (not already at line start)
+  let result = text.replace(/([^\n])•/g, '$1\n•');
+  // 2. Ensure • is followed by a space for consistent formatting
+  result = result.replace(/•(?=\S)/g, '• ');
+  return result;
+}
+
 /** Minimum score for the "remainder" after a break so we don't create a page with 1–2 lines. */
-const MIN_REMAINDER_SCORE = 500;
+const MIN_REMAINDER_SCORE = 800;
 /** If the last chunk is below this score, merge it into the previous page when combined fits. */
-const MIN_LAST_CHUNK_SCORE = 600;
+const MIN_LAST_CHUNK_SCORE = 1200;
 
 export const paginateText = (text: string, maxScore: number = 3200): string[] => {
   if (!text) return [];
+  // Normalize bullet text before pagination so bullets are properly line-separated
+  text = normalizeBulletText(text);
   const chunks: string[] = [];
   let remainingText = text;
 

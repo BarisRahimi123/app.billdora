@@ -42,9 +42,16 @@ const applyInlineFormatting = (raw: string) => {
     return s;
 };
 
+const normalizeBullets = (text: string): string => {
+    if (!text) return text;
+    let r = text.replace(/([^\n])•/g, '$1\n•');
+    r = r.replace(/•(?=\S)/g, '• ');
+    return r;
+};
+
 const parseMarkdown = (md: string) => {
     if (!md) return '<div><br></div>';
-    return md.split('\n').map(line => {
+    return normalizeBullets(md).split('\n').map(line => {
         const t = line.trim();
         // Render Headers
         if (t.startsWith('# ')) return `<div class="text-3xl font-bold text-neutral-900 mb-4 mt-6 tracking-tight leading-tight" data-type="h1">${applyInlineFormatting(line.substring(2))}</div>`;

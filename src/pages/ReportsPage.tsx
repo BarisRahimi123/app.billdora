@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, TimeEntry, Invoice, Expense } from '../lib/api';
 import { BarChart3, Clock, DollarSign, TrendingUp, Users, Download, ChevronDown, ChevronRight, Building2, FolderOpen } from 'lucide-react';
 import { ReportsSkeleton } from '../components/Skeleton';
@@ -204,9 +205,9 @@ function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
                   const clients = Object.values(user.clients).sort((a, b) => b.totalHours - a.totalHours);
 
                   return (
-                    <>
+                    <React.Fragment key={user.userId}>
                       {/* User Row */}
-                      <tr key={user.userId} className="bg-neutral-50 hover:bg-neutral-100/80 cursor-pointer" onClick={() => toggleUser(user.userId)}>
+                      <tr className="bg-neutral-50 hover:bg-neutral-100/80 cursor-pointer" onClick={() => toggleUser(user.userId)}>
                         <td className="px-3 sm:px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             {isUserExpanded ? <ChevronDown className="w-3.5 h-3.5 text-neutral-400" /> : <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />}
@@ -233,8 +234,8 @@ function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
                         const clientUtil = client.totalHours > 0 ? Math.round((client.billableHours / client.totalHours) * 100) : 0;
 
                         return (
-                          <>
-                            <tr key={clientKey} className="bg-white hover:bg-neutral-50/50 cursor-pointer" onClick={() => toggleClient(clientKey)}>
+                          <React.Fragment key={clientKey}>
+                            <tr className="bg-white hover:bg-neutral-50/50 cursor-pointer" onClick={() => toggleClient(clientKey)}>
                               <td className="px-3 sm:px-4 py-2 pl-8 sm:pl-12">
                                 <div className="flex items-center gap-2">
                                   {isClientExpanded ? <ChevronDown className="w-3 h-3 text-neutral-400" /> : <ChevronRight className="w-3 h-3 text-neutral-400" />}
@@ -267,10 +268,10 @@ function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
                                 </tr>
                               );
                             })}
-                          </>
+                          </React.Fragment>
                         );
                       })}
-                    </>
+                    </React.Fragment>
                   );
                 })
               )}
@@ -295,6 +296,16 @@ function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
 
 export default function ReportsPage() {
   const { profile, user, loading: authLoading } = useAuth();
+  const { isAdmin, canViewFinancials } = usePermissions();
+
+  if (!isAdmin && !canViewFinancials) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view reports. Contact your administrator.</p>
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(true);
   const [activeReport, setActiveReport] = useState<ReportType>('time_by_project');
   const [dateRange, setDateRange] = useState<'week' | 'month' | 'quarter' | 'year'>('month');

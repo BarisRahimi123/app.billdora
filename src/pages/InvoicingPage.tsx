@@ -11,9 +11,11 @@ import MakePaymentModal from '../components/MakePaymentModal';
 import { useToast } from '../components/Toast';
 import { InvoicesSkeleton } from '../components/Skeleton';
 import { sortClientsForDisplay } from '../lib/utils';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 export default function InvoicingPage() {
   const { profile, user, loading: authLoading } = useAuth();
+  const { canView, canCreate, canEdit, canDelete, canViewFinancials, isAdmin, loading: permLoading } = usePermissions();
   const { checkAndProceed } = useFeatureGating();
   const { showToast } = useToast();
   const location = useLocation();
@@ -659,7 +661,7 @@ export default function InvoicingPage() {
   }, [clients, projects]);
 
   // Only block for auth loading, NOT data loading (prevents iOS resume spinner)
-  if (authLoading) {
+  if (authLoading || permLoading) {
     return <InvoicesSkeleton />;
   }
 
@@ -667,6 +669,15 @@ export default function InvoicingPage() {
     return (
       <div className="p-12 text-center">
         <p className="text-neutral-500">Unable to load invoices. Please log in again.</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin && !canView('invoicing')) {
+    return (
+      <div className="p-12 text-center">
+        <p className="text-neutral-500 text-lg font-medium">Access Restricted</p>
+        <p className="text-neutral-400 text-sm mt-2">You don't have permission to view invoices. Contact your administrator.</p>
       </div>
     );
   }
@@ -694,6 +705,7 @@ export default function InvoicingPage() {
             <span className="hidden sm:inline">Log Payment</span>
             <span className="sm:hidden">Log</span>
           </button>
+          {(isAdmin || canCreate('invoicing')) && (
           <button
             onClick={() => checkAndProceed('invoices', currentMonthInvoiceCount, () => setShowInvoiceModal(true))}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-[#476E66] text-white rounded-sm hover:bg-[#3A5B54] transition-colors text-[10px] font-bold uppercase tracking-widest shadow-sm"
@@ -702,6 +714,7 @@ export default function InvoicingPage() {
             <span className="hidden sm:inline">Create Invoice</span>
             <span className="sm:hidden">New</span>
           </button>
+          )}
         </div>
       </div>
 
@@ -937,6 +950,7 @@ export default function InvoicingPage() {
                           <Layers className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      {(isAdmin || canDelete('invoicing')) && (
                       <button
                         onClick={handleBatchDelete}
                         disabled={deleting}
@@ -945,6 +959,7 @@ export default function InvoicingPage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      )}
                     </div>
                   )}
                 </th>
@@ -1070,9 +1085,11 @@ export default function InvoicingPage() {
                             </button>
                           )}
                           <div className="border-t border-neutral-100 my-1"></div>
+                          {(isAdmin || canDelete('invoicing')) && (
                           <button onClick={(e) => { e.stopPropagation(); setActiveMenu(null); handleDeleteInvoice(invoice.id); }} className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 tracking-wide uppercase">
                             <Trash2 className="w-3.5 h-3.5" /> Delete
                           </button>
+                          )}
                         </div>
                       )}
                     </td>
