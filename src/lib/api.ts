@@ -2900,7 +2900,7 @@ export const bankStatementsApi = {
     const { data, error } = await supabase.from('bank_statements')
       .select('*')
       .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
+      .order('period_start', { ascending: false, nullsFirst: false });
     if (error) throw error;
     return data as BankStatement[];
   },

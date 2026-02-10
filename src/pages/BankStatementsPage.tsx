@@ -377,10 +377,11 @@ export default function BankStatementsPage() {
   }
 
   function findDuplicateStatement(fileName: string): BankStatement | undefined {
-    // Check by filename (strip timestamps if present)
-    const cleanName = fileName.replace(/^\d+-/, '').toLowerCase();
+    // Normalize: strip timestamps, OS copy suffixes like " (1)", " (2)", etc.
+    const normalize = (name: string) => name.replace(/^\d+-/, '').replace(/\s*\(\d+\)(?=\.\w+$)/, '').toLowerCase();
+    const cleanName = normalize(fileName);
     return statements.find(s => {
-      const existingClean = (s.file_name || '').replace(/^\d+-/, '').toLowerCase();
+      const existingClean = normalize(s.file_name || '');
       return existingClean === cleanName;
     });
   }
