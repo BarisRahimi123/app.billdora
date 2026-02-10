@@ -349,7 +349,6 @@ export interface Quote {
   // Recipient tracking - who the proposal was sent TO
   recipient_name?: string;
   recipient_email?: string;
-  last_sent_at?: string;
 }
 
 export interface QuoteLineItem {

@@ -463,7 +463,7 @@ export default function BankStatementsPage() {
       const parseResult = await aiClient.parseStatement(profile.company_id, file, statement.id);
       
       if (parseResult.success && parseResult.data) {
-        const txCount = parseResult.data._transactionCount || parseResult.data.transactions?.length || 0;
+        const txCount = parseResult.data.transactions?.length || 0;
         showToast(`Statement parsed: ${txCount} transactions saved`, 'success');
       } else {
         throw new Error(parseResult.error || 'Failed to parse statement');
@@ -1353,10 +1353,10 @@ export default function BankStatementsPage() {
                             ))}
                           </select>
                           {tx.category_source === 'ai' && (
-                            <Brain className="w-3 h-3 text-purple-500 flex-shrink-0" title="AI-suggested — review this" />
+                            <span title="AI-suggested — review this"><Brain className="w-3 h-3 text-purple-500 flex-shrink-0" /></span>
                           )}
                           {tx.category_source === 'auto' && (
-                            <Sparkles className="w-3 h-3 text-[#476E66] flex-shrink-0" title="Auto-detected" />
+                            <span title="Auto-detected"><Sparkles className="w-3 h-3 text-[#476E66] flex-shrink-0" /></span>
                           )}
                         </div>
                       </td>
