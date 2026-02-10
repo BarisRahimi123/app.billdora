@@ -249,7 +249,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // FIX: Don't set user until profile is also fetched to prevent race condition
             // where Dashboard sees user but no profile and shows error
             logger.auth('Fetching profile from database for', session.user.email);
-            const profileData = await fetchProfile(session.user.id);
+            let profileData = await fetchProfile(session.user.id);
+            
+            // RECOVERY: If no profile found (e.g., first login after email confirmation
+            // where signUp() failed to create profile due to no session)
+            if (!profileData && session.user.email) {
+              logger.auth('No profile on auth state change, attempting recovery...');
+              profileData = await recoverProfile(session.user.id, session.user.email);
+            }
+            
             logger.auth('Profile loaded on state change:', profileData?.email, 'companyId:', profileData?.company_id);
             if (mounted) {
               // Set both together so Dashboard sees complete state
@@ -345,7 +353,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(data.user);
       
-      const profileData = await fetchProfile(data.user.id);
+      let profileData = await fetchProfile(data.user.id);
+      
+      // RECOVERY: If no profile found by auth user ID, attempt to fix
+      if (!profileData) {
+        logger.auth('No profile found by ID, attempting recovery for', email);
+        profileData = await recoverProfile(data.user.id, email);
+      }
+      
       logger.auth('Profile loaded after sign-in:', { 
         hasProfile: !!profileData, 
         companyId: profileData?.company_id,
@@ -367,6 +382,112 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }
 
+  // Recover a missing or mismatched profile during sign-in
+  // This handles cases where signUp() failed to create/link the profile properly
+  // (e.g., email confirmation was required and profile creation silently failed)
+  async function recoverProfile(userId: string, email: string): Promise<Profile | null> {
+    try {
+      // Step 1: Check if a profile exists with this email but a different ID (ID mismatch)
+      const { data: emailProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email.toLowerCase())
+        .maybeSingle();
+      
+      if (emailProfile && emailProfile.id !== userId) {
+        logger.auth('Found profile with mismatched ID, repairing:', emailProfile.id, '->', userId);
+        const { data: fixed, error: fixErr } = await supabase
+          .from('profiles')
+          .update({ id: userId })
+          .eq('email', email.toLowerCase())
+          .select()
+          .single();
+        if (fixErr) {
+          console.error('[Auth] Profile ID repair failed:', fixErr);
+        } else {
+          logger.auth('Profile ID repaired successfully');
+          return fixed;
+        }
+      }
+      
+      if (emailProfile) {
+        // Profile exists and ID matches (shouldn't reach here, but just in case)
+        return emailProfile;
+      }
+      
+      // Step 2: No profile at all - check for invitation and create profile
+      logger.auth('No profile found, checking for company invitation...');
+      let companyId: string | null = null;
+      let userRole = 'admin';
+      let roleId: string | null = null;
+      
+      try {
+        const { data: invitation } = await supabase
+          .from('company_invitations')
+          .select('*, role:roles(id, name)')
+          .eq('email', email.toLowerCase())
+          .in('status', ['pending', 'accepted'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (invitation) {
+          logger.auth('Found invitation for', email, '- company:', invitation.company_id);
+          companyId = invitation.company_id;
+          roleId = invitation.role_id;
+          userRole = invitation.role?.name || 'staff';
+          
+          // Mark invitation as accepted if still pending
+          if (invitation.status === 'pending') {
+            await supabase
+              .from('company_invitations')
+              .update({ status: 'accepted' })
+              .eq('id', invitation.id);
+          }
+        }
+      } catch (e) {
+        console.error('[Auth] Failed to check invitations during recovery:', e);
+      }
+      
+      // Create the profile
+      const profileInsert: any = {
+        id: userId,
+        email: email.toLowerCase(),
+        is_active: true,
+        is_billable: true,
+        role: userRole,
+      };
+      if (companyId) profileInsert.company_id = companyId;
+      if (roleId) profileInsert.role_id = roleId;
+      
+      const { data: created, error: createErr } = await supabase
+        .from('profiles')
+        .insert(profileInsert)
+        .select()
+        .single();
+      
+      if (createErr) {
+        console.error('[Auth] Profile creation during recovery failed:', createErr);
+        return null;
+      }
+      
+      logger.auth('Profile created during sign-in recovery:', created?.id, 'company:', created?.company_id);
+      return created;
+    } catch (e) {
+      console.error('[Auth] Profile recovery exception:', e);
+      return null;
+    }
+  }
+
+  // Helper to get the correct redirect URL (production URL when on localhost/capacitor)
+  function getRedirectUrl(path: string = '/login'): string {
+    const origin = window.location.origin;
+    if (origin.includes('localhost') || origin.includes('capacitor://') || origin.includes('127.0.0.1')) {
+      return `https://app.billdora.com${path}`;
+    }
+    return `${origin}${path}`;
+  }
+
   // Sign up
   async function signUp(email: string, password: string, fullName: string, phone: string, companyName?: string, staffData?: any): Promise<SignUpResult> {
     logger.auth('Signing up:', email);
@@ -374,7 +495,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
-      options: { emailRedirectTo: `${window.location.origin}/login` }
+      options: { emailRedirectTo: getRedirectUrl('/login') }
     });
     
     if (error) return { error };
@@ -383,17 +504,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const emailConfirmationRequired = !data.user.email_confirmed_at;
       
       // Check for invitation
+      // Note: This may fail silently if email confirmation is required (no session yet)
+      // The signIn() recovery flow will handle it when the user first logs in
       let invitation: any = null;
       try {
-        const { data: inv } = await supabase
+        const { data: inv, error: invErr } = await supabase
           .from('company_invitations')
           .select('*, role:roles(id, name)')
           .eq('email', email.toLowerCase())
           .eq('status', 'pending')
           .gt('expires_at', new Date().toISOString())
           .maybeSingle();
+        if (invErr) {
+          console.warn('[Auth] Invitation lookup failed (may be expected if email confirmation required):', invErr.message);
+        }
         invitation = inv;
-      } catch {}
+      } catch (e) {
+        console.warn('[Auth] Invitation lookup exception:', e);
+      }
 
       let companyId: string | null = null;
       let userRole = 'admin';
@@ -406,8 +534,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         try {
           await supabase.from('company_invitations').update({ status: 'accepted' }).eq('id', invitation.id);
-        } catch {}
-      } else {
+        } catch (e) {
+          console.warn('[Auth] Invitation status update failed:', e);
+        }
+      } else if (!emailConfirmationRequired) {
+        // Only create a new company for non-invite signups when we have a session
         try {
           const { data: newCompanyId } = await supabase.rpc('create_company_for_user', {
             p_user_id: data.user.id,
@@ -416,13 +547,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             p_phone: phone
           });
           if (newCompanyId) companyId = newCompanyId;
-        } catch {}
+        } catch (e) {
+          console.warn('[Auth] Company creation failed:', e);
+        }
       }
       
       // Create/update profile
       try {
-        const { data: existing } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
-        
         const profileUpdate: any = { 
           company_id: companyId, 
           full_name: fullName, 
@@ -442,16 +573,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
         
+        // First check by auth user ID
+        const { data: existing } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle();
+        
         if (existing) {
-          const { data: updated } = await supabase.from('profiles').update(profileUpdate).eq('id', data.user.id).select().single();
-          setProfile(updated);
+          const { data: updated, error: updateErr } = await supabase.from('profiles').update(profileUpdate).eq('id', data.user.id).select().single();
+          if (updateErr) console.error('[Auth] Profile update error during signUp:', updateErr);
+          else setProfile(updated);
         } else {
-          const { data: created } = await supabase.from('profiles').insert({ 
-            id: data.user.id, email, is_active: true, is_billable: true, ...profileUpdate 
-          }).select().single();
-          setProfile(created);
+          // Check if a profile exists with same email but different ID (from a previous signup attempt)
+          const { data: emailExisting } = await supabase.from('profiles').select('*').eq('email', email.toLowerCase()).maybeSingle();
+          
+          if (emailExisting) {
+            // Fix the ID mismatch and update
+            logger.auth('Found existing profile with different ID for', email, '- updating to', data.user.id);
+            const { data: fixed, error: fixErr } = await supabase
+              .from('profiles')
+              .update({ ...profileUpdate, id: data.user.id })
+              .eq('email', email.toLowerCase())
+              .select()
+              .single();
+            if (fixErr) console.error('[Auth] Profile ID fix error during signUp:', fixErr);
+            else setProfile(fixed);
+          } else {
+            // Create new profile
+            const { data: created, error: insertErr } = await supabase.from('profiles').insert({ 
+              id: data.user.id, email, is_active: true, is_billable: true, ...profileUpdate 
+            }).select().single();
+            if (insertErr) console.error('[Auth] Profile insert error during signUp:', insertErr);
+            else setProfile(created);
+          }
         }
-      } catch {}
+      } catch (e) {
+        console.error('[Auth] Profile creation/update exception during signUp:', e);
+      }
       
       // HubSpot sync (fire and forget)
       const hubspotUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -475,7 +630,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: `${window.location.origin}/login` }
+      options: { emailRedirectTo: getRedirectUrl('/login') }
     });
     return { error };
   }
