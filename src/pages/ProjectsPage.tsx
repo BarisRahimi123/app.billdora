@@ -69,6 +69,15 @@ export default function ProjectsPage() {
   const { checkAndProceed } = useFeatureGating();
   const [projects, setProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+  // Store per-project collaboration permissions for shared projects
+  const [sharedProjectPermissions, setSharedProjectPermissions] = useState<Record<string, {
+    can_view_financials: boolean;
+    can_view_time_entries: boolean;
+    can_comment: boolean;
+    can_edit_tasks: boolean;
+    can_invite_others: boolean;
+    their_client_id?: string;
+  }>>({});
   const [projectSource, setProjectSource] = useState<'my' | 'shared'>('my');
   const [clients, setClients] = useState<Client[]>([]);
   // CRITICAL: Start with loading=false to prevent spinner on iOS resume
@@ -308,7 +317,7 @@ export default function ProjectsPage() {
       const myProject = projects.find(p => p.id === projectId);
       const sharedProject = sharedProjects.find(p => p.id === projectId);
       const project = myProject || sharedProject;
-      
+
       if (project) {
         setSelectedProject(project);
         loadProjectDetails(projectId);
@@ -349,7 +358,7 @@ export default function ProjectsPage() {
       setClients(clientsData || []);
       setAllInvoices(invoicesData || []);
 
-      // Load shared projects (projects shared with me)
+      // Load shared projects (projects shared with me) — preserve per-project permissions
       if (user?.email) {
         try {
           const sharedCollabs = await projectCollaboratorsApi.getSharedProjects(user.email, user.id);
@@ -357,6 +366,22 @@ export default function ProjectsPage() {
             .map(collab => collab.project as Project)
             .filter(Boolean);
           setSharedProjects(sharedProjectList);
+
+          // Build permissions map from collaboration records
+          const permMap: Record<string, typeof sharedProjectPermissions[string]> = {};
+          for (const collab of sharedCollabs) {
+            if (collab.project_id) {
+              permMap[collab.project_id] = {
+                can_view_financials: collab.can_view_financials ?? false,
+                can_view_time_entries: collab.can_view_time_entries ?? false,
+                can_comment: collab.can_comment ?? true,
+                can_edit_tasks: collab.can_edit_tasks ?? false,
+                can_invite_others: collab.can_invite_others ?? false,
+                their_client_id: collab.their_client_id || undefined,
+              };
+            }
+          }
+          setSharedProjectPermissions(permMap);
         } catch (err) {
           console.error('[ProjectsPage] Failed to load shared projects:', err);
         }
@@ -573,6 +598,27 @@ export default function ProjectsPage() {
     return stats;
   }, [projects, allInvoices, invoiceProjectIds]);
 
+  // Compute effective permissions for the selected project
+  // For shared projects, use the collaboration-specific permissions instead of the user's general role
+  const isSharedProject = selectedProject ? sharedProjects.some(p => p.id === selectedProject.id) : false;
+  const effectiveCanViewFinancials = isSharedProject && selectedProject
+    ? (sharedProjectPermissions[selectedProject.id]?.can_view_financials ?? false)
+    : canViewFinancials;
+  const effectiveCanEditTasks = isSharedProject && selectedProject
+    ? (sharedProjectPermissions[selectedProject.id]?.can_edit_tasks ?? false)
+    : canEdit;
+  const effectiveCanComment = isSharedProject && selectedProject
+    ? (sharedProjectPermissions[selectedProject.id]?.can_comment ?? true)
+    : true;
+
+  // Helper: check financial visibility for any project (used in list views)
+  const canViewFinancialsForProject = (projectId: string) => {
+    if (sharedProjectPermissions[projectId] !== undefined) {
+      return sharedProjectPermissions[projectId].can_view_financials;
+    }
+    return canViewFinancials;
+  };
+
   const filteredProjects = useMemo(() => {
     const baseProjects = projectSource === 'my' ? projects : sharedProjects;
     return baseProjects.filter(p => {
@@ -767,7 +813,7 @@ export default function ProjectsPage() {
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1 p-1 bg-neutral-100 rounded-sm w-max sm:w-fit">
             {(['vitals', 'client', 'details', 'tasks', 'financials', 'billing'] as DetailTab[]).filter(tab => {
-              if (!canViewFinancials && (tab === 'financials' || tab === 'billing')) return false;
+              if (!effectiveCanViewFinancials && (tab === 'financials' || tab === 'billing')) return false;
               return true;
             }).map(tab => (
               <button
@@ -809,7 +855,7 @@ export default function ProjectsPage() {
             </div>
 
             {/* Budget Card */}
-            {canViewFinancials && (
+            {effectiveCanViewFinancials && (
               <div
                 className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
                 style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
@@ -869,7 +915,7 @@ export default function ProjectsPage() {
             </div>
 
             {/* Invoiced Card */}
-            {canViewFinancials && (
+            {effectiveCanViewFinancials && (
               <div
                 className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
                 style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}
@@ -904,22 +950,29 @@ export default function ProjectsPage() {
                 await api.updateProject(selectedProject.id, updates);
                 if (projectId) loadProjectDetails(projectId);
               }}
-              canViewFinancials={canViewFinancials}
+              canViewFinancials={effectiveCanViewFinancials}
               formatCurrency={formatCurrency}
               companyId={profile?.company_id || ''}
               projectCompanyId={selectedProject.company_id}
+              tasks={tasks}
             />
           )}
 
           {activeTab === 'client' && (
             <ClientTabContent
-              client={clients.find(c => c.id === selectedProject.client_id) || selectedProject.client}
+              client={
+                // For shared projects, show the collaborator's chosen client if available
+                isSharedProject && sharedProjectPermissions[selectedProject.id]?.their_client_id
+                  ? clients.find(c => c.id === sharedProjectPermissions[selectedProject.id].their_client_id)
+                    || selectedProject.client
+                  : clients.find(c => c.id === selectedProject.client_id) || selectedProject.client
+              }
               onClientUpdate={async (updatedClient) => {
                 await api.updateClient(updatedClient.id, updatedClient);
                 loadData();
                 if (projectId) loadProjectDetails(projectId);
               }}
-              canViewFinancials={canViewFinancials}
+              canViewFinancials={effectiveCanViewFinancials}
               isAdmin={isAdmin}
             />
           )}
@@ -930,10 +983,11 @@ export default function ProjectsPage() {
               timeEntries={timeEntries}
               projectId={selectedProject.id}
               companyId={profile?.company_id || ''}
+              projectCompanyId={selectedProject.company_id}
               onTasksChange={() => { if (projectId) loadProjectDetails(projectId); }}
               onEditTask={(task) => { setEditingTask(task); setShowTaskModal(true); }}
               onAddTask={() => { setEditingTask(null); setShowTaskModal(true); }}
-              canViewFinancials={canViewFinancials}
+              canViewFinancials={effectiveCanViewFinancials}
             />
           )}
 
@@ -1396,7 +1450,7 @@ export default function ProjectsPage() {
             onClose={() => { setShowTaskModal(false); setEditingTask(null); }}
             onSave={() => { if (projectId) loadProjectDetails(projectId); setShowTaskModal(false); setEditingTask(null); }}
             onDelete={async (taskId) => { await deleteTask(taskId); setShowTaskModal(false); setEditingTask(null); }}
-            canViewFinancials={canViewFinancials}
+            canViewFinancials={effectiveCanViewFinancials}
           />
         )}
 
@@ -1513,7 +1567,7 @@ export default function ProjectsPage() {
               }`}
           >
             <Users className="w-3.5 h-3.5" />
-            Shared with Me ({sharedProjects.length})
+            Collaborations ({sharedProjects.length})
           </button>
         </div>
       )}
@@ -2023,8 +2077,8 @@ export default function ProjectsPage() {
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-light text-sm text-neutral-900 truncate group-hover:font-bold transition-all">{project.name}</h3>
-                      <p className="text-[11px] font-medium text-neutral-500 truncate mt-0.5 uppercase tracking-wide">{clientName}</p>
+                      <h3 className="font-semibold text-sm text-neutral-900 truncate group-hover:text-[#476E66] transition-all">{project.name}</h3>
+                      <p className="text-[10px] font-medium text-neutral-500 truncate mt-0.5 uppercase tracking-wide">{clientName}</p>
 
                       {/* Meta Info */}
                       <div className="flex items-center gap-3 mt-3 flex-wrap">
@@ -2038,7 +2092,7 @@ export default function ProjectsPage() {
                             }`} />
                           {project.status?.replace('_', ' ') || 'active'}
                         </span>
-                        {canViewFinancials && project.budget > 0 && (
+                        {canViewFinancialsForProject(project.id) && project.budget > 0 && (
                           <span className="text-[11px] font-medium text-neutral-600">{formatCurrency(project.budget)}</span>
                         )}
                         {project.start_date && (
@@ -2176,13 +2230,13 @@ export default function ProjectsPage() {
                             type="project"
                           />
                           <div className="min-w-0">
-                            <p className="font-light text-sm text-neutral-900 truncate group-hover:font-bold group-hover:text-[#476E66] transition-all">{project.name}</p>
+                            <p className="font-semibold text-sm text-neutral-900 truncate group-hover:text-[#476E66] transition-all">{project.name}</p>
                           </div>
                         </div>
                       </td>
                     )}
                     {visibleColumns.includes('client') && (
-                      <td className="px-4 py-4 text-[11px] font-medium text-neutral-600 uppercase tracking-wider">
+                      <td className="px-4 py-4 text-[10px] font-medium text-neutral-600 uppercase tracking-wider">
                         {project.client?.name || clients.find(c => c.id === project.client_id)?.name || '-'}
                       </td>
                     )}
@@ -2435,7 +2489,7 @@ export default function ProjectsPage() {
                               {project.status?.replace('_', ' ') || 'active'}
                             </span>
                           </div>
-                          {canViewFinancials && (
+                          {canViewFinancialsForProject(project.id) && (
                             <div className="w-24 flex-shrink-0 text-right">
                               <span className="font-mono text-[11px] text-neutral-900">{formatCurrency(project.budget)}</span>
                             </div>
@@ -2927,7 +2981,7 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
 }
 
 // Project Vitals Tab Component
-function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatCurrency, companyId, projectCompanyId }: {
+function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatCurrency, companyId, projectCompanyId, tasks = [] }: {
   project: Project;
   clients: Client[];
   onSave: (updates: Partial<Project>) => Promise<void>;
@@ -2935,6 +2989,7 @@ function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatC
   formatCurrency: (amount?: number) => string;
   companyId: string;
   projectCompanyId?: string;
+  tasks?: Task[];
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -3090,7 +3145,7 @@ function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatC
 
       {/* Comments Section */}
       <div className="mt-8 pt-6 border-t border-neutral-100">
-        <ProjectComments projectId={project.id} companyId={projectCompanyId || companyId} />
+        <ProjectComments projectId={project.id} companyId={projectCompanyId || companyId} tasks={tasks} />
       </div>
     </div >
   );
@@ -3341,7 +3396,7 @@ function ClientTabContent({ client, onClientUpdate, canViewFinancials = true, is
 }
 
 // Tasks Tab Component - Clean Unified Design
-function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true }: {
+function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true, projectCompanyId }: {
   tasks: Task[];
   timeEntries?: TimeEntry[];
   projectId: string;
@@ -3350,6 +3405,7 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
   onEditTask: (task: Task) => void;
   onAddTask: () => void;
   canViewFinancials?: boolean;
+  projectCompanyId?: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -3693,6 +3749,11 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
             </div>
           </div>
         )}
+      </div>
+
+      {/* Comments Section */}
+      <div className="mt-8 pt-6 border-t border-neutral-100">
+        <ProjectComments projectId={projectId} companyId={projectCompanyId || companyId} tasks={tasks} />
       </div>
     </div>
   );

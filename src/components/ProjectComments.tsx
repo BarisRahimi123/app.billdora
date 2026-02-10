@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   MessageSquare,
   Send,
@@ -12,17 +12,54 @@ import {
   Clock,
   CornerDownRight,
   User,
-  ShieldAlert
+  ShieldAlert,
+  ListTodo,
+  AtSign
 } from 'lucide-react';
-import { ProjectComment, projectCommentsApi } from '../lib/api';
+import { ProjectComment, projectCommentsApi, Task } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProjectCommentsProps {
   projectId: string;
   companyId: string;
+  tasks?: Task[];
 }
 
-export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) {
+// ─── Task mention format: @[task:ID:Name] ──────────────────
+const TASK_MENTION_REGEX = /@\[task:([^:]+):([^\]]+)\]/g;
+
+function renderCommentContent(content: string) {
+  const parts: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(TASK_MENTION_REGEX.source, 'g');
+
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    const taskName = match[2];
+    parts.push(
+      <span
+        key={`task-${match.index}`}
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-xs font-medium align-baseline cursor-default"
+        title={`Task: ${taskName}`}
+      >
+        <ListTodo className="w-3 h-3 flex-shrink-0" />
+        {taskName}
+      </span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : content;
+}
+
+export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCommentsProps) {
   const { user, profile } = useAuth();
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -36,6 +73,107 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
   const [showResolved, setShowResolved] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionTarget, setMentionTarget] = useState<'new' | 'reply'>('new');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
+  const mentionAnchorPos = useRef<number>(0); // cursor position of the @ character
+  // Map of friendly display name -> task ID for converting before submit
+  const [mentionsMap, setMentionsMap] = useState<Record<string, string>>({});
+
+  const filteredTasks = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return tasks.filter(t => t.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [tasks, mentionQuery]);
+
+  const closeMention = useCallback(() => {
+    setMentionQuery(null);
+    setMentionIndex(0);
+  }, []);
+
+  // Convert friendly @Task Name to storage format @[task:id:Task Name] before saving
+  function convertMentionsForStorage(text: string): string {
+    let result = text;
+    // Sort by name length descending to avoid partial matches
+    const entries = Object.entries(mentionsMap).sort((a, b) => b[0].length - a[0].length);
+    for (const [name, id] of entries) {
+      const friendlyMention = `@${name}`;
+      const storageMention = `@[task:${id}:${name}]`;
+      result = result.split(friendlyMention).join(storageMention);
+    }
+    return result;
+  }
+
+  function handleMentionInput(value: string, textarea: HTMLTextAreaElement | null, target: 'new' | 'reply') {
+    if (!textarea) return;
+    const cursorPos = textarea.selectionStart;
+    // Look backwards from cursor for an unmatched @ sign
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (atIndex >= 0) {
+      const charBefore = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' ';
+      const query = textBeforeCursor.slice(atIndex + 1);
+      // Only trigger if @ is at start or after a space, and query doesn't contain newlines
+      // Also don't trigger if this looks like an already-inserted mention
+      if ((charBefore === ' ' || charBefore === '\n' || atIndex === 0) && !query.includes('\n')) {
+        setMentionQuery(query);
+        setMentionTarget(target);
+        setMentionIndex(0);
+        mentionAnchorPos.current = atIndex;
+        return;
+      }
+    }
+    closeMention();
+  }
+
+  function insertMention(task: Task, target: 'new' | 'reply') {
+    // Show friendly format in textarea: @Task Name
+    const friendlyMention = `@${task.name}`;
+    const setter = target === 'new' ? setNewComment : setReplyContent;
+    const currentValue = target === 'new' ? newComment : replyContent;
+    const textarea = target === 'new' ? textareaRef.current : null;
+
+    const before = currentValue.slice(0, mentionAnchorPos.current);
+    const cursorPos = textarea?.selectionStart || currentValue.length;
+    const after = currentValue.slice(cursorPos);
+    const newValue = before + friendlyMention + ' ' + after;
+
+    setter(newValue);
+    // Remember the task name -> ID mapping for conversion on submit
+    setMentionsMap(prev => ({ ...prev, [task.name]: task.id }));
+    closeMention();
+
+    // Refocus textarea
+    setTimeout(() => {
+      if (textarea) {
+        const newCursorPos = before.length + friendlyMention.length + 1;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }
+    }, 0);
+  }
+
+  function handleMentionKeyDown(e: React.KeyboardEvent, target: 'new' | 'reply') {
+    if (mentionQuery === null || filteredTasks.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex(i => Math.min(i + 1, filteredTasks.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertMention(filteredTasks[mentionIndex], target);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMention();
+    }
+  }
 
   useEffect(() => {
     loadComments();
@@ -75,19 +213,23 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
         author_email: user.email
       });
       
+      // Convert friendly @Task Name mentions to storage format before saving
+      const contentForStorage = convertMentionsForStorage(newComment.trim());
+
       const comment = await projectCommentsApi.create({
         project_id: projectId,
         company_id: companyId,
         author_id: user.id,
         author_name: profile?.full_name || user.email,
         author_email: user.email || '',
-        content: newComment.trim(),
+        content: contentForStorage,
         visibility
       });
 
       console.log('[ProjectComments] Comment created successfully:', comment);
       setComments(prev => [...prev, { ...comment, replies: [] }]);
       setNewComment('');
+      setMentionsMap({});
       setVisibility('all');
     } catch (err: any) {
       console.error('[ProjectComments] Failed to post comment:', err);
@@ -102,13 +244,15 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
 
     try {
       setIsSubmitting(true);
+      const replyContentForStorage = convertMentionsForStorage(replyContent.trim());
+
       const reply = await projectCommentsApi.create({
         project_id: projectId,
         company_id: companyId,
         author_id: user.id,
         author_name: profile?.full_name || user.email,
         author_email: user.email,
-        content: replyContent.trim(),
+        content: replyContentForStorage,
         parent_id: parentId,
         visibility: 'all'
       });
@@ -120,6 +264,7 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
       ));
       setReplyingTo(null);
       setReplyContent('');
+      setMentionsMap({});
     } catch (err) {
       console.error('Failed to post reply:', err);
     } finally {
@@ -318,20 +463,57 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
         </div>
         <div className="flex-1">
           <form onSubmit={handleSubmit} className="relative group">
-            <textarea
-              ref={textareaRef}
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a note or comment..."
-              className="w-full bg-transparent border-0 border-b border-neutral-200 px-0 py-2 text-sm focus:ring-0 focus:border-[#476E66] placeholder:text-neutral-400 resize-none transition-colors"
-              rows={1}
-              style={{ minHeight: '2.5rem' }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = `${target.scrollHeight}px`;
-              }}
-            />
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={newComment}
+                onChange={(e) => {
+                  setNewComment(e.target.value);
+                  handleMentionInput(e.target.value, e.target as HTMLTextAreaElement, 'new');
+                }}
+                onKeyDown={(e) => handleMentionKeyDown(e, 'new')}
+                placeholder="Add a note or comment... (type @ to mention a task)"
+                className="w-full bg-transparent border-0 border-b border-neutral-200 px-0 py-2 text-sm focus:ring-0 focus:border-[#476E66] placeholder:text-neutral-400 resize-none transition-colors"
+                rows={1}
+                style={{ minHeight: '2.5rem' }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${target.scrollHeight}px`;
+                }}
+                onBlur={() => setTimeout(closeMention, 200)}
+              />
+
+              {/* @mention dropdown */}
+              {mentionQuery !== null && mentionTarget === 'new' && filteredTasks.length > 0 && (
+                <div
+                  ref={mentionDropdownRef}
+                  className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-48 overflow-y-auto"
+                >
+                  <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                    <AtSign className="w-3 h-3" /> Tasks
+                  </div>
+                  {filteredTasks.map((task, i) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onMouseDown={(e) => { e.preventDefault(); insertMention(task, 'new'); }}
+                      className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
+                    >
+                      <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+                      <span className="truncate">{task.name}</span>
+                      {task.status && (
+                        <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                          task.status === 'completed' ? 'bg-green-100 text-green-600' :
+                          task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                          'bg-neutral-100 text-neutral-500'
+                        }`}>{task.status.replace('_', ' ')}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className={`flex items-center justify-between mt-2 overflow-hidden transition-all duration-200 ${newComment.trim() ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0'}`}>
               <button
@@ -436,8 +618,8 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-1 text-sm text-neutral-600 leading-relaxed break-words">
-                    {comment.content}
+                  <div className="mt-1 text-sm text-neutral-600 leading-relaxed break-words whitespace-pre-wrap">
+                    {renderCommentContent(comment.content)}
                   </div>
                 )}
 
@@ -461,15 +643,48 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
                     <div className="pt-1.5">
                       <CornerDownRight className="w-4 h-4 text-neutral-300" />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 relative">
                       <textarea
                         value={replyContent}
-                        onChange={(e) => setReplyContent(e.target.value)}
-                        placeholder="Write a reply..."
+                        onChange={(e) => {
+                          setReplyContent(e.target.value);
+                          handleMentionInput(e.target.value, e.target as HTMLTextAreaElement, 'reply');
+                        }}
+                        onKeyDown={(e) => handleMentionKeyDown(e, 'reply')}
+                        onBlur={() => setTimeout(closeMention, 200)}
+                        placeholder="Write a reply... (type @ to mention a task)"
                         className="w-full bg-neutral-50 border-0 rounded-lg p-2 text-sm focus:ring-1 focus:ring-[#476E66] resize-none"
                         rows={1}
                         autoFocus
                       />
+
+                      {/* @mention dropdown for replies */}
+                      {mentionQuery !== null && mentionTarget === 'reply' && filteredTasks.length > 0 && (
+                        <div className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-48 overflow-y-auto">
+                          <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                            <AtSign className="w-3 h-3" /> Tasks
+                          </div>
+                          {filteredTasks.map((task, i) => (
+                            <button
+                              key={task.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); insertMention(task, 'reply'); }}
+                              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
+                            >
+                              <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+                              <span className="truncate">{task.name}</span>
+                              {task.status && (
+                                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                                  task.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                  task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                  'bg-neutral-100 text-neutral-500'
+                                }`}>{task.status.replace('_', ' ')}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="flex justify-end gap-2 mt-2">
                         <button
                           onClick={() => { setReplyingTo(null); setReplyContent(''); }}
@@ -530,8 +745,8 @@ export function ProjectComments({ projectId, companyId }: ProjectCommentsProps) 
                             </div>
                           </div>
                         ) : (
-                          <div className="text-sm text-neutral-600 pl-7">
-                            {reply.content}
+                          <div className="text-sm text-neutral-600 pl-7 whitespace-pre-wrap">
+                            {renderCommentContent(reply.content)}
                           </div>
                         )}
                       </div>

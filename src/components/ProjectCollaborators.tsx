@@ -67,9 +67,14 @@ export function ProjectCollaborators({
   const currentUserEmail = profile?.email?.toLowerCase() || user?.email?.toLowerCase();
   const currentUserId = user?.id;
   
-  const isCurrentUserCollaborator = collaborators.some(
+  const currentUserCollab = collaborators.find(
     c => c.invited_email?.toLowerCase() === currentUserEmail || c.invited_user_id === currentUserId
   );
+  const isCurrentUserCollaborator = !!currentUserCollab;
+  
+  // Determine if user can share: project owner OR collaborator with can_invite_others permission
+  const isProjectOwner = profile?.company_id === companyId;
+  const canShare = isProjectOwner || (isCurrentUserCollaborator && currentUserCollab?.can_invite_others);
 
   // Filter out the current user from the displayed list
   const displayedCollaborators = collaborators.filter(
@@ -200,8 +205,8 @@ export function ProjectCollaborators({
             </h3>
           </div>
 
-          {/* Only show Share button if current user is the project owner (not a collaborator) */}
-          {!isCurrentUserCollaborator && (
+          {/* Show Share button for project owner or collaborators with can_invite_others */}
+          {canShare && (
             <button
               onClick={() => setShowShareModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors"
@@ -219,9 +224,9 @@ export function ProjectCollaborators({
               <Users className="w-5 h-5 text-neutral-300" />
             </div>
             <p className="text-sm text-neutral-400">
-              {isCurrentUserCollaborator ? 'No other collaborators on this project' : 'No collaborators yet'}
+              {isCurrentUserCollaborator && !canShare ? 'No other collaborators on this project' : 'No collaborators yet'}
             </p>
-            {!isCurrentUserCollaborator && (
+            {canShare && (
               <>
                 <p className="text-xs text-neutral-300 mt-1">
                   Share this project with clients or partners

@@ -3154,10 +3154,10 @@ export const collaborationApi = {
           if (companyIds.length > 0) {
             const { data: companies } = await supabase
               .from('companies')
-              .select('id, company_name')
+              .select('id, name')
               .in('id', companyIds);
             if (companies) {
-              companiesMap = companies.reduce((acc, c) => ({ ...acc, [c.id]: c.company_name }), {});
+              companiesMap = companies.reduce((acc, c) => ({ ...acc, [c.id]: c.name }), {});
             }
           }
 
@@ -3958,7 +3958,7 @@ export const projectCollaboratorsApi = {
         return [];
       }
 
-      // Transform RPC response to include nested project object
+      // Transform RPC response to include nested project object with client data
       const result = rpcData.map((d: any) => ({
         id: d.collaboration_id,
         project_id: d.project_id,
@@ -3973,6 +3973,7 @@ export const projectCollaboratorsApi = {
         can_view_time_entries: d.can_view_time_entries,
         can_comment: d.can_comment,
         can_edit_tasks: d.can_edit_tasks,
+        can_invite_others: d.can_invite_others,
         accepted_at: d.accepted_at,
         status: 'accepted',
         project: {
@@ -3985,7 +3986,17 @@ export const projectCollaboratorsApi = {
           end_date: d.project_end_date,
           budget: d.project_budget,
           client_id: d.project_client_id,
-          priority: d.project_priority
+          priority: d.project_priority,
+          // Include client data from the project owner's side
+          client: d.client_name ? {
+            id: d.project_client_id,
+            name: d.client_name,
+            email: d.client_email,
+            phone: d.client_phone,
+            address: d.client_address,
+            billing_contact_name: d.client_billing_contact_name,
+            billing_contact_email: d.client_billing_contact_email
+          } : undefined
         },
         invited_by_company: d.inviter_company_name ? {
           name: d.inviter_company_name
@@ -4079,7 +4090,7 @@ export const projectCollaboratorsApi = {
     const [projectResult, inviterResult, inviterCompanyResult] = await Promise.all([
       supabase.from('projects').select('name').eq('id', invitation.project_id).single(),
       supabase.from('profiles').select('full_name, email').eq('id', invitation.invited_by_user_id).single(),
-      supabase.from('companies').select('company_name').eq('id', invitation.invited_by_company_id).single()
+      supabase.from('companies').select('name').eq('id', invitation.invited_by_company_id).single()
     ]);
 
     const project = projectResult.data;
@@ -4087,7 +4098,7 @@ export const projectCollaboratorsApi = {
     const inviterCompany = inviterCompanyResult.data;
     const projectName = project?.name || 'a project';
     const inviterName = inviter?.full_name || inviter?.email || 'Someone';
-    const companyName = inviterCompany?.company_name || 'a company';
+    const companyName = inviterCompany?.name || 'a company';
 
     console.log('[projectCollaboratorsApi] invite - notification data:', { projectName, inviterName, companyName });
 
