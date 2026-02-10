@@ -266,6 +266,7 @@ export default function BankStatementsPage() {
   const [expenses, setExpenses] = useState<CompanyExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; fileName: string; step: 'uploading' | 'parsing'; completed: string[] } | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -432,17 +433,20 @@ export default function BankStatementsPage() {
     }
     
     setUploading(true);
+    const completed: string[] = [];
     let successCount = 0;
     let errorCount = 0;
     
     try {
       for (let i = 0; i < filesToUpload.length; i++) {
         const file = filesToUpload[i];
+        setUploadProgress({ current: i + 1, total: filesToUpload.length, fileName: file.name, step: 'uploading', completed: [...completed] });
         try {
           // Create statement record and upload file
           const statement = await bankStatementsApi.uploadStatement(profile.company_id, file);
           
           // Parse with AI — edge function saves transactions & updates statement server-side
+          setUploadProgress({ current: i + 1, total: filesToUpload.length, fileName: file.name, step: 'parsing', completed: [...completed] });
           const parseResult = await aiClient.parseStatement(profile.company_id, file, statement.id);
           
           if (parseResult.success && parseResult.data) {
@@ -457,17 +461,23 @@ export default function BankStatementsPage() {
               );
             }
             successCount++;
+            completed.push(file.name);
+            showToast(`Uploaded ${file.name} (${i + 1}/${filesToUpload.length})`, 'success');
+            // Refresh the statements list after each successful upload so the user sees progress
+            loadData();
           } else {
             errorCount++;
+            showToast(`Failed to parse ${file.name}`, 'error');
           }
         } catch (err: any) {
           console.error(`Failed to upload ${file.name}:`, err);
           errorCount++;
+          showToast(`Failed: ${file.name} — ${err?.message || 'Unknown error'}`, 'error');
         }
       }
       
       if (successCount > 0) {
-        showToast(`${successCount} statement(s) uploaded successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}`, 'success');
+        showToast(`Done! ${successCount} of ${filesToUpload.length} statement(s) uploaded`, 'success');
         await loadData();
       } else {
         showToast('Failed to upload statements', 'error');
@@ -477,6 +487,7 @@ export default function BankStatementsPage() {
       showToast(error?.message || 'Failed to upload statements', 'error');
     }
     setUploading(false);
+    setUploadProgress(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -981,7 +992,7 @@ export default function BankStatementsPage() {
                 ) : (
                   <Upload className="w-3 h-3" />
                 )}
-                <span className="hidden sm:inline">{uploading ? 'Uploading...' : 'Upload Statements'}</span>
+                <span className="hidden sm:inline">{uploading ? 'Processing...' : 'Upload Statements'}</span>
                 <span className="sm:hidden">{uploading ? '...' : 'Upload'}</span>
               </button>
             </>
@@ -1104,6 +1115,41 @@ export default function BankStatementsPage() {
               companyId={profile.company_id}
               onSuccess={loadData}
             />
+          )}
+
+          {/* Upload Progress Banner */}
+          {uploadProgress && (
+            <div className="bg-white rounded-lg p-3 border border-[#476E66]/20" style={{ boxShadow: 'var(--shadow-card)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-3.5 h-3.5 text-[#476E66] animate-spin" />
+                  <span className="text-xs font-medium text-neutral-900">
+                    {uploadProgress.step === 'uploading' ? 'Uploading' : 'AI Parsing'}: {uploadProgress.fileName}
+                  </span>
+                </div>
+                <span className="text-[10px] font-medium text-neutral-500">
+                  {uploadProgress.current} of {uploadProgress.total}
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-neutral-100 rounded-full h-1.5 mb-2">
+                <div
+                  className="bg-[#476E66] h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${((uploadProgress.current - (uploadProgress.step === 'parsing' ? 0.5 : 1) + 1) / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+              {/* Completed files */}
+              {uploadProgress.completed.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {uploadProgress.completed.map(name => (
+                    <span key={name} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-700 rounded text-[10px]">
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Statements List */}
