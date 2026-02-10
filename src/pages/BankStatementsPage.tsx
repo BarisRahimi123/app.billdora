@@ -168,15 +168,20 @@ const CATEGORY_KEYWORD_RULES: { keywords: string[]; category: string }[] = [
     'grainger', 'fastenal', 'lumber', 'supply house', 'plumbing supply',
     'electrical supply', 'building material',
   ], category: 'materials' },
-  // Transfers
+  // Incoming Zelle / person-to-person (received payments = income) — must be before outgoing Zelle
   { keywords: [
-    'transfer to', 'transfer from', 'online transfer', 'ach transfer',
-    'wire transfer', 'internal transfer', 'account transfer',
-  ], category: 'transfer' },
-  // Zelle / Person-to-person payments (freelancer / subcontractor likely)
+    'zelle from', 'zelle payment from',
+  ], category: 'income' },
+  // Zelle / Venmo / Person-to-person payments — typically freelancer or subcontractor payments
   { keywords: [
-    'zelle payment', 'zelle to', 'zelle from', 'venmo', 'cashapp', 'cash app',
+    'zelle payment', 'zelle to', 'pmnt sent', 'venmo', 'cashapp', 'cash app',
     'paypal',
+  ], category: 'professional_services' },
+  // Internal account transfers (between own accounts only)
+  { keywords: [
+    'online transfer to chk', 'online transfer to sav', 'mobile transfer to chk',
+    'mobile transfer to sav', 'transfer to chk', 'transfer to sav',
+    'internal transfer', 'account transfer',
   ], category: 'transfer' },
   // Refunds (positive amounts with refund keyword)
   { keywords: ['refund', 'credit memo', 'chargeback', 'reversal'], category: 'refund' },
@@ -588,7 +593,12 @@ export default function BankStatementsPage() {
         await supabase.from('category_learned_rules').update(ruleData).eq('id', existing.id);
         setLearnedRules(learnedRules.map(r => r.id === existing.id ? { ...r, ...ruleData } : r));
       } else {
-        const { data } = await supabase.from('category_learned_rules').insert(ruleData).select().single();
+        // Use upsert to handle race conditions where the pattern already exists in DB
+        // but wasn't found via fuzzy match in local state
+        const { data } = await supabase.from('category_learned_rules')
+          .upsert(ruleData, { onConflict: 'company_id,description_pattern' })
+          .select()
+          .single();
         if (data) setLearnedRules([...learnedRules, data as LearnedRule]);
       }
     } catch (e) {

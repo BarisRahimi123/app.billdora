@@ -41,14 +41,15 @@ export default function PlaidLink({ userId, companyId, onSuccess }: PlaidLinkPro
 
   useEffect(() => {
     loadConnectedBanks();
-    // Load Plaid Link SDK
-    const script = document.createElement('script');
-    script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
-    script.async = true;
-    document.body.appendChild(script);
-    return () => {
-      document.body.removeChild(script);
-    };
+    // Load Plaid Link SDK — only inject once globally
+    const existingScript = document.querySelector('script[src*="link-initialize.js"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+      script.async = true;
+      document.body.appendChild(script);
+    }
+    // Don't remove on unmount — keep the SDK loaded to avoid re-injection
   }, []);
 
   async function loadConnectedBanks() {

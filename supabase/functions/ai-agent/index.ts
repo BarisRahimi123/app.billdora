@@ -111,10 +111,12 @@ const CATEGORY_RULES: { keywords: string[]; category: string }[] = [
   { keywords: ['loan payment', 'sba loan', 'line of credit', 'credit line', 'mortgage payment', 'principal payment', 'interest payment', 'kabbage', 'ondeck', 'bluevine', 'fundbox', 'lendio'], category: 'loan_payment' },
   // Materials & Supplies
   { keywords: ['home depot', 'lowes', "lowe's", 'menards', 'ace hardware', 'tractor supply', 'grainger', 'fastenal', 'lumber', 'supply house', 'plumbing supply', 'electrical supply', 'building material'], category: 'materials' },
-  // Transfers
-  { keywords: ['transfer to', 'transfer from', 'online transfer', 'ach transfer', 'wire transfer', 'internal transfer', 'account transfer'], category: 'transfer' },
-  // Zelle / P2P
-  { keywords: ['zelle payment', 'zelle to', 'zelle from', 'venmo', 'cashapp', 'cash app', 'paypal'], category: 'transfer' },
+  // Incoming Zelle / person-to-person (received payments = income) — must be before outgoing Zelle
+  { keywords: ['zelle from', 'zelle payment from'], category: 'income' },
+  // Zelle / Venmo / P2P payments — typically freelancer or subcontractor payments
+  { keywords: ['zelle payment', 'zelle to', 'pmnt sent', 'venmo', 'cashapp', 'cash app', 'paypal'], category: 'professional_services' },
+  // Internal account transfers (between own accounts only)
+  { keywords: ['online transfer to chk', 'online transfer to sav', 'mobile transfer to chk', 'mobile transfer to sav', 'transfer to chk', 'transfer to sav', 'internal transfer', 'account transfer'], category: 'transfer' },
   // Refunds
   { keywords: ['refund', 'credit memo', 'chargeback', 'reversal'], category: 'refund' },
   // Income
@@ -351,9 +353,11 @@ CRITICAL RULES:
 - NEGATIVE amounts (-) are DEBITS: expenses, payments, withdrawals.
 - ATM deposits and mobile check deposits from clients are "income", NOT "owner_draw".
 - ATM withdrawals by the owner are "owner_draw".
-- Zelle/wire payments TO others may be "freelancer", "subcontractor", or "transfer" depending on context.
+- Zelle/Venmo/PayPal/CashApp payments TO named individuals are "professional_services" (freelancer/contractor payments), NOT "transfer".
+- Only use "transfer" for internal account-to-account transfers (e.g., "online transfer to CHK 3509", "transfer to savings").
+- Wire transfers TO companies or individuals for services are "professional_services", not "transfer".
 - Only use "owner_draw" for cash withdrawals BY the business owner (ATM withdrawals, personal spending).
-- Use "income" for any client payment, check deposit, or business revenue.`,
+- Use "income" for any client payment, check deposit, Zelle received, or business revenue.`,
     messages: [{ role: 'user', content: `Categorize these bank transactions. Return ONLY a JSON array (no markdown):\n[{ "index": 0, "category": "category_value", "is_business": true }]\n\nYou MUST use ONLY these exact category values:\n${categories.join(', ')}\n\nTransactions:\n${JSON.stringify(transactions, null, 2)}` }],
     temperature: 0,
   });
