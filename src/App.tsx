@@ -20,7 +20,6 @@ import LoginPage from './pages/LoginPage';
 const TimeExpensePage = lazy(() => import('./pages/TimeExpensePage'));
 const InvoicingPage = lazy(() => import('./pages/InvoicingPage'));
 const ResourcingPage = lazy(() => import('./pages/ResourcingPage'));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const QuoteDocumentPage = lazy(() => import('./pages/QuoteDocumentPage'));
@@ -197,7 +196,6 @@ function AppRoutes() {
             <Route path="/time-expense" element={<ErrorBoundary><TimeExpensePage /></ErrorBoundary>} />
             <Route path="/invoicing" element={<ErrorBoundary><InvoicingPage /></ErrorBoundary>} />
             <Route path="/resourcing" element={<ErrorBoundary><ResourcingPage /></ErrorBoundary>} />
-            <Route path="/analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
             <Route path="/reports" element={<ErrorBoundary><ReportsPage /></ErrorBoundary>} />
             <Route path="/financials" element={<ErrorBoundary><FinancialsPage /></ErrorBoundary>} />
             <Route path="/company-expenses" element={<Navigate to="/financials?tab=operating" replace />} />

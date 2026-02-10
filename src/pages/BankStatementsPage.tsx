@@ -370,6 +370,20 @@ export default function BankStatementsPage() {
     }
   }
 
+  function findDuplicateStatement(fileName: string): BankStatement | undefined {
+    // Check by filename (strip timestamps if present)
+    const cleanName = fileName.replace(/^\d+-/, '').toLowerCase();
+    return statements.find(s => {
+      const existingClean = (s.file_name || '').replace(/^\d+-/, '').toLowerCase();
+      return existingClean === cleanName;
+    });
+  }
+
+  function findOverlappingPeriod(periodStart: string, periodEnd: string): BankStatement | undefined {
+    if (!periodStart || !periodEnd) return undefined;
+    return statements.find(s => s.period_start === periodStart && s.period_end === periodEnd);
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files || files.length === 0 || !profile?.company_id) return;
@@ -381,14 +395,49 @@ export default function BankStatementsPage() {
         return;
       }
     }
+
+    // Pre-upload duplicate check by filename
+    const duplicateFiles: string[] = [];
+    const filesToUpload: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const existing = findDuplicateStatement(files[i].name);
+      if (existing) {
+        const period = existing.period_start && existing.period_end
+          ? ` (${new Date(existing.period_start + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
+          : '';
+        duplicateFiles.push(`${files[i].name}${period}`);
+      } else {
+        filesToUpload.push(files[i]);
+      }
+    }
+
+    if (duplicateFiles.length > 0 && filesToUpload.length === 0) {
+      // All files are duplicates
+      const proceed = confirm(
+        `This statement has already been uploaded:\n\n${duplicateFiles.join('\n')}\n\nUploading it again will create a duplicate. Are you sure you want to continue?`
+      );
+      if (!proceed) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      // User chose to proceed — upload all
+      for (let i = 0; i < files.length; i++) filesToUpload.push(files[i]);
+    } else if (duplicateFiles.length > 0) {
+      showToast(`Skipped ${duplicateFiles.length} duplicate(s): ${duplicateFiles.join(', ')}`, 'error');
+    }
+
+    if (filesToUpload.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     
     setUploading(true);
     let successCount = 0;
     let errorCount = 0;
     
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
         try {
           // Create statement record and upload file
           const statement = await bankStatementsApi.uploadStatement(profile.company_id, file);
@@ -397,6 +446,16 @@ export default function BankStatementsPage() {
           const parseResult = await aiClient.parseStatement(profile.company_id, file, statement.id);
           
           if (parseResult.success && parseResult.data) {
+            // Post-parse duplicate check: verify the parsed period doesn't overlap an existing statement
+            const parsedStart = parseResult.data.periodStart;
+            const parsedEnd = parseResult.data.periodEnd;
+            const overlap = findOverlappingPeriod(parsedStart, parsedEnd);
+            if (overlap && overlap.id !== statement.id) {
+              showToast(
+                `Warning: "${file.name}" covers the same period as "${overlap.file_name}" (${new Date(parsedStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}). Review for duplicates.`,
+                'error'
+              );
+            }
             successCount++;
           } else {
             errorCount++;
