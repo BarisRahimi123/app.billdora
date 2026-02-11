@@ -341,33 +341,96 @@ export default function InvoiceViewPage() {
               )}
             </div>
 
-            {/* Line Items */}
-            <table className="w-full mb-8">
-              <thead>
-                <tr className="border-b-2 border-neutral-200">
-                  <th className="text-left py-3 text-sm font-semibold text-neutral-600">Description</th>
-                  <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-24">Qty</th>
-                  <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Rate</th>
-                  <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineItems.length > 0 ? (
-                  lineItems.map((item, idx) => (
-                    <tr key={idx} className="border-b border-neutral-100">
-                      <td className="py-4 text-neutral-900">{item.description}</td>
-                      <td className="py-4 text-right text-neutral-600">{item.quantity}</td>
-                      <td className="py-4 text-right text-neutral-600">{formatCurrency(item.unit_price)}</td>
-                      <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
+            {/* Line Items - grouped by project if consolidated */}
+            {(() => {
+              // Detect if items have [ProjectName] prefix (consolidated invoice)
+              const projectPattern = /^\[([^\]]+)\]\s*/;
+              const hasProjectGroups = lineItems.some(item => projectPattern.test(item.description || ''));
+
+              if (hasProjectGroups && lineItems.length > 0) {
+                // Group items by project
+                const groups: { project: string; items: typeof lineItems }[] = [];
+                const groupMap: Record<string, typeof lineItems> = {};
+                for (const item of lineItems) {
+                  const match = (item.description || '').match(projectPattern);
+                  const project = match ? match[1] : 'Other';
+                  const cleanDesc = match ? (item.description || '').replace(projectPattern, '') : item.description;
+                  const cleanItem = { ...item, description: cleanDesc };
+                  if (!groupMap[project]) { groupMap[project] = []; groups.push({ project, items: groupMap[project] }); }
+                  groupMap[project].push(cleanItem);
+                }
+
+                return (
+                  <div className="mb-8">
+                    {groups.map(({ project, items }) => (
+                      <div key={project} className="mb-6">
+                        <div className="border-b-2 border-[#476E66] mb-3 pb-1">
+                          <h3 className="text-base font-bold text-[#476E66] uppercase tracking-wide">{project}</h3>
+                        </div>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="text-xs font-bold text-neutral-500 uppercase border-b border-neutral-200">
+                              <th className="text-left py-2 px-2">Description</th>
+                              <th className="text-center py-2 px-2 w-20">Qty</th>
+                              <th className="text-right py-2 px-2 w-28">Rate</th>
+                              <th className="text-right py-2 px-2 w-28">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-100">
+                            {items.map((item: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-neutral-50">
+                                <td className="py-2.5 px-2 text-neutral-800">{item.description}</td>
+                                <td className="py-2.5 px-2 text-center text-neutral-600">{item.quantity}</td>
+                                <td className="py-2.5 px-2 text-right text-neutral-500">{formatCurrency(item.unit_price)}</td>
+                                <td className="py-2.5 px-2 text-right font-semibold text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-neutral-50 font-bold border-t border-neutral-200">
+                              <td colSpan={3} className="py-2 px-2 text-right text-xs uppercase text-neutral-500 tracking-wider">
+                                Total {project}
+                              </td>
+                              <td className="py-2 px-2 text-right text-[#476E66]">
+                                {formatCurrency(items.reduce((sum: number, i: any) => sum + (i.amount || i.quantity * i.unit_price || 0), 0))}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // Default flat table for non-consolidated invoices
+              return (
+                <table className="w-full mb-8">
+                  <thead>
+                    <tr className="border-b-2 border-neutral-200">
+                      <th className="text-left py-3 text-sm font-semibold text-neutral-600">Description</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-24">Qty</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Rate</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Amount</th>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-neutral-500">No line items</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {lineItems.length > 0 ? (
+                      lineItems.map((item, idx) => (
+                        <tr key={idx} className="border-b border-neutral-100">
+                          <td className="py-4 text-neutral-900">{item.description}</td>
+                          <td className="py-4 text-right text-neutral-600">{item.quantity}</td>
+                          <td className="py-4 text-right text-neutral-600">{formatCurrency(item.unit_price)}</td>
+                          <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-neutral-500">No line items</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              );
+            })()}
 
             {/* Totals */}
             <div className="flex justify-end">
