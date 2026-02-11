@@ -371,22 +371,18 @@ export default function InvoiceViewPage() {
                           <thead>
                             <tr className="text-xs font-bold text-neutral-500 uppercase border-b border-neutral-200">
                               <th className="text-left py-2 px-2">Description</th>
-                              <th className="text-center py-2 px-2 w-20">Qty</th>
-                              <th className="text-right py-2 px-2 w-28">Rate</th>
-                              <th className="text-right py-2 px-2 w-28">Amount</th>
+                              <th className="text-right py-2 px-2 w-32">Amount</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-neutral-100">
                             {items.map((item: any, idx: number) => (
                               <tr key={idx} className="hover:bg-neutral-50">
                                 <td className="py-2.5 px-2 text-neutral-800">{item.description}</td>
-                                <td className="py-2.5 px-2 text-center text-neutral-600">{item.quantity}</td>
-                                <td className="py-2.5 px-2 text-right text-neutral-500">{formatCurrency(item.unit_price)}</td>
                                 <td className="py-2.5 px-2 text-right font-semibold text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
                               </tr>
                             ))}
                             <tr className="bg-neutral-50 font-bold border-t border-neutral-200">
-                              <td colSpan={3} className="py-2 px-2 text-right text-xs uppercase text-neutral-500 tracking-wider">
+                              <td className="py-2 px-2 text-right text-xs uppercase text-neutral-500 tracking-wider">
                                 Subtotal
                               </td>
                               <td className="py-2 px-2 text-right text-neutral-600">
@@ -407,8 +403,6 @@ export default function InvoiceViewPage() {
                   <thead>
                     <tr className="border-b-2 border-neutral-200">
                       <th className="text-left py-3 text-sm font-semibold text-neutral-600">Description</th>
-                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-24">Qty</th>
-                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Rate</th>
                       <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Amount</th>
                     </tr>
                   </thead>
@@ -417,14 +411,12 @@ export default function InvoiceViewPage() {
                       lineItems.map((item, idx) => (
                         <tr key={idx} className="border-b border-neutral-100">
                           <td className="py-4 text-neutral-900">{item.description}</td>
-                          <td className="py-4 text-right text-neutral-600">{item.quantity}</td>
-                          <td className="py-4 text-right text-neutral-600">{formatCurrency(item.unit_price)}</td>
                           <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} className="py-8 text-center text-neutral-500">No line items</td>
+                        <td colSpan={2} className="py-8 text-center text-neutral-500">No line items</td>
                       </tr>
                     )}
                   </tbody>
