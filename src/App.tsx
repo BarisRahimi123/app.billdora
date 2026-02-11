@@ -16,28 +16,50 @@ import SalesPage from './pages/SalesPage';
 import ProjectsPage from './pages/ProjectsPage';
 import LoginPage from './pages/LoginPage';
 
-// Lazy load less frequently used pages
-const TimeExpensePage = lazy(() => import('./pages/TimeExpensePage'));
-const InvoicingPage = lazy(() => import('./pages/InvoicingPage'));
-const ResourcingPage = lazy(() => import('./pages/ResourcingPage'));
-const ReportsPage = lazy(() => import('./pages/ReportsPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const QuoteDocumentPage = lazy(() => import('./pages/QuoteDocumentPage'));
-const ProposalPortalPage = lazy(() => import('./pages/ProposalPortalPage'));
-const InvoiceViewPage = lazy(() => import('./pages/InvoiceViewPage'));
-const ClientPortalPage = lazy(() => import('./pages/ClientPortalPage'));
-const CompanyExpensesPage = lazy(() => import('./pages/CompanyExpensesPage'));
-const BankStatementsPage = lazy(() => import('./pages/BankStatementsPage'));
-const FinancialsPage = lazy(() => import('./pages/FinancialsPage'));
-const ReceiptsPage = lazy(() => import('./pages/ReceiptsPage'));
-const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const CheckEmailPage = lazy(() => import('./pages/CheckEmailPage'));
-const CollaboratorAcceptPage = lazy(() => import('./pages/CollaboratorAcceptPage'));
-const ProjectShareAcceptPage = lazy(() => import('./pages/ProjectShareAcceptPage'));
-const TermsPage = lazy(() => import('./pages/TermsPage'));
-const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
-const LeadFormPage = lazy(() => import('./pages/LeadFormPage'));
+// Helper: lazy load with auto-retry on chunk load failure (handles deployment cache mismatch)
+function lazyWithRetry(importFn: () => Promise<any>) {
+  return lazy(() =>
+    importFn().catch((err) => {
+      // If the chunk failed to load (stale deployment), reload the page once
+      const hasReloaded = sessionStorage.getItem('chunk_reload');
+      if (!hasReloaded) {
+        sessionStorage.setItem('chunk_reload', '1');
+        window.location.reload();
+        return new Promise(() => {}); // Never resolves - page is reloading
+      }
+      sessionStorage.removeItem('chunk_reload');
+      throw err; // If we already reloaded once, let ErrorBoundary handle it
+    })
+  );
+}
+
+// Clear the reload flag on successful page load
+if (sessionStorage.getItem('chunk_reload')) {
+  sessionStorage.removeItem('chunk_reload');
+}
+
+// Lazy load less frequently used pages (with retry for deployment cache mismatches)
+const TimeExpensePage = lazyWithRetry(() => import('./pages/TimeExpensePage'));
+const InvoicingPage = lazyWithRetry(() => import('./pages/InvoicingPage'));
+const ResourcingPage = lazyWithRetry(() => import('./pages/ResourcingPage'));
+const ReportsPage = lazyWithRetry(() => import('./pages/ReportsPage'));
+const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
+const QuoteDocumentPage = lazyWithRetry(() => import('./pages/QuoteDocumentPage'));
+const ProposalPortalPage = lazyWithRetry(() => import('./pages/ProposalPortalPage'));
+const InvoiceViewPage = lazyWithRetry(() => import('./pages/InvoiceViewPage'));
+const ClientPortalPage = lazyWithRetry(() => import('./pages/ClientPortalPage'));
+const CompanyExpensesPage = lazyWithRetry(() => import('./pages/CompanyExpensesPage'));
+const BankStatementsPage = lazyWithRetry(() => import('./pages/BankStatementsPage'));
+const FinancialsPage = lazyWithRetry(() => import('./pages/FinancialsPage'));
+const ReceiptsPage = lazyWithRetry(() => import('./pages/ReceiptsPage'));
+const NotificationsPage = lazyWithRetry(() => import('./pages/NotificationsPage'));
+const LandingPage = lazyWithRetry(() => import('./pages/LandingPage'));
+const CheckEmailPage = lazyWithRetry(() => import('./pages/CheckEmailPage'));
+const CollaboratorAcceptPage = lazyWithRetry(() => import('./pages/CollaboratorAcceptPage'));
+const ProjectShareAcceptPage = lazyWithRetry(() => import('./pages/ProjectShareAcceptPage'));
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
+const PrivacyPage = lazyWithRetry(() => import('./pages/PrivacyPage'));
+const LeadFormPage = lazyWithRetry(() => import('./pages/LeadFormPage'));
 
 import CookieConsent from './components/CookieConsent';
 

@@ -2641,6 +2641,7 @@ function InvoiceDetailView({
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [emailContent, setEmailContent] = useState('');
+  const [showClientPreview, setShowClientPreview] = useState(false);
 
   // Initialize email content when modal opens
   useEffect(() => {
@@ -3297,6 +3298,12 @@ function InvoiceDetailView({
               <button className="px-4 py-2 text-sm text-neutral-900 hover:bg-neutral-100 rounded-lg font-medium">Edit</button>
               <button className="px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50">Refresh</button>
               <button className="px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50">Snapshot</button>
+              <button
+                onClick={() => setShowClientPreview(true)}
+                className="px-4 py-2 bg-white border border-neutral-300 rounded-lg text-sm font-medium hover:bg-neutral-50 flex items-center gap-2"
+              >
+                <Eye className="w-4 h-4" /> Preview as Client
+              </button>
               <button
                 onClick={() => setShowSendModal(true)}
                 className="px-4 py-2 bg-[#476E66] text-white rounded-lg text-sm font-medium hover:bg-[#3a5b54] flex items-center gap-2"
@@ -4155,6 +4162,188 @@ function InvoiceDetailView({
           </button>
         </div>
       </div>
+
+      {/* Client Preview Modal - Shows exactly what the client will see */}
+      {showClientPreview && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
+          {/* Header Bar */}
+          <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <Eye className="w-5 h-5 text-[#476E66]" />
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Client Preview</h3>
+                <p className="text-xs text-neutral-500">This is exactly what your client will see</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setShowClientPreview(false); setShowSendModal(true); }}
+                className="px-4 py-2 bg-[#476E66] text-white rounded-lg text-sm font-medium hover:bg-[#3a5b54] flex items-center gap-2"
+              >
+                <Send className="w-4 h-4" /> Send Invoice
+              </button>
+              <button
+                onClick={() => setShowClientPreview(false)}
+                className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-neutral-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable Client View */}
+          <div className="flex-1 overflow-auto bg-neutral-100 py-8 px-4">
+            <div className="max-w-4xl mx-auto">
+              {/* Simulated Action Bar (read-only, no functional buttons) */}
+              <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-6 h-6 text-[#476E66]" />
+                    <span className="font-semibold text-neutral-900">Invoice {invoiceNumber}</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    {status === 'paid' ? (
+                      <div className="flex items-center justify-center gap-2 px-5 py-3 bg-emerald-100 text-emerald-700 font-semibold rounded-lg min-h-[44px] w-full sm:w-auto">
+                        <CheckCircle className="w-5 h-5" />
+                        Paid - {formatCurrency(invoice.total)}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 px-6 py-3 bg-[#635BFF] text-white font-semibold rounded-lg text-lg min-h-[44px] w-full sm:w-auto opacity-75 cursor-default">
+                        <CreditCard className="w-5 h-5" />
+                        Pay Online - {formatCurrency(invoice.total)}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center gap-2 px-4 py-3 border border-neutral-300 text-neutral-700 rounded-lg min-h-[44px] w-full sm:w-auto opacity-75 cursor-default">
+                      <Download className="w-4 h-4" />
+                      Print / Download PDF
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Document - matching InvoiceViewPage layout */}
+              <div className="bg-white rounded-xl shadow-sm p-8">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    {company?.logo_url && (
+                      <img src={company.logo_url} alt="" className="h-12 w-auto object-contain mb-3" />
+                    )}
+                    <h2 className="text-xl font-bold text-neutral-900">{company?.company_name || 'Company'}</h2>
+                    {company?.address && <p className="text-sm text-neutral-600">{company.address}</p>}
+                    {(company?.city || company?.state || company?.zip) && (
+                      <p className="text-sm text-neutral-600">
+                        {[company.city, company.state, company.zip].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                    {company?.phone && <p className="text-sm text-neutral-600">{company.phone}</p>}
+                  </div>
+                  <div className="text-right">
+                    <h1 className="text-3xl font-bold text-neutral-900 mb-1">INVOICE</h1>
+                    <p className="text-neutral-500">#{invoiceNumber}</p>
+                  </div>
+                </div>
+
+                {/* Invoice Dates */}
+                <div className="flex justify-end mb-8">
+                  <div className="text-right">
+                    <p className="text-sm text-neutral-500">Invoice Date</p>
+                    <p className="font-medium">{draftDate ? new Date(draftDate).toLocaleDateString() : new Date().toLocaleDateString()}</p>
+                    {dueDate && (
+                      <>
+                        <p className="text-sm text-neutral-500 mt-2">Due Date</p>
+                        <p className="font-medium">{new Date(dueDate).toLocaleDateString()}</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bill To */}
+                <div className="grid grid-cols-2 gap-8 mb-8">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 mb-2">BILL TO</p>
+                    <p className="font-semibold text-lg text-neutral-900">{invoice.client?.name}</p>
+                    {invoice.client?.address && <p className="text-neutral-600">{invoice.client.address}</p>}
+                    {(invoice.client?.city || invoice.client?.state || invoice.client?.zip) && (
+                      <p className="text-neutral-600">
+                        {[invoice.client.city, invoice.client.state, invoice.client.zip].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+                    {invoice.client?.phone && <p className="text-neutral-600">{invoice.client.phone}</p>}
+                    {invoice.client?.website && <p className="text-neutral-600">{invoice.client.website}</p>}
+                  </div>
+                  {invoice.project && (
+                    <div>
+                      <p className="text-sm font-medium text-neutral-500 mb-2">PROJECT</p>
+                      <p className="font-semibold text-neutral-900">{invoice.project.name}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Line Items */}
+                <table className="w-full mb-8">
+                  <thead>
+                    <tr className="border-b-2 border-neutral-200">
+                      <th className="text-left py-3 text-sm font-semibold text-neutral-600">Description</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-24">Qty</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Rate</th>
+                      <th className="text-right py-3 text-sm font-semibold text-neutral-600 w-32">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.length > 0 ? (
+                      lineItems.map((item, idx) => (
+                        <tr key={idx} className="border-b border-neutral-100">
+                          <td className="py-4 text-neutral-900">{item.description}</td>
+                          <td className="py-4 text-right text-neutral-600">{item.quantity}</td>
+                          <td className="py-4 text-right text-neutral-600">{formatCurrency(item.rate || item.unit_price)}</td>
+                          <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-neutral-500">No line items</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-72">
+                    <div className="flex justify-between py-2">
+                      <span className="text-neutral-600">Subtotal</span>
+                      <span className="font-medium">{formatCurrency(invoice.subtotal || subtotal)}</span>
+                    </div>
+                    {(taxAmount || 0) > 0 && (
+                      <div className="flex justify-between py-2">
+                        <span className="text-neutral-600">Tax</span>
+                        <span className="font-medium">{formatCurrency(taxAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-3 border-t-2 border-neutral-900">
+                      <span className="text-lg font-bold">Total Due</span>
+                      <span className="text-lg font-bold">{formatCurrency(invoice.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Badge */}
+                <div className="mt-8 pt-8 border-t border-neutral-200 text-center">
+                  <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold ${
+                    status === 'paid' ? 'bg-green-100 text-green-700' :
+                    status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                    status === 'overdue' ? 'bg-red-100 text-red-700' :
+                    'bg-neutral-100 text-neutral-700'
+                  }`}>
+                    {status?.toUpperCase() || 'DRAFT'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Send Invoice Modal */}
       {
