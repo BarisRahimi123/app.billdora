@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Download, FileText, CreditCard, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Download, FileText, CreditCard, CheckCircle, XCircle, Loader2, Search, X } from 'lucide-react';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -15,6 +15,7 @@ interface Invoice {
   total: number;
   due_date: string;
   created_at: string;
+  accept_online_payment?: boolean;
   client: { name: string; email: string; address?: string; city?: string; state?: string; zip?: string; phone?: string; website?: string };
   project: { name: string } | null;
 }
@@ -45,6 +46,7 @@ export default function InvoiceViewPage() {
   const [error, setError] = useState('');
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Check for payment callback
   useEffect(() => {
@@ -177,6 +179,7 @@ export default function InvoiceViewPage() {
 
   const canPay = invoice && 
     invoice.status !== 'paid' && 
+    invoice.accept_online_payment === true &&
     companySettings?.stripe_account_id && 
     invoice.total > 0;
 
@@ -341,11 +344,61 @@ export default function InvoiceViewPage() {
               )}
             </div>
 
+            {/* Search bar for line items */}
+            {lineItems.length > 5 && (
+              <div className="mb-4 print:hidden">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search line items..."
+                    className="w-full pl-10 pr-10 py-2.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 focus:bg-white focus:ring-1 focus:ring-neutral-300 focus:border-neutral-300 outline-none transition-colors placeholder:text-neutral-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {searchQuery && (
+                  <p className="text-xs text-neutral-400 mt-1.5 pl-1">
+                    {(() => {
+                      const q = searchQuery.toLowerCase();
+                      const count = lineItems.filter(item =>
+                        (item.description || '').toLowerCase().includes(q)
+                      ).length;
+                      return `${count} result${count !== 1 ? 's' : ''} found`;
+                    })()}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Line Items - grouped by project if consolidated */}
             {(() => {
               // Detect if items have [ProjectName] prefix (consolidated invoice)
               const projectPattern = /^\[([^\]]+)\]\s*/;
               const hasProjectGroups = lineItems.some(item => projectPattern.test(item.description || ''));
+              const query = searchQuery.toLowerCase().trim();
+
+              // Helper to highlight matching text
+              const highlightMatch = (text: string) => {
+                if (!query) return text;
+                const idx = text.toLowerCase().indexOf(query);
+                if (idx === -1) return text;
+                return (
+                  <>
+                    {text.slice(0, idx)}
+                    <mark className="bg-yellow-200 text-neutral-900 rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+                    {text.slice(idx + query.length)}
+                  </>
+                );
+              };
 
               if (hasProjectGroups && lineItems.length > 0) {
                 // Group items by project
@@ -360,12 +413,30 @@ export default function InvoiceViewPage() {
                   groupMap[project].push(cleanItem);
                 }
 
+                // Filter groups if searching
+                const filteredGroups = query
+                  ? groups.map(g => ({
+                      ...g,
+                      items: g.project.toLowerCase().includes(query)
+                        ? g.items // Show all items if project name matches
+                        : g.items.filter((item: any) => (item.description || '').toLowerCase().includes(query)),
+                    })).filter(g => g.items.length > 0)
+                  : groups;
+
+                if (query && filteredGroups.length === 0) {
+                  return (
+                    <div className="mb-8 py-8 text-center text-neutral-400 text-sm">
+                      No items match "{searchQuery}"
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="mb-8">
-                    {groups.map(({ project, items }) => (
+                    {filteredGroups.map(({ project, items }) => (
                       <div key={project} className="mb-6">
                         <div className="border-b-2 border-neutral-300 mb-3 pb-1">
-                          <h3 className="text-base font-bold text-neutral-900 uppercase tracking-wide">{project}</h3>
+                          <h3 className="text-base font-bold text-neutral-900 uppercase tracking-wide">{highlightMatch(project)}</h3>
                         </div>
                         <table className="w-full">
                           <thead>
@@ -377,7 +448,7 @@ export default function InvoiceViewPage() {
                           <tbody className="divide-y divide-neutral-100">
                             {items.map((item: any, idx: number) => (
                               <tr key={idx} className="hover:bg-neutral-50">
-                                <td className="py-2.5 px-2 text-neutral-800">{item.description}</td>
+                                <td className="py-2.5 px-2 text-neutral-800">{highlightMatch(item.description)}</td>
                                 <td className="py-2.5 px-2 text-right font-semibold text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
                               </tr>
                             ))}
@@ -398,6 +469,10 @@ export default function InvoiceViewPage() {
               }
 
               // Default flat table for non-consolidated invoices
+              const filteredItems = query
+                ? lineItems.filter(item => (item.description || '').toLowerCase().includes(query))
+                : lineItems;
+
               return (
                 <table className="w-full mb-8">
                   <thead>
@@ -407,16 +482,18 @@ export default function InvoiceViewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lineItems.length > 0 ? (
-                      lineItems.map((item, idx) => (
+                    {filteredItems.length > 0 ? (
+                      filteredItems.map((item, idx) => (
                         <tr key={idx} className="border-b border-neutral-100">
-                          <td className="py-4 text-neutral-900">{item.description}</td>
+                          <td className="py-4 text-neutral-900">{highlightMatch(item.description)}</td>
                           <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount || item.quantity * item.unit_price)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={2} className="py-8 text-center text-neutral-500">No line items</td>
+                        <td colSpan={2} className="py-8 text-center text-neutral-500">
+                          {query ? `No items match "${searchQuery}"` : 'No line items'}
+                        </td>
                       </tr>
                     )}
                   </tbody>

@@ -12,13 +12,13 @@ interface ReportData {
   timeEntries: TimeEntry[];
   invoices: Invoice[];
   expenses: Expense[];
-  profiles: { id: string; full_name?: string; email?: string }[];
+  profiles: { id: string; full_name?: string; email?: string; hourly_pay_rate?: number; hourly_rate?: number }[];
 }
 
 // Time by User Report Component
 function TimeByUserReport({ timeEntries, profiles, formatCurrency }: {
   timeEntries: TimeEntry[];
-  profiles: { id: string; full_name?: string; email?: string }[];
+  profiles: { id: string; full_name?: string; email?: string; hourly_pay_rate?: number; hourly_rate?: number }[];
   formatCurrency: (amount: number) => string
 }) {
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
@@ -425,7 +425,11 @@ export default function ReportsPage() {
       const projectExpenses = data.expenses.filter(e => e.project_id === project.id);
       const projectInvoices = data.invoices.filter(i => i.project_id === project.id);
 
-      const laborCost = projectEntries.reduce((sum, e) => sum + Number(e.hours) * 75, 0); // Assuming $75 cost
+      const laborCost = projectEntries.reduce((sum, e) => {
+        const userProfile = data.profiles.find(p => p.id === e.user_id);
+        const payRate = Number((userProfile as any)?.hourly_pay_rate) || 0;
+        return sum + Number(e.hours) * payRate;
+      }, 0);
       const expenseCost = projectExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
       const revenue = projectInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0);
       const profit = revenue - laborCost - expenseCost;

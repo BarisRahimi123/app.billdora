@@ -299,6 +299,8 @@ export interface Invoice {
   public_view_token?: string;
   view_count?: number;
   last_viewed_at?: string;
+  // Online payment
+  accept_online_payment?: boolean;
   // Consolidation fields
   consolidated_into?: string; // ID of the consolidated invoice this was merged into
   consolidated_from?: string[]; // Array of invoice IDs that were merged into this invoice
@@ -797,7 +799,7 @@ export const api = {
 
   async getCompanyProfiles(companyId: string) {
     const { data, error } = await supabase.from('profiles')
-      .select('id, full_name, avatar_url, email, role')
+      .select('id, full_name, avatar_url, email, role, hourly_pay_rate, hourly_rate')
       .eq('company_id', companyId)
       .eq('is_active', true)
       .order('full_name');
@@ -1116,7 +1118,7 @@ export const api = {
   async getInvoices(companyId: string) {
     return apiCall(async () => {
       const { data, error } = await supabase.from('invoices')
-        .select('*, client:clients(id, name, display_name, email, address, city, state, zip, phone, website), project:projects(id, name)')
+        .select('*, client:clients(id, name, display_name, email, address, city, state, zip, phone, website, primary_contact_name, primary_contact_email, primary_contact_phone, billing_contact_name, billing_contact_email, billing_contact_phone), project:projects(id, name)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -1213,6 +1215,30 @@ export const api = {
       console.warn(`Invoice created with ${errors.length} task billing errors`);
     }
 
+    // Verify at least some line items were created
+    const { count: lineItemCount } = await supabase
+      .from('invoice_line_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('invoice_id', invoiceData.id);
+
+    if (!lineItemCount || lineItemCount === 0) {
+      // All line items failed -- create a fallback line item so the invoice always has a breakdown
+      console.error('All line items failed to create. Creating fallback line item.');
+      const fallbackDescription = taskBillings.length === 1
+        ? 'Task billing'
+        : `${taskBillings.length} tasks billed`;
+      const invoiceTotal = invoiceData.subtotal || taskBillings.reduce((sum, b) => sum + b.amountToBill, 0);
+
+      await supabase.from('invoice_line_items').insert({
+        invoice_id: invoiceData.id,
+        description: fallbackDescription,
+        quantity: 1,
+        unit_price: invoiceTotal,
+        amount: invoiceTotal,
+        sort_order: 0,
+      });
+    }
+
     return invoiceData as Invoice;
   },
 
@@ -1230,6 +1256,17 @@ export const api = {
 
   async deleteInvoice(id: string) {
     try {
+      // Guard: prevent deleting an invoice that has been consolidated into another
+      const { data: invoiceCheck } = await supabase
+        .from('invoices')
+        .select('consolidated_into, status')
+        .eq('id', id)
+        .single();
+
+      if (invoiceCheck?.consolidated_into) {
+        return { success: false, error: new Error('Cannot delete this invoice because it has been consolidated into another invoice. Delete the consolidated invoice first.'), step: 'validation' };
+      }
+
       // Fetch task-billing line items before delete so we can roll back tasks.billed_percentage / billed_amount
       const { data: lineItems } = await supabase
         .from('invoice_line_items')
@@ -1246,6 +1283,28 @@ export const api = {
           if (!byTask[tid]) byTask[tid] = { billed_percentage: 0, billed_amount: 0 };
           byTask[tid].billed_percentage += pct;
           byTask[tid].billed_amount += amt;
+        }
+      }
+
+      // If this is a consolidated invoice, revert original invoices back to draft
+      if (invoiceCheck?.status === 'draft' || invoiceCheck?.status === 'sent') {
+        const { data: consolidatedInvoice } = await supabase
+          .from('invoices')
+          .select('consolidated_from')
+          .eq('id', id)
+          .single();
+
+        if (consolidatedInvoice?.consolidated_from && consolidatedInvoice.consolidated_from.length > 0) {
+          // Revert original invoices: clear consolidated_into and set status back to draft
+          const { error: revertError } = await supabase
+            .from('invoices')
+            .update({ consolidated_into: null, status: 'draft' })
+            .in('id', consolidatedInvoice.consolidated_from);
+
+          if (revertError) {
+            console.error('Failed to revert consolidated invoices:', revertError);
+            // Continue with deletion anyway - better to delete than leave orphaned data
+          }
         }
       }
 
@@ -1292,6 +1351,18 @@ export const api = {
   async deleteInvoices(ids: string[]) {
     try {
       if (ids.length === 0) return { success: true };
+
+      // Guard: prevent deleting invoices that have been consolidated into another
+      const { data: consolidatedCheck } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, consolidated_into')
+        .in('id', ids)
+        .not('consolidated_into', 'is', null);
+
+      if (consolidatedCheck && consolidatedCheck.length > 0) {
+        const numbers = consolidatedCheck.map(inv => inv.invoice_number).join(', ');
+        return { success: false, error: new Error(`Cannot delete invoices that have been consolidated: ${numbers}. Delete the consolidated invoice first.`), step: 'validation' };
+      }
 
       // Fetch task-billing line items for these invoices so we can roll back tasks
       const { data: lineItems } = await supabase
@@ -1431,12 +1502,99 @@ export const api = {
 
       if (lineItemsError) throw lineItemsError;
 
-      // Copy line items to consolidated invoice with project context
+      // Identify invoices that have a total but NO line items (e.g. milestone invoices where line item creation failed)
+      const invoiceIdsWithLineItems = new Set((allLineItems || []).map(li => li.invoice_id));
+      const invoicesWithoutLineItems = invoices.filter(
+        inv => !invoiceIdsWithLineItems.has(inv.id) && (inv.total || 0) > 0
+      );
+
+      // For invoices without line items, try to generate them from task data
+      const syntheticLineItems: Array<{
+        invoice_id: string;
+        description: string;
+        quantity: number;
+        unit_price: number;
+        amount: number;
+        sort_order: number;
+        unit: string | null;
+      }> = [];
+
+      for (const inv of invoicesWithoutLineItems) {
+        const projectName = inv.project?.name || inv.invoice_number || 'General';
+
+        // Try to fetch tasks for the project that have been billed
+        if (inv.project_id) {
+          const { data: billedTasks } = await supabase
+            .from('tasks')
+            .select('id, name, billed_amount, total_budget, estimated_fees, billing_unit')
+            .eq('project_id', inv.project_id)
+            .gt('billed_amount', 0);
+
+          if (billedTasks && billedTasks.length > 0) {
+            // Create a line item for each billed task
+            billedTasks.forEach((task, idx) => {
+              const taskAmount = task.billed_amount || task.total_budget || task.estimated_fees || 0;
+              syntheticLineItems.push({
+                invoice_id: consolidatedInvoice.id,
+                description: `[${projectName}] ${task.name}`,
+                quantity: 1,
+                unit_price: taskAmount,
+                amount: taskAmount,
+                sort_order: (allLineItems?.length || 0) + syntheticLineItems.length,
+                unit: null,
+              });
+            });
+
+            // Verify synthetic line items sum matches invoice total; adjust if needed
+            const syntheticSum = billedTasks.reduce((sum, t) => sum + (t.billed_amount || t.total_budget || t.estimated_fees || 0), 0);
+            const invoiceTotal = inv.total || 0;
+            if (Math.abs(syntheticSum - invoiceTotal) > 0.01) {
+              // Amounts don't match exactly, use a single line item instead
+              const lastAdded = billedTasks.length;
+              syntheticLineItems.splice(syntheticLineItems.length - lastAdded, lastAdded);
+              syntheticLineItems.push({
+                invoice_id: consolidatedInvoice.id,
+                description: `[${projectName}] Project Total`,
+                quantity: 1,
+                unit_price: invoiceTotal,
+                amount: invoiceTotal,
+                sort_order: (allLineItems?.length || 0) + syntheticLineItems.length,
+                unit: null,
+              });
+            }
+            continue;
+          }
+        }
+
+        // Fallback: create a single catch-all line item with the full invoice total
+        syntheticLineItems.push({
+          invoice_id: consolidatedInvoice.id,
+          description: `[${projectName}] Project Total`,
+          quantity: 1,
+          unit_price: inv.total || 0,
+          amount: inv.total || 0,
+          sort_order: (allLineItems?.length || 0) + syntheticLineItems.length,
+          unit: null,
+        });
+      }
+
+      // Combine existing line items with synthetic ones
+      const newLineItems: Array<{
+        invoice_id: string;
+        description: string;
+        quantity: number;
+        unit_price: number;
+        amount: number;
+        sort_order: number;
+        unit: string | null;
+      }> = [];
+
+      // Copy existing line items with project context
       if (allLineItems && allLineItems.length > 0) {
-        const newLineItems = allLineItems.map((item, index) => {
+        allLineItems.forEach((item, index) => {
           const originalInvoice = invoices.find(inv => inv.id === item.invoice_id);
           const projectName = originalInvoice?.project?.name || originalInvoice?.invoice_number || 'General';
-          return {
+          newLineItems.push({
             invoice_id: consolidatedInvoice.id,
             description: `[${projectName}] ${item.description || 'Line item'}`,
             quantity: item.quantity || 1,
@@ -1444,14 +1602,26 @@ export const api = {
             amount: item.amount || 0,
             sort_order: item.sort_order || index,
             unit: item.unit || null
-          };
+          });
         });
+      }
 
+      // Add synthetic line items
+      newLineItems.push(...syntheticLineItems);
+
+      // Insert all line items
+      if (newLineItems.length > 0) {
         const { error: insertLineItemsError } = await supabase
           .from('invoice_line_items')
           .insert(newLineItems);
 
         if (insertLineItemsError) throw insertLineItemsError;
+      }
+
+      // Final validation: verify line items total matches consolidated invoice total
+      const lineItemsTotal = newLineItems.reduce((sum, li) => sum + (li.amount || 0), 0);
+      if (Math.abs(lineItemsTotal - total) > 0.01) {
+        console.warn(`Consolidation line items total ($${lineItemsTotal.toFixed(2)}) differs from invoice total ($${total.toFixed(2)}). Gap: $${(total - lineItemsTotal).toFixed(2)}`);
       }
 
       // Mark original invoices as consolidated

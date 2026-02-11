@@ -446,19 +446,22 @@ export default function InvoicingPage() {
 
   const sendInvoiceEmail = useCallback(async (invoice: Invoice) => {
     const client = clients.find(c => c.id === invoice.client_id);
-    if (!client?.email) {
-      showToast('Client does not have an email address', 'error');
+    // Determine best recipient: billing contact > primary contact > client email
+    const recipientEmail = client?.billing_contact_email || client?.primary_contact_email || client?.email;
+    const recipientName = client?.billing_contact_name || client?.primary_contact_name || client?.name;
+    if (!recipientEmail) {
+      showToast('Client does not have an email address. Please add a billing or primary contact.', 'error');
       setActiveMenu(null);
       return;
     }
     try {
       // Send actual email via edge function
       await api.sendEmail({
-        to: client.email,
+        to: recipientEmail,
         subject: `Invoice ${invoice.invoice_number} from ${profile?.full_name || 'Our Company'}`,
         documentType: 'invoice',
         documentNumber: invoice.invoice_number,
-        clientName: client.name,
+        clientName: recipientName || 'Client',
         companyName: profile?.full_name || 'Our Company',
         total: invoice.total,
       });
@@ -470,7 +473,7 @@ export default function InvoicingPage() {
         sent_date: new Date().toISOString().split('T')[0],
         public_view_token: viewToken
       });
-      showToast(`Invoice sent to ${client.email}`, 'success');
+      showToast(`Invoice sent to ${recipientEmail}`, 'success');
       loadData();
     } catch (error: any) {
       console.error('Failed to send invoice:', error);
@@ -2389,7 +2392,9 @@ function PaymentReminderSection({
   }, [sentDate, reminderDays]);
 
   const handleScheduleReminder = async () => {
-    if (!invoice.client?.email) {
+    const schedClient = invoice.client;
+    const schedEmail = (schedClient as any)?.billing_contact_email || (schedClient as any)?.primary_contact_email || schedClient?.email;
+    if (!schedEmail) {
       showToast('Client does not have an email address', 'error');
       return;
     }
@@ -2419,7 +2424,10 @@ function PaymentReminderSection({
   };
 
   const handleSendReminderNow = async () => {
-    if (!invoice.client?.email) {
+    const client = invoice.client;
+    const reminderEmail = (client as any)?.billing_contact_email || (client as any)?.primary_contact_email || client?.email;
+    const reminderName = (client as any)?.billing_contact_name || (client as any)?.primary_contact_name || client?.name;
+    if (!reminderEmail) {
       showToast('Client does not have an email address', 'error');
       return;
     }
@@ -2435,8 +2443,8 @@ function PaymentReminderSection({
         },
         body: JSON.stringify({
           invoiceId: invoice.id,
-          clientEmail: invoice.client.email,
-          clientName: invoice.client.name,
+          clientEmail: reminderEmail,
+          clientName: reminderName || 'Client',
           invoiceNumber: invoice.invoice_number,
           totalAmount: formatCurrency(invoice.total),
           dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A',
@@ -2632,6 +2640,7 @@ function InvoiceDetailView({
   const [poNumber, setPoNumber] = useState('');
   const [terms, setTerms] = useState('Net 30');
   const [status, setStatus] = useState(invoice.status || 'draft');
+  const [acceptOnlinePayment, setAcceptOnlinePayment] = useState((invoice as any).accept_online_payment || false);
   const [draftDate] = useState(invoice.created_at ? new Date(invoice.created_at).toISOString().split('T')[0] : '');
   const [sentDate, setSentDate] = useState((invoice as any).sent_at ? new Date((invoice as any).sent_at).toISOString().split('T')[0] : '');
   const [dueDate, setDueDate] = useState(invoice.due_date ? invoice.due_date.split('T')[0] : '');
@@ -2642,14 +2651,60 @@ function InvoiceDetailView({
   const [sendingInvoice, setSendingInvoice] = useState(false);
   const [emailContent, setEmailContent] = useState('');
   const [showClientPreview, setShowClientPreview] = useState(false);
+  const [previewSearchQuery, setPreviewSearchQuery] = useState('');
 
-  // Initialize email content when modal opens
+  // Contact selection state for send modal
+  const [sendToEmail, setSendToEmail] = useState('');
+  const [sendToName, setSendToName] = useState('');
+  const [ccRecipients, setCcRecipients] = useState<{ email: string; name: string; enabled: boolean; label: string }[]>([]);
+  const [customCcEmail, setCustomCcEmail] = useState('');
+
+  // Initialize email content and contacts when modal opens
   useEffect(() => {
-    if (showSendModal && invoice.client?.name) {
+    if (showSendModal && invoice.client) {
+      const client = clients.find(c => c.id === invoice.client_id) || invoice.client;
+      const billingEmail = (client as any).billing_contact_email;
+      const billingName = (client as any).billing_contact_name;
+      const primaryEmail = (client as any).primary_contact_email;
+      const primaryName = (client as any).primary_contact_name;
+      const clientEmail = client.email;
+      const clientName = client.name;
+
+      // Determine primary recipient: billing contact > primary contact > client email
+      if (billingEmail) {
+        setSendToEmail(billingEmail);
+        setSendToName(billingName || 'Billing Contact');
+      } else if (primaryEmail) {
+        setSendToEmail(primaryEmail);
+        setSendToName(primaryName || 'Primary Contact');
+      } else {
+        setSendToEmail(clientEmail || '');
+        setSendToName(clientName || '');
+      }
+
+      // Build CC list from available contacts (excluding whoever is the "To" recipient)
+      const ccList: { email: string; name: string; enabled: boolean; label: string }[] = [];
+      const toEmail = billingEmail || primaryEmail || clientEmail || '';
+
+      if (primaryEmail && primaryEmail.toLowerCase() !== toEmail.toLowerCase()) {
+        ccList.push({ email: primaryEmail, name: primaryName || 'Primary Contact', enabled: true, label: 'Primary Contact' });
+      }
+      if (billingEmail && billingEmail.toLowerCase() !== toEmail.toLowerCase()) {
+        ccList.push({ email: billingEmail, name: billingName || 'Billing Contact', enabled: true, label: 'Billing Contact' });
+      }
+      if (clientEmail && clientEmail.toLowerCase() !== toEmail.toLowerCase()
+        && !ccList.some(c => c.email.toLowerCase() === clientEmail.toLowerCase())) {
+        ccList.push({ email: clientEmail, name: clientName || 'Company Email', enabled: false, label: 'Company Email' });
+      }
+
+      setCcRecipients(ccList);
+      setCustomCcEmail('');
+
+      const recipientName = billingName || primaryName || clientName || 'Client';
       const defaultContent = `Please find attached Invoice ${invoiceNumber} for ${invoice.project?.name || 'services rendered'}.\n\nThe total amount due is ${formatCurrency(invoice.total)}${dueDate ? ` and payment is due by ${new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}.\n\nThank you for your business. Please don't hesitate to reach out if you have any questions.`;
       setEmailContent(defaultContent);
     }
-  }, [showSendModal, invoice, invoiceNumber, dueDate]);
+  }, [showSendModal, invoice, invoiceNumber, dueDate, clients]);
 
   // Calculate due date from sent date and terms
   useEffect(() => {
@@ -2984,6 +3039,7 @@ function InvoiceDetailView({
         status,
         pdf_template_id: selectedTemplateId || null,
         calculator_type: calculatorType,
+        accept_online_payment: acceptOnlinePayment,
       });
 
       // Save line items - delete existing and insert new ones
@@ -3304,6 +3360,19 @@ function InvoiceDetailView({
               >
                 <Eye className="w-4 h-4" /> Preview as Client
               </button>
+              <div className="h-6 w-px bg-neutral-300 mx-1" />
+              <button
+                type="button"
+                onClick={() => setAcceptOnlinePayment(!acceptOnlinePayment)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${acceptOnlinePayment ? 'bg-[#635BFF]/10 border-[#635BFF]/30 text-[#635BFF]' : 'bg-white border-neutral-300 text-neutral-500 hover:bg-neutral-50'}`}
+                title={acceptOnlinePayment ? 'Online payment enabled - click to disable' : 'Online payment disabled - click to enable'}
+              >
+                <CreditCard className="w-4 h-4" />
+                <span className="hidden sm:inline">Pay Online</span>
+                <span className={`inline-flex items-center justify-center w-7 h-5 rounded-full text-[10px] font-bold ${acceptOnlinePayment ? 'bg-[#635BFF] text-white' : 'bg-neutral-200 text-neutral-500'}`}>
+                  {acceptOnlinePayment ? 'ON' : 'OFF'}
+                </span>
+              </button>
               <button
                 onClick={() => setShowSendModal(true)}
                 className="px-4 py-2 bg-[#476E66] text-white rounded-lg text-sm font-medium hover:bg-[#3a5b54] flex items-center gap-2"
@@ -3360,7 +3429,83 @@ function InvoiceDetailView({
                 {invoice.client?.website && <p className="text-neutral-600">{invoice.client.website}</p>}
               </div>
 
+              {/* Search bar for line items */}
+              {(lineItems.length > 3 || isConsolidated) && (
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                    <input
+                      type="text"
+                      value={previewSearchQuery}
+                      onChange={(e) => setPreviewSearchQuery(e.target.value)}
+                      placeholder="Search line items, projects, tasks..."
+                      className="w-full pl-10 pr-10 py-2.5 text-sm border border-neutral-200 rounded-lg bg-neutral-50 focus:bg-white focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none transition-colors placeholder:text-neutral-400"
+                    />
+                    {previewSearchQuery && (
+                      <button
+                        onClick={() => setPreviewSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {previewSearchQuery && (
+                    <p className="text-xs text-neutral-400 mt-1.5 pl-1">
+                      {(() => {
+                        const q = previewSearchQuery.toLowerCase();
+                        const count = lineItems.filter(item =>
+                          (item.description || '').toLowerCase().includes(q) ||
+                          (item.taskName || '').toLowerCase().includes(q) ||
+                          (item.projectName || '').toLowerCase().includes(q)
+                        ).length;
+                        return `${count} result${count !== 1 ? 's' : ''} found`;
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Calculator-based Content */}
+              {(() => {
+                const pq = previewSearchQuery.toLowerCase().trim();
+
+                // Helper to highlight matching text
+                const hl = (text: string) => {
+                  if (!pq) return text;
+                  const idx = text.toLowerCase().indexOf(pq);
+                  if (idx === -1) return text;
+                  return (
+                    <>
+                      {text.slice(0, idx)}
+                      <mark className="bg-yellow-200 text-neutral-900 rounded-sm px-0.5">{text.slice(idx, idx + pq.length)}</mark>
+                      {text.slice(idx + pq.length)}
+                    </>
+                  );
+                };
+
+                // Helper: does an item match the search?
+                const itemMatches = (item: any) => {
+                  if (!pq) return true;
+                  return (item.description || '').toLowerCase().includes(pq) ||
+                    (item.taskName || '').toLowerCase().includes(pq) ||
+                    (item.projectName || '').toLowerCase().includes(pq);
+                };
+
+                // Filter line items
+                const filteredLineItems = pq ? lineItems.filter(itemMatches) : lineItems;
+
+                // Filter consolidated groups
+                const filteredConsolidatedGroups = pq
+                  ? consolidatedGroups.map(g => ({
+                      ...g,
+                      items: g.project.toLowerCase().includes(pq)
+                        ? g.items // show all if project name matches
+                        : g.items.filter((item: any) => (item.description || '').toLowerCase().includes(pq)),
+                    })).filter(g => g.items.length > 0)
+                  : consolidatedGroups;
+
+                return (
               <div className="border-t border-b border-neutral-200 py-6 mb-6">
                 {calculatorType === 'summary' ? (
                   /* Summary Only - Just project name and total */
@@ -3385,12 +3530,12 @@ function InvoiceDetailView({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-100">
-                        {lineItems.map(item => {
+                        {filteredLineItems.map(item => {
                           const priorAmt = ((item.taskBudget || item.amount) * (item.priorBilledPercentage || 0)) / 100;
                           const currentAmt = ((item.taskBudget || item.amount) * (item.billedPercentage || 0)) / 100;
                           return (
                             <tr key={item.id}>
-                              <td className="py-3">{item.description}</td>
+                              <td className="py-3">{hl(item.description)}</td>
                               <td className="py-3 text-center">
                                 <div className="text-xs">
                                   <span className="inline-flex items-center justify-center w-14 h-5 bg-neutral-100 rounded font-medium text-neutral-500">
@@ -3412,6 +3557,9 @@ function InvoiceDetailView({
                             </tr>
                           );
                         })}
+                        {pq && filteredLineItems.length === 0 && (
+                          <tr><td colSpan={5} className="py-6 text-center text-neutral-400 text-sm">No items match "{previewSearchQuery}"</td></tr>
+                        )}
                       </tbody>
                     </table>
                     {/* Billing Summary */}
@@ -3445,16 +3593,34 @@ function InvoiceDetailView({
                   <>
                     <h4 className="font-semibold text-neutral-900 mb-4 text-lg">Time & Material Details</h4>
 
-                    {Object.entries(lineItems.reduce((acc, item) => {
-                      const proj = item.projectName || 'Professional Services';
-                      if (!acc[proj]) acc[proj] = [];
-                      acc[proj].push(item);
-                      return acc;
-                    }, {} as Record<string, InvoiceLineItem[]>)).map(([projName, items]) => (
+                    {(() => {
+                      // Group line items by project, then filter
+                      const tmGroups = Object.entries(lineItems.reduce((acc, item) => {
+                        const proj = item.projectName || 'Professional Services';
+                        if (!acc[proj]) acc[proj] = [];
+                        acc[proj].push(item);
+                        return acc;
+                      }, {} as Record<string, InvoiceLineItem[]>));
+
+                      const filteredTmGroups = pq
+                        ? tmGroups.map(([projName, items]) => [
+                            projName,
+                            projName.toLowerCase().includes(pq)
+                              ? items  // show all if project name matches
+                              : items.filter(itemMatches),
+                          ] as [string, InvoiceLineItem[]])
+                          .filter(([, items]) => items.length > 0)
+                        : tmGroups;
+
+                      if (pq && filteredTmGroups.length === 0) {
+                        return <p className="py-6 text-center text-neutral-400 text-sm">No items match "{previewSearchQuery}"</p>;
+                      }
+
+                      return filteredTmGroups.map(([projName, items]) => (
                       <div key={projName} className="mb-8 break-inside-avoid">
                         {/* Project Header */}
                         <div className="border-b-2 border-[#476E66] mb-3 pb-1">
-                          <h3 className="text-lg font-bold text-[#476E66] uppercase tracking-wide">{projName}</h3>
+                          <h3 className="text-lg font-bold text-[#476E66] uppercase tracking-wide">{hl(projName)}</h3>
                         </div>
 
                         <table className="w-full text-sm">
@@ -3471,12 +3637,12 @@ function InvoiceDetailView({
                             {items.map(item => (
                               <tr key={item.id} className="hover:bg-neutral-50">
                                 <td className="py-2.5 px-2 font-bold text-neutral-800 align-top">
-                                  {item.taskName || 'Service'}
+                                  {hl(item.taskName || 'Service')}
                                 </td>
                                 <td className="py-2.5 px-2 text-neutral-600 align-top">
-                                  {item.description && item.description.includes(':')
-                                    ? item.description.split(':').pop()?.trim()
-                                    : item.description || 'No description'}
+                                  {hl(item.description && item.description.includes(':')
+                                    ? item.description.split(':').pop()?.trim() || ''
+                                    : item.description || 'No description')}
                                 </td>
                                 <td className="py-2.5 px-2 text-center text-neutral-700 font-medium align-top">
                                   {item.quantity}
@@ -3501,7 +3667,8 @@ function InvoiceDetailView({
                           </tbody>
                         </table>
                       </div>
-                    ))}
+                    ));
+                    })()}
 
                     {lineItems.length === 0 && <p className="text-neutral-500 italic">No time entries found.</p>}
                   </>
@@ -3509,12 +3676,12 @@ function InvoiceDetailView({
                   /* Fixed Fee - Simple line items; when consolidated, group by project with section headers */
                   <>
                     <h4 className="font-semibold text-neutral-900 mb-4 text-lg">Fixed Fee Invoice</h4>
-                    {isConsolidated && consolidatedGroups.length > 0 ? (
+                    {isConsolidated && filteredConsolidatedGroups.length > 0 ? (
                       <div className="space-y-6">
-                        {consolidatedGroups.map(({ project, items }) => (
+                        {filteredConsolidatedGroups.map(({ project, items }) => (
                           <div key={project} className="break-inside-avoid">
                             <div className="border-b-2 border-[#476E66] mb-3 pb-1">
-                              <h3 className="text-base font-bold text-[#476E66] uppercase tracking-wide">{project}</h3>
+                              <h3 className="text-base font-bold text-[#476E66] uppercase tracking-wide">{hl(project)}</h3>
                               {items.length > 1 && (
                                 <p className="text-xs text-neutral-500 mt-0.5">{items.length} tasks</p>
                               )}
@@ -3529,7 +3696,7 @@ function InvoiceDetailView({
                               <tbody className="divide-y divide-neutral-100">
                                 {items.map((row) => (
                                   <tr key={row.id}>
-                                    <td className="py-2.5">{row.description}</td>
+                                    <td className="py-2.5">{hl(row.description)}</td>
                                     <td className="py-2.5 text-right font-medium">{formatCurrency(row.amount)}</td>
                                   </tr>
                                 ))}
@@ -3543,6 +3710,9 @@ function InvoiceDetailView({
                             </table>
                           </div>
                         ))}
+                        {pq && isConsolidated && filteredConsolidatedGroups.length === 0 && (
+                          <p className="py-6 text-center text-neutral-400 text-sm">No items match "{previewSearchQuery}"</p>
+                        )}
                       </div>
                     ) : (
                       <table className="w-full">
@@ -3553,18 +3723,23 @@ function InvoiceDetailView({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-100">
-                          {lineItems.map(item => (
+                          {filteredLineItems.map(item => (
                             <tr key={item.id}>
-                              <td className="py-3">{item.description || 'Service'}</td>
+                              <td className="py-3">{hl(item.description || 'Service')}</td>
                               <td className="py-3 text-right font-medium">{formatCurrency(item.amount)}</td>
                             </tr>
                           ))}
+                          {pq && filteredLineItems.length === 0 && (
+                            <tr><td colSpan={2} className="py-6 text-center text-neutral-400 text-sm">No items match "{previewSearchQuery}"</td></tr>
+                          )}
                         </tbody>
                       </table>
                     )}
                   </>
                 )}
               </div>
+                );
+              })()}
 
               {/* Totals Section */}
               <div className="flex justify-end">
@@ -3666,6 +3841,30 @@ function InvoiceDetailView({
                       onChange={(e) => setDueDate(e.target.value)}
                       className="w-full px-3 py-2.5 border border-neutral-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66] outline-none"
                     />
+                  </div>
+                  <div className="pt-2 border-t border-neutral-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Online Payment</label>
+                        <p className="text-[10px] text-neutral-400 mt-0.5">Allow client to pay online via Stripe</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={acceptOnlinePayment}
+                        onClick={() => setAcceptOnlinePayment(!acceptOnlinePayment)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 ${acceptOnlinePayment ? 'bg-[#476E66]' : 'bg-neutral-300'}`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${acceptOnlinePayment ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
+                      </button>
+                    </div>
+                    {acceptOnlinePayment && (
+                      <div className="mt-2 px-2 py-1.5 bg-emerald-50 rounded-md">
+                        <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1">
+                          <CreditCard className="w-3 h-3" /> "Pay Online" button will be visible to client
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -4207,12 +4406,12 @@ function InvoiceDetailView({
                         <CheckCircle className="w-5 h-5" />
                         Paid - {formatCurrency(invoice.total)}
                       </div>
-                    ) : (
+                    ) : acceptOnlinePayment ? (
                       <div className="flex items-center justify-center gap-2 px-6 py-3 bg-[#635BFF] text-white font-semibold rounded-lg text-lg min-h-[44px] w-full sm:w-auto opacity-75 cursor-default">
                         <CreditCard className="w-5 h-5" />
                         Pay Online - {formatCurrency(invoice.total)}
                       </div>
-                    )}
+                    ) : null}
                     <div className="flex items-center justify-center gap-2 px-4 py-3 border border-neutral-300 text-neutral-700 rounded-lg min-h-[44px] w-full sm:w-auto opacity-75 cursor-default">
                       <Download className="w-4 h-4" />
                       Print / Download PDF
@@ -4398,115 +4597,201 @@ function InvoiceDetailView({
       )}
 
       {/* Send Invoice Modal */}
-      {
-        showSendModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
-              <div className="p-6 border-b border-neutral-100">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">Send Invoice</h3>
-                  <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-neutral-100 rounded-lg">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Recipient</label>
-                  <div className="px-4 py-3 bg-neutral-50 rounded-lg">
-                    <p className="font-medium">{invoice.client?.name}</p>
-                    <p className="text-sm text-neutral-500">{invoice.client?.email || 'No email on file'}</p>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Invoice Details</label>
-                  <div className="px-4 py-3 bg-neutral-50 rounded-lg flex justify-between items-center">
-                    <span className="text-neutral-600">Invoice {invoiceNumber}</span>
-                    <span className="font-semibold text-lg">{formatCurrency(invoice.total)}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Email Message</label>
-                  <textarea
-                    value={emailContent}
-                    onChange={(e) => setEmailContent(e.target.value)}
-                    rows={6}
-                    className="w-full px-4 py-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
-                    placeholder="Enter your email message..."
-                  />
-                  <p className="text-xs text-neutral-500 mt-1">You can customize this message before sending.</p>
-                </div>
-              </div>
-              <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
-                <button
-                  onClick={() => setShowSendModal(false)}
-                  className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    if (!invoice.client?.email) {
-                      alert('Client does not have an email address on file.');
-                      return;
-                    }
-                    setSendingInvoice(true);
-                    try {
-                      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-                      const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${supabaseAnonKey}`
-                        },
-                        body: JSON.stringify({
-                          invoiceId: invoice.id,
-                          clientEmail: invoice.client.email,
-                          clientName: invoice.client.name,
-                          invoiceNumber: invoiceNumber,
-                          projectName: invoice.project?.name || '',
-                          companyName: profile?.full_name || 'Billdora',
-                          senderName: profile?.full_name || 'Billdora',
-                          totalAmount: formatCurrency(invoice.total),
-                          dueDate: dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
-                          emailContent,
-                          portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`
-                        })
-                      });
-                      const data = await res.json();
-                      if (data.error) throw new Error(data.error);
-                      setShowSendModal(false);
-                      setStatus('sent');
-                      setSentDate(new Date().toISOString().split('T')[0]);
-                      onUpdate();
-                      alert('Invoice sent successfully!');
-                    } catch (error: any) {
-                      console.error('Failed to send invoice:', error);
-                      alert(error?.message || 'Failed to send invoice');
-                    }
-                    setSendingInvoice(false);
-                  }}
-                  disabled={sendingInvoice || !invoice.client?.email}
-                  className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3a5b54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {sendingInvoice ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Invoice
-                    </>
-                  )}
+      {showSendModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-neutral-100 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold">Send Invoice</h3>
+                <button onClick={() => setShowSendModal(false)} className="p-2 hover:bg-neutral-100 rounded-lg">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* To Recipient */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Send To</label>
+                <div className="px-4 py-3 bg-[#476E66]/5 rounded-lg border border-[#476E66]/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-neutral-900">{sendToName || invoice.client?.name || 'No recipient'}</p>
+                      <p className="text-sm text-neutral-500">{sendToEmail || 'No email on file'}</p>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wide font-semibold text-[#476E66] bg-[#476E66]/10 px-2 py-1 rounded">
+                      {(() => {
+                        const client = clients.find(c => c.id === invoice.client_id) || invoice.client;
+                        const billingEmail = (client as any)?.billing_contact_email;
+                        if (billingEmail && sendToEmail === billingEmail) return 'Billing';
+                        const primaryEmail = (client as any)?.primary_contact_email;
+                        if (primaryEmail && sendToEmail === primaryEmail) return 'Primary';
+                        return 'Client';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CC Recipients */}
+              {ccRecipients.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1.5">CC (Copy)</label>
+                  <div className="space-y-2">
+                    {ccRecipients.map((cc, idx) => (
+                      <label key={idx} className={`flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${cc.enabled ? 'bg-neutral-50 border-neutral-300' : 'bg-white border-neutral-200 opacity-60'}`}>
+                        <input
+                          type="checkbox"
+                          checked={cc.enabled}
+                          onChange={() => {
+                            const updated = [...ccRecipients];
+                            updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                            setCcRecipients(updated);
+                          }}
+                          className="w-4 h-4 rounded border-neutral-300 text-[#476E66] focus:ring-[#476E66]"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-neutral-900 truncate">{cc.name}</p>
+                          <p className="text-xs text-neutral-500 truncate">{cc.email}</p>
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wide font-medium text-neutral-400 flex-shrink-0">{cc.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add Custom CC */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Add CC Email</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={customCcEmail}
+                    onChange={(e) => setCustomCcEmail(e.target.value)}
+                    placeholder="Enter email address..."
+                    className="flex-1 px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customCcEmail.trim() && customCcEmail.includes('@')) {
+                        e.preventDefault();
+                        const newEmail = customCcEmail.trim().toLowerCase();
+                        if (newEmail !== sendToEmail.toLowerCase() && !ccRecipients.some(c => c.email.toLowerCase() === newEmail)) {
+                          setCcRecipients([...ccRecipients, { email: newEmail, name: newEmail, enabled: true, label: 'Custom' }]);
+                          setCustomCcEmail('');
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newEmail = customCcEmail.trim().toLowerCase();
+                      if (newEmail && newEmail.includes('@') && newEmail !== sendToEmail.toLowerCase() && !ccRecipients.some(c => c.email.toLowerCase() === newEmail)) {
+                        setCcRecipients([...ccRecipients, { email: newEmail, name: newEmail, enabled: true, label: 'Custom' }]);
+                        setCustomCcEmail('');
+                      }
+                    }}
+                    disabled={!customCcEmail.trim() || !customCcEmail.includes('@')}
+                    className="px-3 py-2 text-sm font-medium bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Invoice Details */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Invoice Details</label>
+                <div className="px-4 py-3 bg-neutral-50 rounded-lg flex justify-between items-center">
+                  <span className="text-neutral-600">Invoice {invoiceNumber}</span>
+                  <span className="font-semibold text-lg">{formatCurrency(invoice.total)}</span>
+                </div>
+              </div>
+
+              {/* Email Message */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Email Message</label>
+                <textarea
+                  value={emailContent}
+                  onChange={(e) => setEmailContent(e.target.value)}
+                  rows={5}
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#476E66]/20 focus:border-[#476E66]"
+                  placeholder="Enter your email message..."
+                />
+                <p className="text-xs text-neutral-500 mt-1">You can customize this message before sending.</p>
+              </div>
+            </div>
+            <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowSendModal(false)}
+                className="flex-1 px-4 py-2.5 border border-neutral-300 rounded-xl hover:bg-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!sendToEmail) {
+                    alert('No recipient email address available. Please add a billing or primary contact to this client.');
+                    return;
+                  }
+                  setSendingInvoice(true);
+                  try {
+                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                    const enabledCc = ccRecipients.filter(c => c.enabled).map(c => ({ email: c.email, name: c.name }));
+                    const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseAnonKey}`
+                      },
+                      body: JSON.stringify({
+                        invoiceId: invoice.id,
+                        clientEmail: sendToEmail,
+                        clientName: sendToName,
+                        invoiceNumber,
+                        projectName: invoice.project?.name || '',
+                        companyName: profile?.full_name || 'Billdora',
+                        senderName: profile?.full_name || 'Billdora',
+                        totalAmount: formatCurrency(invoice.total),
+                        dueDate: dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+                        emailContent,
+                        portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`,
+                        ccRecipients: enabledCc
+                      })
+                    });
+                    const data = await res.json();
+                    if (data.error) throw new Error(data.error);
+                    setShowSendModal(false);
+                    setStatus('sent');
+                    setSentDate(new Date().toISOString().split('T')[0]);
+                    onUpdate();
+                    const ccMsg = enabledCc.length > 0 ? ` (CC: ${enabledCc.map(c => c.email).join(', ')})` : '';
+                    alert(`Invoice sent to ${sendToEmail}${ccMsg}`);
+                  } catch (error: any) {
+                    console.error('Failed to send invoice:', error);
+                    alert(error?.message || 'Failed to send invoice');
+                  }
+                  setSendingInvoice(false);
+                }}
+                disabled={sendingInvoice || !sendToEmail}
+                className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3a5b54] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sendingInvoice ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Send Invoice
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        )
-      }
+        </div>
+      )}
     </div >
   );
 }

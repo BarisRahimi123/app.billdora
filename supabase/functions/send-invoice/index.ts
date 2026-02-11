@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { invoiceId, clientEmail, clientName, invoiceNumber, projectName, companyName, senderName, totalAmount, dueDate, emailContent, portalUrl } = await req.json();
+    const { invoiceId, clientEmail, clientName, invoiceNumber, projectName, companyName, senderName, totalAmount, dueDate, emailContent, portalUrl, ccRecipients } = await req.json();
 
     const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -150,6 +150,21 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
+    // Build personalizations with optional CC
+    const personalization: Record<string, unknown> = {
+      to: [{ email: clientEmail, name: clientName }]
+    };
+
+    // Add CC recipients if provided (filter out duplicates of the primary recipient)
+    if (ccRecipients && Array.isArray(ccRecipients) && ccRecipients.length > 0) {
+      const validCc = ccRecipients
+        .filter((r: { email: string; name?: string }) => r.email && r.email.toLowerCase() !== clientEmail.toLowerCase())
+        .map((r: { email: string; name?: string }) => ({ email: r.email, ...(r.name ? { name: r.name } : {}) }));
+      if (validCc.length > 0) {
+        personalization.cc = validCc;
+      }
+    }
+
     const sendgridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
       headers: {
@@ -157,7 +172,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: clientEmail, name: clientName }] }],
+        personalizations: [personalization],
         from: { email: 'info@billdora.com', name: companyName },
         subject: `Invoice ${invoiceNumber} from ${companyName}`,
         content: [

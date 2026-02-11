@@ -692,7 +692,14 @@ export default function ProjectsPage() {
     const billedAmount = paidInvoices + retainerPaid;
     const totalInvoiced = invoices.reduce((sum, i) => sum + Number(i.total), 0);
 
-    return { totalHours, billableHours, billedAmount, totalInvoiced };
+    // Calculate actual labor cost using each employee's hourly pay rate
+    const laborCost = timeEntries.reduce((sum, e) => {
+      const userProfile = companyProfiles.find(p => p.id === e.user_id);
+      const payRate = Number((userProfile as any)?.hourly_pay_rate) || 0;
+      return sum + Number(e.hours) * payRate;
+    }, 0);
+
+    return { totalHours, billableHours, billedAmount, totalInvoiced, laborCost };
   };
 
   const deleteTask = async (taskId: string) => {
@@ -947,7 +954,12 @@ export default function ProjectsPage() {
               project={selectedProject}
               clients={clients}
               onSave={async (updates) => {
-                await api.updateProject(selectedProject.id, updates);
+                const updatedProject = await api.updateProject(selectedProject.id, updates);
+                // Refresh the projects list so selectedProject gets updated with new data
+                if (updatedProject) {
+                  setProjects(prev => prev.map(p => p.id === selectedProject.id ? { ...p, ...updatedProject } : p));
+                  setSelectedProject(prev => prev ? { ...prev, ...updatedProject } : prev);
+                }
                 if (projectId) loadProjectDetails(projectId);
               }}
               canViewFinancials={effectiveCanViewFinancials}
@@ -1056,8 +1068,8 @@ export default function ProjectsPage() {
                 </div>
                 <div className="p-4 bg-neutral-50 rounded-sm border border-neutral-200 cursor-pointer hover:border-neutral-300 transition-all" onClick={() => setActiveTab('tasks')}>
                   <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Labor Cost</p>
-                  <p className="text-xl font-bold text-neutral-900">{formatCurrency(stats.billableHours * 150)}</p>
-                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wide mt-1">{stats.billableHours}h @ $150/hr</p>
+                  <p className="text-xl font-bold text-neutral-900">{formatCurrency(stats.laborCost)}</p>
+                  <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-wide mt-1">{stats.billableHours}h LOGGED</p>
                 </div>
                 <div className="p-4 bg-neutral-50 rounded-sm border border-neutral-200 cursor-pointer hover:border-neutral-300 transition-all" onClick={() => navigate('/time-expense')}>
                   <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Expenses</p>
@@ -4384,7 +4396,7 @@ function TaskTableRow({ task, editingCell, editValues, onStartEditing, onEditCha
   const isEditing = (field: string) => editingCell?.taskId === task.id && editingCell?.field === field;
   const getValue = (field: string, defaultValue: string) => editValues[task.id]?.[field] ?? defaultValue;
   const formatCurrency = (val?: number) => val ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '$0.00';
-  const estimate = (task.estimated_hours || 0) * 150; // Default rate $150/hr
+  const estimate = task.total_budget || task.estimated_fees || 0;
   const isCompleted = task.status === 'completed';
 
   return (
@@ -5671,7 +5683,7 @@ function InlineBillingInvoiceView({
   const taxAmount = invoice.tax_amount || 0;
   const total = invoice.total || 0;
 
-  const timeTotal = timeEntries.reduce((sum, e) => sum + (Number(e.hours) * 150), 0);
+  const timeTotal = timeEntries.reduce((sum, e) => sum + (Number(e.hours) * Number(e.hourly_rate || 0)), 0);
   const expensesTotal = expenses.filter(e => e.billable).reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const addLineItem = () => {
@@ -6367,7 +6379,7 @@ function InlineBillingInvoiceView({
                       </td>
                       <td className="px-2 py-2 text-xs">{entry.description || '-'}</td>
                       <td className="px-2 py-2 text-xs text-right font-medium">{Number(entry.hours).toFixed(1)}h</td>
-                      <td className="px-2 py-2 text-xs text-right font-medium">{formatCurrency(Number(entry.hours) * 150)}</td>
+                      <td className="px-2 py-2 text-xs text-right font-medium">{formatCurrency(Number(entry.hours) * Number(entry.hourly_rate || 0))}</td>
                     </tr>
                   ))
                 )}
