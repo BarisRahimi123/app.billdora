@@ -3124,7 +3124,7 @@ function InvoiceDetailView({
                             </tbody>
                             <tfoot>
                               <tr style="background: #f9f9f9;">
-                                <td style="padding: 10px 10px 8px; font-size: 11px; font-weight: 600;">Section total</td>
+                                <td style="padding: 10px 10px 8px; font-size: 11px; font-weight: 600;">Subtotal</td>
                                 <td style="text-align:right; padding: 10px 10px 8px; font-size: 11px; font-weight: 600;">${formatCurrency(items.reduce((s, r) => s + r.amount, 0))}</td>
                               </tr>
                             </tfoot>
@@ -3536,7 +3536,7 @@ function InvoiceDetailView({
                               </tbody>
                               <tfoot className="border-t border-neutral-200 bg-neutral-50/50">
                                 <tr>
-                                  <td className="py-2.5 text-sm font-semibold text-neutral-700">Section total</td>
+                                  <td className="py-2.5 text-sm font-semibold text-neutral-700">Subtotal</td>
                                   <td className="py-2.5 text-right text-sm font-semibold text-neutral-900">{formatCurrency(items.reduce((s, r) => s + r.amount, 0))}</td>
                                 </tr>
                               </tfoot>
@@ -4318,7 +4318,7 @@ function InvoiceDetailView({
                                   <tr key={idx} className="hover:bg-neutral-50">
                                     <td className="py-2.5 px-2 text-neutral-800">{item.description}</td>
                                     <td className="py-2.5 px-2 text-center text-neutral-600">{item.quantity}</td>
-                                    <td className="py-2.5 px-2 text-right text-neutral-500">{formatCurrency(item.rate || item.unit_price)}</td>
+                                    <td className="py-2.5 px-2 text-right text-neutral-500">{formatCurrency(item.rate)}</td>
                                     <td className="py-2.5 px-2 text-right font-semibold text-neutral-900">{formatCurrency(item.amount)}</td>
                                   </tr>
                                 ))}
@@ -4354,7 +4354,7 @@ function InvoiceDetailView({
                             <tr key={idx} className="border-b border-neutral-100">
                               <td className="py-4 text-neutral-900">{item.description}</td>
                               <td className="py-4 text-right text-neutral-600">{item.quantity}</td>
-                              <td className="py-4 text-right text-neutral-600">{formatCurrency(item.rate || item.unit_price)}</td>
+                              <td className="py-4 text-right text-neutral-600">{formatCurrency(item.rate)}</td>
                               <td className="py-4 text-right font-medium text-neutral-900">{formatCurrency(item.amount)}</td>
                             </tr>
                           ))
