@@ -4301,8 +4301,8 @@ function InvoiceDetailView({
                       <div className="mb-8">
                         {groups.map(({ project, items }) => (
                           <div key={project} className="mb-6">
-                            <div className="border-b-2 border-[#476E66] mb-3 pb-1">
-                              <h3 className="text-base font-bold text-[#476E66] uppercase tracking-wide">{project}</h3>
+                            <div className="border-b-2 border-neutral-300 mb-3 pb-1">
+                              <h3 className="text-base font-bold text-neutral-900 uppercase tracking-wide">{project}</h3>
                             </div>
                             <table className="w-full">
                               <thead>
@@ -4324,9 +4324,9 @@ function InvoiceDetailView({
                                 ))}
                                 <tr className="bg-neutral-50 font-bold border-t border-neutral-200">
                                   <td colSpan={3} className="py-2 px-2 text-right text-xs uppercase text-neutral-500 tracking-wider">
-                                    Total {project}
+                                    Subtotal
                                   </td>
-                                  <td className="py-2 px-2 text-right text-[#476E66]">
+                                  <td className="py-2 px-2 text-right text-neutral-600">
                                     {formatCurrency(items.reduce((sum, i) => sum + (i.amount || 0), 0))}
                                   </td>
                                 </tr>
