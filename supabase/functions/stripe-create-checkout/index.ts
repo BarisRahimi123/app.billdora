@@ -1,5 +1,4 @@
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
-import { verifyAuth, unauthorizedResponse } from '../_shared/auth.ts';
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
@@ -8,11 +7,9 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  // Verify authentication
-  const authResult = await verifyAuth(req);
-  if (!authResult.authenticated) {
-    return unauthorizedResponse(corsHeaders, authResult.error);
-  }
+  // PUBLIC ENDPOINT: No auth required - called from the public invoice view page
+  // by unauthenticated clients. The invoice UUID acts as the access token.
+  // Security: accept_online_payment flag must be true on the invoice.
 
   try {
     const { invoice_id } = await req.json();
@@ -45,7 +42,12 @@ Deno.serve(async (req) => {
     }
 
     const invoice = invoices[0];
-    
+
+    // Check if online payment is enabled for this invoice
+    if (!invoice.accept_online_payment) {
+      throw new Error('Online payment is not enabled for this invoice');
+    }
+
     // Fetch company_settings separately
     const settingsRes = await fetch(
       `${supabaseUrl}/rest/v1/company_settings?company_id=eq.${invoice.company_id}&select=stripe_account_id`,
