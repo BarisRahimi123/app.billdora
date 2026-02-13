@@ -80,7 +80,12 @@ export default function ProjectShareAcceptPage() {
 
       if (data.status !== 'pending') {
         if (data.status === 'accepted') {
-          setError('This invitation has already been accepted');
+          // Invitation already accepted (likely auto-accepted on login) — go to the project
+          navigate(`/projects/${data.project_id}`, {
+            state: { toast: 'Project collaboration is active!' },
+            replace: true,
+          });
+          return;
         } else if (data.status === 'declined') {
           setError('This invitation has been declined');
         }
