@@ -9,11 +9,16 @@ import {
   MoreHorizontal,
   Trash2,
   Eye,
+  EyeOff,
   DollarSign,
   MessageSquare,
   Edit3,
   Building2,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  ListTodo
 } from 'lucide-react';
 import { ProjectCollaborator, projectCollaboratorsApi, Client } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +42,7 @@ export function ProjectCollaborators({
   const [isLoading, setIsLoading] = useState(true);
   const [showShareModal, setShowShareModal] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCollaborators();
@@ -190,6 +196,18 @@ export function ProjectCollaborators({
     });
   };
 
+  // Permission definitions for clear display
+  const permissionDefs = [
+    { key: 'can_comment' as const, icon: MessageSquare, label: 'Comment', desc: 'Can post and reply to comments' },
+    { key: 'can_view_financials' as const, icon: DollarSign, label: 'View Financials', desc: 'Can see invoices, quotes, and budgets' },
+    { key: 'can_view_time_entries' as const, icon: Clock, label: 'View Time Entries', desc: 'Can see time logs and hours' },
+    { key: 'can_edit_tasks' as const, icon: Edit3, label: 'Edit Tasks', desc: 'Can create, edit, and manage tasks' },
+    { key: 'can_invite_others' as const, icon: UserPlus, label: 'Invite Others', desc: 'Can invite new collaborators' },
+  ];
+
+  const getPermissionCount = (collab: ProjectCollaborator) =>
+    permissionDefs.filter(p => collab[p.key]).length;
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl p-6" style={{ boxShadow: 'var(--shadow-card)' }}>
@@ -221,7 +239,6 @@ export function ProjectCollaborators({
             </h3>
           </div>
 
-          {/* Show Share button for project owner or collaborators with can_invite_others */}
           {canShare && (
             <button
               onClick={() => setShowShareModal(true)}
@@ -258,143 +275,180 @@ export function ProjectCollaborators({
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {displayedCollaborators.map((collab) => {
               const displayName = getDisplayName(collab);
               const showEmailSeparately = displayName !== collab.invited_email;
-              
+              const isExpanded = expandedId === collab.id;
+              const permCount = getPermissionCount(collab);
+
               return (
-              <div
-                key={collab.id}
-                className="flex items-center gap-3 p-3 rounded-lg bg-neutral-50 hover:bg-neutral-100 transition-colors"
-              >
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-[#476E66]/10 flex items-center justify-center text-xs font-semibold text-[#476E66] flex-shrink-0">
-                  {getInitials(displayName)}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-neutral-900 truncate">
-                      {displayName}
-                    </span>
-                    {getStatusBadge(collab.status)}
-                    {getRoleBadge(collab.role)}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 text-[10px] text-neutral-400">
-                    {showEmailSeparately && (
-                      <>
-                        <span>{collab.invited_email}</span>
-                        <span>•</span>
-                      </>
-                    )}
-                    {collab.relationship && (
-                      <>
-                        <span>{getRelationshipLabel(collab.relationship)}</span>
-                        <span>•</span>
-                      </>
-                    )}
-                    <span>Invited {formatDate(collab.invited_at)}</span>
-                    {collab.accepted_at && (
-                      <>
-                        <span>•</span>
-                        <span>Joined {formatDate(collab.accepted_at)}</span>
-                      </>
-                    )}
-                  </div>
-                  {/* Permissions */}
-                  <div className="flex items-center gap-1.5 mt-2">
-                    {collab.can_comment && (
-                      <span
-                        className="p-1 bg-white rounded border border-neutral-200"
-                        title="Can comment"
-                      >
-                        <MessageSquare className="w-3 h-3 text-neutral-400" />
-                      </span>
-                    )}
-                    {collab.can_view_financials && (
-                      <span
-                        className="p-1 bg-white rounded border border-neutral-200"
-                        title="Can view financials"
-                      >
-                        <DollarSign className="w-3 h-3 text-neutral-400" />
-                      </span>
-                    )}
-                    {collab.can_view_time_entries && (
-                      <span
-                        className="p-1 bg-white rounded border border-neutral-200"
-                        title="Can view time entries"
-                      >
-                        <Clock className="w-3 h-3 text-neutral-400" />
-                      </span>
-                    )}
-                    {collab.can_edit_tasks && (
-                      <span
-                        className="p-1 bg-white rounded border border-neutral-200"
-                        title="Can edit tasks"
-                      >
-                        <Edit3 className="w-3 h-3 text-neutral-400" />
-                      </span>
-                    )}
-                    {collab.their_client_name && (
-                      <span
-                        className="flex items-center gap-1 px-1.5 py-0.5 bg-white rounded border border-neutral-200 text-[9px] text-neutral-500"
-                        title="Their client for this project"
-                      >
-                        <Building2 className="w-3 h-3" />
-                        {collab.their_client_name}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions Menu */}
-                <div className="relative">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenuId(openMenuId === collab.id ? null : collab.id);
-                    }}
-                    className="p-1.5 rounded hover:bg-white transition-colors"
+                <div key={collab.id} className="rounded-xl border border-neutral-100 overflow-hidden transition-all">
+                  {/* Compact Row */}
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-neutral-50 transition-colors"
+                    onClick={() => setExpandedId(isExpanded ? null : collab.id)}
                   >
-                    <MoreHorizontal className="w-4 h-4 text-neutral-400" />
-                  </button>
+                    {/* Avatar */}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${
+                      collab.status === 'accepted'
+                        ? 'bg-[#476E66]/10 text-[#476E66]'
+                        : collab.status === 'pending'
+                        ? 'bg-amber-50 text-amber-600'
+                        : 'bg-neutral-100 text-neutral-400'
+                    }`}>
+                      {getInitials(displayName)}
+                    </div>
 
-                  {openMenuId === collab.id && (
-                    <div
-                      className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 min-w-[140px]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {collab.status === 'pending' && (
-                        <button
-                          onClick={() => handleResend(collab.id)}
-                          disabled={resendingId === collab.id}
-                          className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2 disabled:opacity-50"
-                        >
-                          {resendingId === collab.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Mail className="w-3.5 h-3.5" />
+                    {/* Name + meta */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-neutral-900 truncate">
+                          {displayName}
+                        </span>
+                        {getStatusBadge(collab.status)}
+                        {getRoleBadge(collab.role)}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400">
+                        {showEmailSeparately && (
+                          <>
+                            <span>{collab.invited_email}</span>
+                            <span>·</span>
+                          </>
+                        )}
+                        {collab.relationship && (
+                          <>
+                            <span>{getRelationshipLabel(collab.relationship)}</span>
+                            <span>·</span>
+                          </>
+                        )}
+                        <span className="inline-flex items-center gap-0.5">
+                          <Shield className="w-2.5 h-2.5" />
+                          {permCount} permission{permCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions + expand toggle */}
+                    <div className="flex items-center gap-1">
+                      {/* Context menu */}
+                      {isProjectOwner && (
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === collab.id ? null : collab.id);
+                            }}
+                            className="p-1.5 rounded hover:bg-neutral-200 transition-colors"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-neutral-400" />
+                          </button>
+
+                          {openMenuId === collab.id && (
+                            <div
+                              className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 min-w-[160px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {collab.status === 'pending' && (
+                                <button
+                                  onClick={() => handleResend(collab.id)}
+                                  disabled={resendingId === collab.id}
+                                  className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2 disabled:opacity-50"
+                                >
+                                  {resendingId === collab.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Mail className="w-3.5 h-3.5" />
+                                  )}
+                                  {resendingId === collab.id ? 'Sending...' : 'Resend Invitation'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  handleRemove(collab.id);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2 text-red-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Remove
+                              </button>
+                            </div>
                           )}
-                          {resendingId === collab.id ? 'Sending...' : 'Resend Invitation'}
-                        </button>
+                        </div>
                       )}
-                      <button
-                        onClick={() => {
-                          handleRemove(collab.id);
-                          setOpenMenuId(null);
-                        }}
-                        className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2 text-red-600"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Remove
+
+                      {/* Expand/collapse chevron */}
+                      <button className="p-1.5 rounded hover:bg-neutral-200 transition-colors">
+                        {isExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-neutral-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-neutral-400" />
+                        )}
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Detail Panel */}
+                  {isExpanded && (
+                    <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-4">
+                      {/* Timeline row */}
+                      <div className="flex items-center gap-4 text-[11px] text-neutral-500 mb-4">
+                        <span>Invited {formatDate(collab.invited_at)}</span>
+                        {collab.accepted_at && (
+                          <>
+                            <span className="text-neutral-300">→</span>
+                            <span className="text-emerald-600 font-medium">Joined {formatDate(collab.accepted_at)}</span>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Client mapping */}
+                      {collab.their_client_name && (
+                        <div className="flex items-center gap-2 mb-4 text-xs text-neutral-600">
+                          <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+                          <span>Mapped to client: <strong>{collab.their_client_name}</strong></span>
+                        </div>
+                      )}
+
+                      {/* Permissions grid */}
+                      <div className="mb-1">
+                        <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                          Access & Permissions
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {permissionDefs.map(({ key, icon: Icon, label, desc }) => {
+                            const granted = collab[key];
+                            return (
+                              <div
+                                key={key}
+                                className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border transition-colors ${
+                                  granted
+                                    ? 'bg-white border-emerald-100'
+                                    : 'bg-neutral-50 border-neutral-100 opacity-50'
+                                }`}
+                              >
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                  granted ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-400'
+                                }`}>
+                                  {granted ? <Icon className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className={`text-xs font-medium ${granted ? 'text-neutral-900' : 'text-neutral-400 line-through'}`}>
+                                    {label}
+                                  </p>
+                                  <p className="text-[10px] text-neutral-400 leading-snug">{desc}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-            )})}
+              );
+            })}
           </div>
         )}
       </div>
