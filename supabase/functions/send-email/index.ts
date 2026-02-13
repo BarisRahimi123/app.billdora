@@ -280,11 +280,11 @@ Deno.serve(async (req) => {
           </div>
           ` : ''}
           <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
-            Click the button below to accept or decline this invitation:
+            Sign in to your Billdora account to get started. If you don't have an account yet, you can create one — the project will be added to your account automatically.
           </p>
           <div style="text-align: center; margin: 32px 0;">
             <a href="${acceptUrl || '#'}" style="display: inline-block; background: #476E66; color: white; text-decoration: none; padding: 14px 32px; font-size: 14px; font-weight: 600; border-radius: 8px;">
-              View Invitation
+              Sign In to Accept
             </a>
           </div>
           <p style="color: #9CA3AF; font-size: 14px; margin-top: 40px;">

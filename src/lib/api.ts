@@ -4501,7 +4501,10 @@ export const projectCollaboratorsApi = {
 
     // Always send email notification
     try {
-      const acceptUrl = `${window.location.origin}/project-share/${data.id}`;
+      // Link goes to login page with email pre-filled; invitations are auto-accepted on login/signup
+      const inviteEmail = encodeURIComponent(invitation.invited_email.toLowerCase());
+      const returnTo = encodeURIComponent(`/project-share/${data.id}`);
+      const acceptUrl = `${window.location.origin}/login?email=${inviteEmail}&return_to=${returnTo}`;
       console.log('[projectCollaboratorsApi] invite - sending email to:', invitation.invited_email);
       
       const emailResult = await supabase.functions.invoke('send-email', {

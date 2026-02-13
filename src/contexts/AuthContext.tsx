@@ -244,6 +244,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             logger.auth('Using cached profile on state change:', cachedProfile.email, 'companyId:', cachedProfile.company_id);
             setUser(session.user);
             setProfile(cachedProfile);
+            // Auto-accept pending project invitations (fire-and-forget)
+            if (cachedProfile.email && cachedProfile.company_id) {
+              autoAcceptProjectInvitations(session.user.id, cachedProfile.email, cachedProfile.company_id);
+            }
           } else {
             // No valid cached profile, fetch from database
             // FIX: Don't set user until profile is also fetched to prevent race condition
@@ -265,6 +269,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setProfile(profileData);
               if (profileData) {
                 setCachedProfile(profileData);
+                // Auto-accept pending project invitations (fire-and-forget)
+                if (profileData.email && profileData.company_id) {
+                  autoAcceptProjectInvitations(session.user.id, profileData.email, profileData.company_id);
+                }
               }
             }
           }
@@ -380,6 +388,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     return { error: null };
+  }
+
+  // Auto-accept any pending project collaboration invitations for this user.
+  // Runs silently after login/signup so the shared project appears immediately.
+  async function autoAcceptProjectInvitations(userId: string, email: string, companyId: string) {
+    try {
+      const { data: pending } = await supabase
+        .from('project_collaborators')
+        .select('id')
+        .eq('status', 'pending')
+        .or(`invited_user_id.eq.${userId},invited_email.eq.${email.toLowerCase()}`);
+
+      if (!pending || pending.length === 0) return;
+
+      for (const inv of pending) {
+        const { error } = await supabase
+          .from('project_collaborators')
+          .update({
+            status: 'accepted',
+            invited_user_id: userId,
+            invited_company_id: companyId,
+            accepted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', inv.id);
+        if (error) {
+          console.error('[Auth] Failed to auto-accept invitation:', inv.id, error);
+        } else {
+          logger.auth('Auto-accepted project invitation:', inv.id);
+        }
+      }
+    } catch (err) {
+      console.error('[Auth] autoAcceptProjectInvitations error:', err);
+    }
   }
 
   // Recover a missing or mismatched profile during sign-in
