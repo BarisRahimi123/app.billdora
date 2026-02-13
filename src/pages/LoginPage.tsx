@@ -98,6 +98,13 @@ export default function LoginPage() {
     }
     if (returnToParam) {
       setReturnTo(returnToParam);
+    } else {
+      // Fallback: check sessionStorage for returnTo saved before email confirmation
+      const savedReturnTo = sessionStorage.getItem('pendingReturnTo');
+      if (savedReturnTo) {
+        setReturnTo(savedReturnTo);
+        sessionStorage.removeItem('pendingReturnTo');
+      }
     }
   }, [searchParams, user, signOut, initialCleanupDone]);
 
@@ -269,6 +276,7 @@ export default function LoginPage() {
         // Redirect to check-email page if confirmation required (non-collaborators)
         if (result.emailConfirmationRequired) {
           sessionStorage.setItem('pendingVerificationEmail', email);
+          if (returnTo) sessionStorage.setItem('pendingReturnTo', returnTo);
           navigate('/check-email');
           return;
         }

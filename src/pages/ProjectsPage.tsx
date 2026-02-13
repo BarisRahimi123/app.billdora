@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
 import { api, Project, Task, Client, TimeEntry, Invoice, Expense, ProjectTeamMember, settingsApi, FieldValue, StatusCode, CostCenter, projectCollaboratorsApi } from '../lib/api';
+import { SubmittalsTab } from '../components/SubmittalsTab';
 import { TEAM_MEMBERS_BATCH_LIMIT } from '../lib/constants';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notificationService';
@@ -24,7 +25,7 @@ import { PendingProjectInvitations } from '../components/PendingProjectInvitatio
 
 type TaskSubTab = 'overview' | 'editor' | 'schedule' | 'allocations' | 'checklist';
 
-type DetailTab = 'vitals' | 'client' | 'tasks' | 'team' | 'financials' | 'billing' | 'details';
+type DetailTab = 'vitals' | 'client' | 'tasks' | 'team' | 'financials' | 'billing' | 'details' | 'submittals';
 
 const PROJECT_CATEGORIES = [
   { value: 'A', label: 'Architectural', color: 'bg-neutral-400' },
@@ -819,7 +820,7 @@ export default function ProjectsPage() {
         {/* Tabs - Compact horizontally scrollable on mobile */}
         <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="flex gap-1 p-1 bg-neutral-100 rounded-sm w-max sm:w-fit">
-            {(['vitals', 'client', 'details', 'tasks', 'financials', 'billing'] as DetailTab[]).filter(tab => {
+            {(['vitals', 'client', 'details', 'tasks', 'submittals', 'financials', 'billing'] as DetailTab[]).filter(tab => {
               if (!effectiveCanViewFinancials && (tab === 'financials' || tab === 'billing')) return false;
               return true;
             }).map(tab => (
@@ -1432,6 +1433,14 @@ export default function ProjectsPage() {
                 </>
               )}
             </div>
+          )}
+
+          {activeTab === 'submittals' && selectedProject && (
+            <SubmittalsTab
+              projectId={selectedProject.id}
+              companyId={profile?.company_id || ''}
+              userId={profile?.id}
+            />
           )}
 
           {activeTab === 'details' && (

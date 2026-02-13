@@ -612,6 +612,19 @@ export const api = {
     });
   },
 
+  /** Fetch minimal project info by IDs (works across companies via RLS). */
+  async getProjectsByIds(ids: string[]): Promise<Pick<Project, 'id' | 'name' | 'project_number'>[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await supabase.from('projects')
+      .select('id, name, project_number')
+      .in('id', ids);
+    if (error) {
+      console.error('getProjectsByIds error:', error);
+      return [];
+    }
+    return data || [];
+  },
+
   async createProject(project: Partial<Project>) {
     return apiCall(async () => {
       const { data, error } = await supabase.from('projects')
@@ -3999,8 +4012,205 @@ export const projectCommentsApi = {
 
   async toggleResolved(id: string, isResolved: boolean): Promise<ProjectComment> {
     return this.update(id, { is_resolved: isResolved });
-  }
+  },
+
+  async getAllByCompany(_companyId: string): Promise<(ProjectComment & { project_name?: string; project_number?: string })[]> {
+    // RLS already restricts visibility based on project membership / collaboration.
+    // Don't join projects here — the RLS policy on project_comments already
+    // references projects internally, causing a PostgREST 400 conflict.
+    // Project names are resolved in the component from the separate getProjects call.
+    const { data, error } = await supabase
+      .from('project_comments')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.error('getAllByCompany error:', error);
+      throw error;
+    }
+    return (data || []) as (ProjectComment & { project_name?: string; project_number?: string })[];
+  },
+
+  async uploadAttachment(companyId: string, projectId: string, file: File): Promise<{ name: string; url: string; type: string; size: number }> {
+    const fileName = `${companyId}/${projectId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error } = await supabase.storage
+      .from('comment-attachments')
+      .upload(fileName, file);
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('comment-attachments')
+      .getPublicUrl(fileName);
+
+    return { name: file.name, url: publicUrl, type: file.type, size: file.size };
+  },
+
+  async createWithAttachments(comment: {
+    project_id: string;
+    company_id: string;
+    author_id: string;
+    author_name?: string;
+    author_email?: string;
+    content: string;
+    visibility?: 'all' | 'internal' | 'owner_only';
+    parent_id?: string;
+    mentions?: string[];
+    attachments?: Array<{ name: string; url: string; type: string; size: number }>;
+  }): Promise<ProjectComment> {
+    const { data, error } = await supabase
+      .from('project_comments')
+      .insert({
+        ...comment,
+        visibility: comment.visibility || 'all',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
 };
+
+// ─── Comment Tasks API (pin messages as to-do) ─────────────────
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface CommentTask {
+  id: string;
+  comment_id: string;
+  project_id: string;
+  user_id: string;
+  company_id: string;
+  note: string;
+  priority: TaskPriority;
+  due_date: string | null;
+  reminder_at: string | null;
+  reminder_sent: boolean;
+  is_completed: boolean;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export const commentTasksApi = {
+  async getAll(): Promise<CommentTask[]> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) { console.error('commentTasksApi.getAll error:', error); throw error; }
+    return (data || []) as CommentTask[];
+  },
+
+  async create(task: {
+    comment_id: string;
+    project_id: string;
+    user_id: string;
+    company_id: string;
+    note?: string;
+    priority?: TaskPriority;
+    due_date?: string | null;
+    reminder_at?: string | null;
+  }): Promise<CommentTask> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .insert({
+        ...task,
+        note: task.note || '',
+        priority: task.priority || 'medium',
+        due_date: task.due_date || null,
+        reminder_at: task.reminder_at || null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return data as CommentTask;
+  },
+
+  async update(id: string, fields: {
+    priority?: TaskPriority;
+    due_date?: string | null;
+    reminder_at?: string | null;
+    note?: string;
+  }): Promise<CommentTask> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .update(fields)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as CommentTask;
+  },
+
+  async toggleComplete(id: string, isCompleted: boolean): Promise<CommentTask> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .update({ is_completed: isCompleted, completed_at: isCompleted ? new Date().toISOString() : null })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as CommentTask;
+  },
+
+  async remove(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('comment_tasks')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  /** Fetch tasks with due reminders (reminder_at <= now, not sent, not completed) */
+  async getDueReminders(): Promise<CommentTask[]> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .select('*')
+      .eq('is_completed', false)
+      .eq('reminder_sent', false)
+      .lte('reminder_at', new Date().toISOString())
+      .order('reminder_at', { ascending: true });
+    if (error) { console.error('getDueReminders error:', error); return []; }
+    return (data || []) as CommentTask[];
+  },
+
+  /** Mark a reminder as sent so it doesn't fire again */
+  async markReminderSent(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('comment_tasks')
+      .update({ reminder_sent: true })
+      .eq('id', id);
+    if (error) console.error('markReminderSent error:', error);
+  },
+
+  /** Snooze: push reminder_at forward and reset reminder_sent */
+  async snoozeReminder(id: string, newReminderAt: string): Promise<CommentTask> {
+    const { data, error } = await supabase
+      .from('comment_tasks')
+      .update({ reminder_at: newReminderAt, reminder_sent: false })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as CommentTask;
+  },
+};
+
+// ─── Generic App Reminder Interface (extensible for submittals, deadlines, etc.) ───
+export type ReminderSource = 'comment_task' | 'submittal' | 'project_deadline';
+
+export interface AppReminder {
+  id: string;
+  sourceId: string;
+  source: ReminderSource;
+  title: string;
+  message: string;
+  projectName?: string;
+  projectId?: string;
+  priority?: TaskPriority;
+  reminder_at: string;
+  created_at: string;
+}
 
 // Project Collaborators API
 export const projectCollaboratorsApi = {
@@ -4471,5 +4681,272 @@ export const transactionCategoryApi = {
   async delete(id: string): Promise<void> {
     const { error } = await supabase.from('transaction_categories').delete().eq('id', id);
     if (error) throw error;
+  },
+};
+
+// ===== Submittals Tracker =====
+
+export interface Agency {
+  id: string;
+  company_id: string;
+  name: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  typical_response_days?: number;
+  notes?: string;
+  is_archived?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SubmittalPackage {
+  id: string;
+  project_id: string;
+  company_id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  submitted_date?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Joined
+  items?: SubmittalItem[];
+  creator?: { id: string; full_name?: string };
+}
+
+export type SubmittalStatus =
+  | 'not_submitted'
+  | 'submitted'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'revisions_required'
+  | 'resubmitted'
+  | 'not_applicable';
+
+export interface SubmittalItem {
+  id: string;
+  package_id: string;
+  agency_id?: string;
+  company_id: string;
+  agency_name: string;
+  status: SubmittalStatus;
+  submitted_date?: string;
+  submitted_by?: string;
+  expected_response_date?: string;
+  received_date?: string;
+  response_notes?: string;
+  tracking_number?: string;
+  follow_up_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  // Joined
+  agency?: Agency;
+  submitter?: { id: string; full_name?: string };
+  package?: SubmittalPackage;
+}
+
+export interface SubmittalActivity {
+  id: string;
+  submittal_item_id: string;
+  company_id: string;
+  action: string;
+  old_status?: string;
+  new_status?: string;
+  notes?: string;
+  created_by?: string;
+  created_at?: string;
+  creator?: { id: string; full_name?: string };
+}
+
+export const submittalsApi = {
+  // --- Agency Directory ---
+  async getAgencies(companyId: string): Promise<Agency[]> {
+    const { data, error } = await supabase
+      .from('agency_directory')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('is_archived', false)
+      .order('name');
+    if (error) throw error;
+    return (data || []) as Agency[];
+  },
+
+  async createAgency(agency: Partial<Agency> & { company_id: string; name: string }): Promise<Agency> {
+    const { data, error } = await supabase
+      .from('agency_directory')
+      .insert(agency)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Agency;
+  },
+
+  async updateAgency(id: string, updates: Partial<Agency>): Promise<Agency> {
+    const { data, error } = await supabase
+      .from('agency_directory')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Agency;
+  },
+
+  async deleteAgency(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('agency_directory')
+      .update({ is_archived: true, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- Submittal Packages ---
+  async getPackages(projectId: string): Promise<SubmittalPackage[]> {
+    const { data, error } = await supabase
+      .from('submittal_packages')
+      .select('*, creator:profiles!submittal_packages_created_by_fkey(id, full_name), items:submittal_items(*)')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []) as SubmittalPackage[];
+  },
+
+  async createPackage(pkg: Partial<SubmittalPackage> & { project_id: string; company_id: string; name: string }): Promise<SubmittalPackage> {
+    const { data, error } = await supabase
+      .from('submittal_packages')
+      .insert(pkg)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SubmittalPackage;
+  },
+
+  async updatePackage(id: string, updates: Partial<SubmittalPackage>): Promise<SubmittalPackage> {
+    const { data, error } = await supabase
+      .from('submittal_packages')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SubmittalPackage;
+  },
+
+  async deletePackage(id: string): Promise<void> {
+    const { error } = await supabase.from('submittal_packages').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- Submittal Items ---
+  async createItem(item: Partial<SubmittalItem> & { package_id: string; company_id: string; agency_name: string }): Promise<SubmittalItem> {
+    const { data, error } = await supabase
+      .from('submittal_items')
+      .insert(item)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SubmittalItem;
+  },
+
+  async createItems(items: (Partial<SubmittalItem> & { package_id: string; company_id: string; agency_name: string })[]): Promise<SubmittalItem[]> {
+    const { data, error } = await supabase
+      .from('submittal_items')
+      .insert(items)
+      .select();
+    if (error) throw error;
+    return (data || []) as SubmittalItem[];
+  },
+
+  async updateItem(id: string, updates: Partial<SubmittalItem>): Promise<SubmittalItem> {
+    const { data, error } = await supabase
+      .from('submittal_items')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SubmittalItem;
+  },
+
+  async deleteItem(id: string): Promise<void> {
+    const { error } = await supabase.from('submittal_items').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- Submittal Activity ---
+  async getActivity(submittalItemId: string): Promise<SubmittalActivity[]> {
+    const { data, error } = await supabase
+      .from('submittal_activity')
+      .select('*, creator:profiles!submittal_activity_created_by_fkey(id, full_name)')
+      .eq('submittal_item_id', submittalItemId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []) as SubmittalActivity[];
+  },
+
+  async logActivity(activity: {
+    submittal_item_id: string;
+    company_id: string;
+    action: string;
+    old_status?: string;
+    new_status?: string;
+    notes?: string;
+    created_by?: string;
+  }): Promise<SubmittalActivity> {
+    const { data, error } = await supabase
+      .from('submittal_activity')
+      .insert(activity)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as SubmittalActivity;
+  },
+
+  // --- Combined: Update item status + log activity ---
+  async updateItemStatus(
+    id: string,
+    newStatus: SubmittalStatus,
+    companyId: string,
+    userId?: string,
+    notes?: string,
+    extraUpdates?: Partial<SubmittalItem>
+  ): Promise<SubmittalItem> {
+    // Get current status
+    const { data: current } = await supabase
+      .from('submittal_items')
+      .select('status')
+      .eq('id', id)
+      .single();
+
+    const oldStatus = current?.status || 'not_submitted';
+
+    // Update item
+    const updates: Partial<SubmittalItem> = { status: newStatus, ...extraUpdates };
+    if (newStatus === 'submitted' && !extraUpdates?.submitted_date) {
+      updates.submitted_date = new Date().toISOString().split('T')[0];
+      updates.submitted_by = userId;
+    }
+    if (['approved', 'rejected', 'revisions_required'].includes(newStatus) && !extraUpdates?.received_date) {
+      updates.received_date = new Date().toISOString().split('T')[0];
+    }
+
+    const item = await this.updateItem(id, updates);
+
+    // Log activity
+    await this.logActivity({
+      submittal_item_id: id,
+      company_id: companyId,
+      action: `Status changed to ${newStatus.replace(/_/g, ' ')}`,
+      old_status: oldStatus,
+      new_status: newStatus,
+      notes,
+      created_by: userId,
+    });
+
+    return item;
   },
 };

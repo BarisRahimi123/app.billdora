@@ -11,9 +11,12 @@ import { useDebounce } from '../hooks/useDebounce';
 import {
   LayoutDashboard, Users, FolderKanban, Clock, FileText, Calendar, BarChart3, Settings, LogOut,
   Search, Bell, ChevronDown, ChevronRight, X, Play, Pause, Square, Menu, PieChart, ArrowLeft, Wallet, FileSpreadsheet, Camera,
-  Sparkles
+  Sparkles, MessageSquare
 } from 'lucide-react';
 import { AiChatSidebar } from '../ai/components/AiChatSidebar';
+import { CommunicationsPanel } from './CommunicationsPanel';
+import { ReminderPopup } from './ReminderPopup';
+import type { AppReminder } from '../lib/api';
 
 const mainNavItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -57,6 +60,10 @@ export default function Layout() {
 
   // AI Chat Sidebar
   const [aiChatOpen, setAiChatOpen] = useState(false);
+
+  // Communications Panel
+  const [commsOpen, setCommsOpen] = useState(false);
+  const [commsInitialTab, setCommsInitialTab] = useState<'messages' | 'todos'>('messages');
 
   // Floating Timer State
   const [timerRunning, setTimerRunning] = useState(false);
@@ -576,6 +583,15 @@ export default function Layout() {
                 </div>
               )}
 
+              {/* Communications */}
+              <button
+                onClick={() => setCommsOpen(true)}
+                className="relative p-1.5 hover:bg-neutral-100 rounded-lg transition-colors"
+                title="Communications"
+              >
+                <MessageSquare className="w-5 h-5 text-neutral-600" />
+              </button>
+
               {/* Notifications */}
               <div ref={notificationsRef} className="relative">
                 <button
@@ -792,6 +808,25 @@ export default function Layout() {
       >
         <Sparkles className="w-5 h-5" />
       </button>
+
+      {/* Communications Panel */}
+      <CommunicationsPanel
+        isOpen={commsOpen}
+        onClose={() => { setCommsOpen(false); setCommsInitialTab('messages'); }}
+        initialTab={commsInitialTab}
+      />
+
+      {/* Global Reminder Popups */}
+      <ReminderPopup
+        onNavigate={(reminder: AppReminder) => {
+          if (reminder.source === 'comment_task') {
+            // Open the Communications Hub directly on the To-Do tab
+            setCommsInitialTab('todos');
+            setCommsOpen(true);
+          }
+          // Future: handle other sources (submittals, deadlines) with navigation
+        }}
+      />
 
       {/* AI Chat Sidebar */}
       <AiChatSidebar

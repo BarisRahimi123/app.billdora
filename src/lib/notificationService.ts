@@ -28,7 +28,10 @@ export type NotificationType =
   | 'new_client_added'
   | 'collaboration_declined'
   | 'collaboration_invited'
-  | 'collaboration_response_submitted';
+  | 'collaboration_response_submitted'
+  | 'submittal_overdue'
+  | 'submittal_reminder'
+  | 'submittal_status_changed';
 
 interface CreateNotificationParams {
   companyId: string;
@@ -37,7 +40,7 @@ interface CreateNotificationParams {
   title: string;
   message: string;
   referenceId?: string;
-  referenceType?: 'quote' | 'invoice' | 'project' | 'client' | 'task' | 'collaboration';
+  referenceType?: 'quote' | 'invoice' | 'project' | 'client' | 'task' | 'collaboration' | 'submittal';
   sendPush?: boolean; // Whether to send a push notification (default: true)
 }
 
@@ -287,6 +290,39 @@ export const NotificationService = {
       message: `${collaboratorName} submitted their response for "${projectTitle}"`,
       referenceId: quoteId,
       referenceType: 'quote',
+    });
+  },
+
+  async submittalOverdue(companyId: string, agencyName: string, packageName: string, projectName: string, daysOverdue: number, projectId?: string) {
+    return createNotification({
+      companyId,
+      type: 'submittal_overdue',
+      title: '📋 Submittal Response Overdue',
+      message: `${agencyName} has not responded to "${packageName}" (${projectName}) - ${daysOverdue}d overdue`,
+      referenceId: projectId,
+      referenceType: 'project',
+    });
+  },
+
+  async submittalReminder(companyId: string, agencyName: string, packageName: string, projectName: string, daysUntilDue: number, projectId?: string) {
+    return createNotification({
+      companyId,
+      type: 'submittal_reminder',
+      title: '⏰ Submittal Follow-up Reminder',
+      message: `${agencyName} response for "${packageName}" (${projectName}) expected in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}`,
+      referenceId: projectId,
+      referenceType: 'project',
+    });
+  },
+
+  async submittalStatusChanged(companyId: string, agencyName: string, packageName: string, newStatus: string, projectId?: string) {
+    return createNotification({
+      companyId,
+      type: 'submittal_status_changed',
+      title: '📋 Submittal Status Updated',
+      message: `${agencyName} - "${packageName}" is now ${newStatus.replace(/_/g, ' ')}`,
+      referenceId: projectId,
+      referenceType: 'project',
     });
   },
 };

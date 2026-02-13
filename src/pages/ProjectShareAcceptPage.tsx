@@ -51,10 +51,10 @@ export default function ProjectShareAcceptPage() {
   const [newClientEmail, setNewClientEmail] = useState('');
 
   useEffect(() => {
-    if (id) {
+    if (id && user) {
       loadInvitation();
     }
-  }, [id]);
+  }, [id, user]);
 
   const loadInvitation = async () => {
     if (!id) return;
@@ -217,7 +217,42 @@ export default function ProjectShareAcceptPage() {
     );
   }
 
-  // Error state
+  // Not logged in — show login/signup prompt (must come before error check
+  // because unauthenticated users can't load invitation data via RLS)
+  if (!user && !authLoading) {
+    const returnPath = encodeURIComponent(`/project-share/${id}`);
+    return (
+      <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-[#476E66]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-[#476E66]" />
+          </div>
+          <h1 className="text-xl font-semibold text-neutral-900 mb-2">
+            Project Invitation
+          </h1>
+          <p className="text-neutral-500 mb-6">
+            Please log in or create an account to accept this project invitation
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => navigate(`/login?return_to=${returnPath}`)}
+              className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Log In
+            </button>
+            <button
+              onClick={() => navigate(`/login?signup=true&return_to=${returnPath}`)}
+              className="px-6 py-2.5 bg-[#476E66] text-white rounded-xl text-sm font-medium hover:bg-[#3a5b54] transition-colors"
+            >
+              Create Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state (only shown for logged-in users)
   if (error) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
@@ -234,31 +269,6 @@ export default function ProjectShareAcceptPage() {
             className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
           >
             Go to Projects
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Not logged in
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-[#476E66]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-8 h-8 text-[#476E66]" />
-          </div>
-          <h1 className="text-xl font-semibold text-neutral-900 mb-2">
-            Login Required
-          </h1>
-          <p className="text-neutral-500 mb-6">
-            Please log in to accept this project invitation
-          </p>
-          <button
-            onClick={() => navigate('/login', { state: { returnTo: `/project-share/${id}` } })}
-            className="px-6 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
-          >
-            Log In
           </button>
         </div>
       </div>

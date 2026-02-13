@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 export default function CheckEmailPage() {
   const [resending, setResending] = useState(false);
   const [message, setMessage] = useState('');
+  const pendingReturnTo = sessionStorage.getItem('pendingReturnTo');
 
   const handleResend = async () => {
     setResending(true);
@@ -71,7 +72,7 @@ export default function CheckEmailPage() {
         )}
 
         <Link
-          to="/login"
+          to={pendingReturnTo ? `/login?return_to=${encodeURIComponent(pendingReturnTo)}` : '/login'}
           className="inline-block mt-6 text-sm hover:underline"
           style={{ color: '#476E66' }}
         >

@@ -32,10 +32,11 @@ const getIconForPlan = (planName: string) => {
 
 const defaultFeatures: Record<string, string[]> = {
   free: [
-    'Up to 3 clients',
-    '5 invoices per month',
-    'Basic time tracking',
-    'Basic invoicing',
+    'Up to 5 projects',
+    'Up to 10 clients',
+    '15 invoices per month',
+    '2 team members',
+    'Time & expense tracking',
     'Email support',
   ],
   starter: [

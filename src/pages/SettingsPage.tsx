@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { api, Service, CompanySettings, userManagementApi, Role, UserProfile, CompanyInvitation, settingsApi, Category, ExpenseCode, InvoiceTerm, FieldValue, StatusCode, CostCenter, emailTemplatesApi, EmailTemplate, collaboratorCategoryApi, CollaboratorCategory, transactionCategoryApi, TransactionCategory, TAX_CLASSIFICATIONS } from '../lib/api';
+import { api, Service, CompanySettings, userManagementApi, Role, UserProfile, CompanyInvitation, settingsApi, Category, ExpenseCode, InvoiceTerm, FieldValue, StatusCode, CostCenter, emailTemplatesApi, EmailTemplate, collaboratorCategoryApi, CollaboratorCategory, transactionCategoryApi, TransactionCategory, TAX_CLASSIFICATIONS, submittalsApi, Agency } from '../lib/api';
 import { supabase } from '../lib/supabase';
 
 const CATEGORIES = ['Scanning', 'Modeling', 'Drafting', 'GIS', 'Consulting', 'Other'];
@@ -79,6 +79,7 @@ export default function SettingsPage() {
         { id: 'users', label: 'User Management', icon: Users, adminOnly: true },
         { id: 'staff', label: 'Staff', icon: Users, adminOnly: true },
         { id: 'collaborators', label: 'Collaborators', icon: Users, adminOnly: true },
+        { id: 'agency-directory', label: 'Agency Directory', icon: Building2, adminOnly: true },
       ]
     },
     {
@@ -719,6 +720,10 @@ export default function SettingsPage() {
 
             {activeTab === 'collaborators' && (
               <CollaboratorCategoriesTab companyId={profile.company_id} />
+            )}
+
+            {activeTab === 'agency-directory' && (
+              <AgencyDirectoryTab companyId={profile.company_id} />
             )}
 
             {activeTab === 'notifications' && (
@@ -5780,17 +5785,18 @@ function SubscriptionTab() {
   }
 
   const features = [
-    { name: 'Projects', starter: '3', pro: 'Unlimited' },
-    { name: 'Team Members', starter: '2', pro: '50' },
-    { name: 'Clients', starter: '5', pro: 'Unlimited' },
-    { name: 'Invoices per Month', starter: '10', pro: 'Unlimited' },
-    { name: 'Time Tracking', starter: true, pro: true },
-    { name: 'Expense Tracking', starter: true, pro: true },
-    { name: 'Invoice Generation', starter: true, pro: true },
-    { name: 'Custom Branding', starter: false, pro: true },
-    { name: 'Advanced Reports', starter: false, pro: true },
-    { name: 'Priority Support', starter: false, pro: true },
-    { name: 'API Access', starter: false, pro: true },
+    { name: 'Projects', free: '5', starter: 'Unlimited', pro: 'Unlimited' },
+    { name: 'Team Members', free: '2', starter: '3', pro: '50' },
+    { name: 'Clients', free: '10', starter: 'Unlimited', pro: 'Unlimited' },
+    { name: 'Invoices per Month', free: '15', starter: 'Unlimited', pro: 'Unlimited' },
+    { name: 'Time Tracking', free: true, starter: true, pro: true },
+    { name: 'Expense Tracking', free: true, starter: true, pro: true },
+    { name: 'Invoice Generation', free: true, starter: true, pro: true },
+    { name: 'Payment Processing', free: false, starter: true, pro: true },
+    { name: 'Bank Sync (Plaid)', free: false, starter: true, pro: true },
+    { name: 'Custom Branding', free: false, starter: false, pro: true },
+    { name: 'Advanced Reports', free: false, starter: false, pro: true },
+    { name: 'Priority Support', free: false, starter: false, pro: true },
   ];
 
   return (
@@ -5836,12 +5842,12 @@ function SubscriptionTab() {
           <div className="p-4 border border-neutral-200 rounded-lg bg-white">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Projects</span>
-              <span className="text-xs font-medium text-neutral-900">{usage.projects} / {currentPlan?.limits?.projects === -1 ? '∞' : (currentPlan?.limits?.projects ?? 3)}</span>
+              <span className="text-xs font-medium text-neutral-900">{usage.projects} / {currentPlan?.limits?.projects === -1 ? '∞' : (currentPlan?.limits?.projects ?? 5)}</span>
             </div>
             <div className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full ${usage.projects >= (currentPlan?.limits?.projects ?? 3) && currentPlan?.limits?.projects !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
-                style={{ width: `${currentPlan?.limits?.projects === -1 ? 0 : Math.min((usage.projects / (currentPlan?.limits?.projects ?? 3)) * 100, 100)}%` }}
+                className={`h-full rounded-full ${usage.projects >= (currentPlan?.limits?.projects ?? 5) && currentPlan?.limits?.projects !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
+                style={{ width: `${currentPlan?.limits?.projects === -1 ? 0 : Math.min((usage.projects / (currentPlan?.limits?.projects ?? 5)) * 100, 100)}%` }}
               />
             </div>
           </div>
@@ -5862,12 +5868,12 @@ function SubscriptionTab() {
           <div className="p-4 border border-neutral-200 rounded-lg bg-white">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Clients</span>
-              <span className="text-xs font-medium text-neutral-900">{usage.clients} / {currentPlan?.limits?.clients === -1 ? '∞' : (currentPlan?.limits?.clients ?? 5)}</span>
+              <span className="text-xs font-medium text-neutral-900">{usage.clients} / {currentPlan?.limits?.clients === -1 ? '∞' : (currentPlan?.limits?.clients ?? 10)}</span>
             </div>
             <div className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full ${usage.clients >= (currentPlan?.limits?.clients ?? 5) && currentPlan?.limits?.clients !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
-                style={{ width: `${currentPlan?.limits?.clients === -1 ? 0 : Math.min((usage.clients / (currentPlan?.limits?.clients ?? 5)) * 100, 100)}%` }}
+                className={`h-full rounded-full ${usage.clients >= (currentPlan?.limits?.clients ?? 10) && currentPlan?.limits?.clients !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
+                style={{ width: `${currentPlan?.limits?.clients === -1 ? 0 : Math.min((usage.clients / (currentPlan?.limits?.clients ?? 10)) * 100, 100)}%` }}
               />
             </div>
           </div>
@@ -5875,12 +5881,12 @@ function SubscriptionTab() {
           <div className="p-4 border border-neutral-200 rounded-lg bg-white">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Invoices (Mo)</span>
-              <span className="text-xs font-medium text-neutral-900">{usage.invoices} / {currentPlan?.limits?.invoices_per_month === -1 ? '∞' : (currentPlan?.limits?.invoices_per_month ?? 10)}</span>
+              <span className="text-xs font-medium text-neutral-900">{usage.invoices} / {currentPlan?.limits?.invoices_per_month === -1 ? '∞' : (currentPlan?.limits?.invoices_per_month ?? 15)}</span>
             </div>
             <div className="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full ${usage.invoices >= (currentPlan?.limits?.invoices_per_month ?? 10) && currentPlan?.limits?.invoices_per_month !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
-                style={{ width: `${currentPlan?.limits?.invoices_per_month === -1 ? 0 : Math.min((usage.invoices / (currentPlan?.limits?.invoices_per_month ?? 10)) * 100, 100)}%` }}
+                className={`h-full rounded-full ${usage.invoices >= (currentPlan?.limits?.invoices_per_month ?? 15) && currentPlan?.limits?.invoices_per_month !== -1 ? 'bg-red-500' : 'bg-neutral-900'}`}
+                style={{ width: `${currentPlan?.limits?.invoices_per_month === -1 ? 0 : Math.min((usage.invoices / (currentPlan?.limits?.invoices_per_month ?? 15)) * 100, 100)}%` }}
               />
             </div>
           </div>
@@ -6020,9 +6026,10 @@ function SubscriptionTab() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-neutral-200">
-                <th className="py-4 pr-4 text-xs font-bold text-neutral-900 uppercase tracking-wider w-1/2">Features</th>
-                <th className="py-4 px-4 text-center text-xs font-bold text-neutral-900 uppercase tracking-wider w-1/4">Starter</th>
-                <th className="py-4 px-4 text-center text-xs font-bold text-neutral-900 uppercase tracking-wider w-1/4">
+                <th className="py-4 pr-4 text-xs font-bold text-neutral-900 uppercase tracking-wider">Features</th>
+                <th className="py-4 px-4 text-center text-xs font-bold text-neutral-900 uppercase tracking-wider">Free</th>
+                <th className="py-4 px-4 text-center text-xs font-bold text-neutral-900 uppercase tracking-wider">Starter</th>
+                <th className="py-4 px-4 text-center text-xs font-bold text-neutral-900 uppercase tracking-wider">
                   Professional
                   {billingCycle === 'yearly' && <span className="ml-2 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] rounded font-bold">SAVE 20%</span>}
                 </th>
@@ -6032,6 +6039,21 @@ function SubscriptionTab() {
               {features.map((feature, idx) => (
                 <tr key={feature.name} className="hover:bg-neutral-50/50 transition-colors">
                   <td className="py-3 pr-4 text-xs font-medium text-neutral-700">{feature.name}</td>
+                  <td className="py-3 px-4 text-center">
+                    {typeof feature.free === 'boolean' ? (
+                      feature.free ? (
+                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-50 text-emerald-600">
+                          <Check className="w-3 h-3" />
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-neutral-100 text-neutral-400">
+                          <X className="w-3 h-3" />
+                        </div>
+                      )
+                    ) : (
+                      <span className="text-xs font-bold text-neutral-900">{feature.free}</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4 text-center">
                     {typeof feature.starter === 'boolean' ? (
                       feature.starter ? (
@@ -7396,6 +7418,233 @@ function AccountingCategoriesTab({ companyId }: { companyId: string }) {
             <p className="text-[10px] text-neutral-500 leading-tight">{t.description}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ==================== Agency Directory Tab ====================
+
+function AgencyDirectoryTab({ companyId }: { companyId: string }) {
+  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingAgency, setEditingAgency] = useState<Agency | null>(null);
+  const [form, setForm] = useState({ name: '', contact_name: '', email: '', phone: '', address: '', typical_response_days: 30, notes: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const { showToast } = useToast();
+
+  const loadAgencies = async () => {
+    try {
+      const data = await submittalsApi.getAgencies(companyId);
+      setAgencies(data);
+    } catch (err) {
+      console.error('Failed to load agencies:', err);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadAgencies(); }, [companyId]);
+
+  const resetForm = () => {
+    setForm({ name: '', contact_name: '', email: '', phone: '', address: '', typical_response_days: 30, notes: '' });
+    setEditingAgency(null);
+    setShowForm(false);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return;
+    try {
+      if (editingAgency) {
+        await submittalsApi.updateAgency(editingAgency.id, {
+          name: form.name.trim(),
+          contact_name: form.contact_name || undefined,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          address: form.address || undefined,
+          typical_response_days: form.typical_response_days || 30,
+          notes: form.notes || undefined,
+        });
+        showToast('Agency updated', 'success');
+      } else {
+        await submittalsApi.createAgency({
+          company_id: companyId,
+          name: form.name.trim(),
+          contact_name: form.contact_name || undefined,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          address: form.address || undefined,
+          typical_response_days: form.typical_response_days || 30,
+          notes: form.notes || undefined,
+        });
+        showToast('Agency added', 'success');
+      }
+      resetForm();
+      loadAgencies();
+    } catch (err) {
+      console.error('Failed to save agency:', err);
+      showToast('Failed to save agency', 'error');
+    }
+  };
+
+  const handleEdit = (agency: Agency) => {
+    setEditingAgency(agency);
+    setForm({
+      name: agency.name,
+      contact_name: agency.contact_name || '',
+      email: agency.email || '',
+      phone: agency.phone || '',
+      address: agency.address || '',
+      typical_response_days: agency.typical_response_days || 30,
+      notes: agency.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (agency: Agency) => {
+    if (!confirm(`Archive "${agency.name}"? It will no longer appear in the agency list.`)) return;
+    try {
+      await submittalsApi.deleteAgency(agency.id);
+      showToast('Agency archived', 'success');
+      loadAgencies();
+    } catch (err) {
+      console.error('Failed to archive agency:', err);
+      showToast('Failed to archive agency', 'error');
+    }
+  };
+
+  const filteredAgencies = searchQuery.trim()
+    ? agencies.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+    : agencies;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-sm border border-neutral-200">
+        <div className="px-4 py-3 border-b border-neutral-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#476E66]" />
+                <h3 className="text-sm font-semibold text-neutral-900">Agency Directory</h3>
+              </div>
+              <p className="text-[10px] text-neutral-500 mt-0.5">
+                Manage your company-wide directory of agencies for submittal tracking.
+              </p>
+            </div>
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
+              className="px-3 py-1.5 text-xs font-medium bg-[#476E66] text-white rounded-lg hover:bg-[#3a5b54] flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add Agency
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        {showForm && (
+          <div className="px-4 py-4 bg-neutral-50 border-b border-neutral-100 space-y-3">
+            <h4 className="text-xs font-semibold text-neutral-700">{editingAgency ? 'Edit Agency' : 'New Agency'}</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Agency Name *</label>
+                <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g., Building Department" className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Contact Name</label>
+                <input type="text" value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} placeholder="John Doe" className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Email</label>
+                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Phone</label>
+                <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Address</label>
+                <input type="text" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-neutral-600 mb-1">Typical Response (days)</label>
+                <input type="number" value={form.typical_response_days} onChange={e => setForm({ ...form, typical_response_days: parseInt(e.target.value) || 30 })} className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-600 mb-1">Notes</label>
+              <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="w-full px-3 py-2 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none resize-none" />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={resetForm} className="px-3 py-1.5 text-xs border border-neutral-300 rounded-lg hover:bg-white">Cancel</button>
+              <button onClick={handleSave} disabled={!form.name.trim()} className="px-3 py-1.5 text-xs font-medium bg-[#476E66] text-white rounded-lg hover:bg-[#3a5b54] disabled:opacity-50">{editingAgency ? 'Update' : 'Add'}</button>
+            </div>
+          </div>
+        )}
+
+        {/* Search */}
+        {agencies.length > 5 && (
+          <div className="px-4 py-2 border-b border-neutral-100">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search agencies..."
+              className="w-full px-3 py-1.5 text-xs border border-neutral-200 rounded-lg focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] outline-none"
+            />
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-neutral-50 border-b border-neutral-200">
+                <th className="text-left px-4 py-2 font-medium text-neutral-500">Agency</th>
+                <th className="text-left px-4 py-2 font-medium text-neutral-500">Contact</th>
+                <th className="text-left px-4 py-2 font-medium text-neutral-500">Email</th>
+                <th className="text-left px-4 py-2 font-medium text-neutral-500">Phone</th>
+                <th className="text-center px-4 py-2 font-medium text-neutral-500">Resp. Days</th>
+                <th className="text-right px-4 py-2 font-medium text-neutral-500">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAgencies.map(agency => (
+                <tr key={agency.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                  <td className="px-4 py-2.5 font-medium text-neutral-900">{agency.name}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{agency.contact_name || '-'}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{agency.email || '-'}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{agency.phone || '-'}</td>
+                  <td className="px-4 py-2.5 text-center text-neutral-600">{agency.typical_response_days || 30}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleEdit(agency)} className="p-1 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(agency)} className="p-1 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredAgencies.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-neutral-400">
+                    {agencies.length === 0 ? 'No agencies added yet. Click "Add Agency" to get started.' : 'No agencies match your search.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { AiCreditsInfo } from '../ai-types';
 
 const PLAN_LIMITS: Record<string, number> = {
-  free: 50,
+  free: 75,
   starter: 200,
   professional: 500,
   enterprise: 2000,
