@@ -88,6 +88,24 @@ export function ProjectCollaborators({
   );
 
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [togglingPerm, setTogglingPerm] = useState<string | null>(null); // "collabId:key"
+
+  const handleTogglePermission = async (collabId: string, key: keyof ProjectCollaborator, currentValue: boolean) => {
+    const toggleKey = `${collabId}:${key}`;
+    setTogglingPerm(toggleKey);
+    try {
+      await projectCollaboratorsApi.update(collabId, { [key]: !currentValue } as any);
+      // Update local state immediately
+      setCollaborators(prev => prev.map(c =>
+        c.id === collabId ? { ...c, [key]: !currentValue } : c
+      ));
+    } catch (err) {
+      console.error('Failed to update permission:', err);
+      alert('Failed to update permission. Please try again.');
+    } finally {
+      setTogglingPerm(null);
+    }
+  };
 
   const handleResend = async (id: string) => {
     try {
@@ -411,35 +429,62 @@ export function ProjectCollaborators({
                         </div>
                       )}
 
-                      {/* Permissions grid */}
+                      {/* Permissions grid — editable for project owner, read-only for others */}
                       <div className="mb-1">
                         <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">
                           Access & Permissions
+                          {isProjectOwner && <span className="text-neutral-300 ml-1">· click to toggle</span>}
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {permissionDefs.map(({ key, icon: Icon, label, desc }) => {
                             const granted = collab[key];
+                            const isToggling = togglingPerm === `${collab.id}:${key}`;
+
                             return (
-                              <div
+                              <button
                                 key={key}
-                                className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border transition-colors ${
+                                type="button"
+                                disabled={!isProjectOwner || isToggling}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isProjectOwner) handleTogglePermission(collab.id, key, !!granted);
+                                }}
+                                className={`flex items-start gap-2.5 px-3 py-2.5 rounded-lg border transition-all text-left w-full ${
                                   granted
                                     ? 'bg-white border-emerald-100'
-                                    : 'bg-neutral-50 border-neutral-100 opacity-50'
-                                }`}
+                                    : 'bg-neutral-50 border-neutral-100 opacity-60'
+                                } ${isProjectOwner ? 'cursor-pointer hover:shadow-sm hover:border-neutral-200' : 'cursor-default'} ${isToggling ? 'animate-pulse' : ''}`}
                               >
-                                <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
-                                  granted ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-400'
-                                }`}>
-                                  {granted ? <Icon className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                  <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${
+                                    granted ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-400'
+                                  }`}>
+                                    {isToggling ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : granted ? (
+                                      <Icon className="w-3.5 h-3.5" />
+                                    ) : (
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className={`text-xs font-medium ${granted ? 'text-neutral-900' : 'text-neutral-400 line-through'}`}>
+                                      {label}
+                                    </p>
+                                    <p className="text-[10px] text-neutral-400 leading-snug">{desc}</p>
+                                  </div>
                                 </div>
-                                <div className="min-w-0">
-                                  <p className={`text-xs font-medium ${granted ? 'text-neutral-900' : 'text-neutral-400 line-through'}`}>
-                                    {label}
-                                  </p>
-                                  <p className="text-[10px] text-neutral-400 leading-snug">{desc}</p>
-                                </div>
-                              </div>
+                                {/* Toggle switch visual */}
+                                {isProjectOwner && (
+                                  <div className={`w-8 h-4.5 rounded-full flex-shrink-0 relative mt-0.5 transition-colors ${
+                                    granted ? 'bg-emerald-500' : 'bg-neutral-300'
+                                  }`} style={{ minWidth: '2rem', height: '1.125rem' }}>
+                                    <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                                      granted ? 'translate-x-[calc(2rem-1.125rem)]' : 'translate-x-0.5'
+                                    }`} />
+                                  </div>
+                                )}
+                              </button>
                             );
                           })}
                         </div>

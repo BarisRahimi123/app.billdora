@@ -1043,6 +1043,7 @@ export default function ProjectsPage() {
               onEditTask={(task) => { setEditingTask(task); setShowTaskModal(true); }}
               onAddTask={() => { setEditingTask(null); setShowTaskModal(true); }}
               canViewFinancials={effectiveCanViewFinancials}
+              isSharedProject={isSharedProject}
             />
           )}
 
@@ -1576,6 +1577,7 @@ export default function ProjectsPage() {
             onSave={() => { if (projectId) loadProjectDetails(projectId); setShowTaskModal(false); setEditingTask(null); }}
             onDelete={async (taskId) => { await deleteTask(taskId); setShowTaskModal(false); setEditingTask(null); }}
             canViewFinancials={effectiveCanViewFinancials}
+            isSharedProject={isSharedProject}
           />
         )}
 
@@ -2805,7 +2807,7 @@ function ProjectModal({ project, clients, companyId, onClose, onSave }: {
   );
 }
 
-function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, projectCollaborators = [], onClose, onSave, onDelete, canViewFinancials = true }: {
+function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, projectCollaborators = [], onClose, onSave, onDelete, canViewFinancials = true, isSharedProject = false }: {
   task: Task | null;
   projectId: string;
   companyId: string;
@@ -2816,6 +2818,7 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, p
   onSave: () => void;
   onDelete?: (taskId: string) => void;
   canViewFinancials?: boolean;
+  isSharedProject?: boolean;
 }) {
   const { user } = useAuth();
   const [name, setName] = useState(task?.name || '');
@@ -2987,9 +2990,7 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, p
               <select
                 value={assignedTo}
                 onChange={(e) => setAssignedTo(e.target.value)}
-                disabled={!canViewFinancials}
-                className={`w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none ${!canViewFinancials ? 'bg-neutral-100 cursor-not-allowed opacity-60' : 'bg-white'
-                  }`}
+                className="w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none bg-white"
               >
                 <option value="">Unassigned</option>
                 {companyProfiles.length > 0 && (
@@ -3042,57 +3043,77 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, p
               </div>
             </div>
 
-            {/* Time & Budget */}
-            {canViewFinancials && (
-              <div className="border-t border-neutral-100 pt-2.5 mt-2">
-                <h4 className="text-xs font-semibold text-neutral-900 mb-2">
-                  Time & Budget
-                </h4>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">
-                      Estimated Hours
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={estimatedHours}
-                      onChange={(e) => setEstimatedHours(e.target.value)}
-                      className="w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
+            {/* Time & Budget — Full access for project owner, task-level for collaborators */}
+            {(() => {
+              // For collaborators: show budget read-only ONLY on tasks assigned to them
+              const isMyTask = isSharedProject && task?.assigned_to === user?.id;
+              const showFullBudget = canViewFinancials; // project owner or collaborator with full financial access
+              const showTaskBudgetOnly = !showFullBudget && isSharedProject && isMyTask;
+
+              if (!showFullBudget && !showTaskBudgetOnly) return null;
+
+              return (
+                <div className="border-t border-neutral-100 pt-2.5 mt-2">
+                  <h4 className="text-xs font-semibold text-neutral-900 mb-2">
+                    {showTaskBudgetOnly ? 'Your Task Budget' : 'Time & Budget'}
+                  </h4>
+                  <div className="space-y-2">
+                    {/* Estimated Hours — always editable when section is visible */}
                     <div>
                       <label className="block text-xs font-medium text-neutral-600 mb-1">
-                        Est. Fees ($)
+                        Estimated Hours
                       </label>
                       <input
                         type="number"
-                        step="0.01"
-                        value={estimatedFees}
-                        onChange={(e) => setEstimatedFees(e.target.value)}
+                        step="0.5"
+                        value={estimatedHours}
+                        onChange={(e) => setEstimatedHours(e.target.value)}
                         className="w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
-                        placeholder="0.00"
+                        placeholder="0"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-neutral-600 mb-1">
-                        Actual Fees ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={actualFees}
-                        onChange={(e) => setActualFees(e.target.value)}
-                        className="w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
-                        placeholder="0.00"
-                      />
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">
+                          Est. Fees ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={estimatedFees}
+                          onChange={(e) => { if (showFullBudget) setEstimatedFees(e.target.value); }}
+                          readOnly={showTaskBudgetOnly}
+                          className={`w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg outline-none ${
+                            showTaskBudgetOnly
+                              ? 'bg-neutral-50 cursor-default text-neutral-600'
+                              : 'focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66]'
+                          }`}
+                          placeholder="0.00"
+                        />
+                        {showTaskBudgetOnly && (
+                          <p className="text-[10px] text-blue-500 mt-0.5">Set by project owner</p>
+                        )}
+                      </div>
+                      {showFullBudget && (
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">
+                            Actual Fees ($)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={actualFees}
+                            onChange={(e) => setActualFees(e.target.value)}
+                            className="w-full h-10 px-3 text-sm border border-neutral-300 rounded-lg focus:ring-1 focus:ring-[#476E66] focus:border-[#476E66] outline-none"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </form>
         </div>
 
@@ -3549,7 +3570,7 @@ function ClientTabContent({ client, onClientUpdate, canViewFinancials = true, is
 }
 
 // Tasks Tab Component - Clean Unified Design
-function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true, projectCompanyId, projectCollaborators = [] }: {
+function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true, projectCompanyId, projectCollaborators = [], isSharedProject = false }: {
   tasks: Task[];
   timeEntries?: TimeEntry[];
   projectId: string;
@@ -3560,6 +3581,7 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
   canViewFinancials?: boolean;
   projectCompanyId?: string;
   projectCollaborators?: ProjectCollaborator[];
+  isSharedProject?: boolean;
 }) {
   const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
@@ -3852,6 +3874,17 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
                     <span className="hidden sm:block text-[10px] font-bold text-neutral-400 uppercase tracking-wide w-12 text-right">
                       {task.estimated_hours ? `${task.estimated_hours}h` : '-'}
                     </span>
+
+                    {/* Task budget — visible to owner OR collaborator on their own task */}
+                    {(() => {
+                      const showBudget = canViewFinancials || (isSharedProject && task.assigned_to === user?.id);
+                      if (!showBudget || !task.estimated_fees) return null;
+                      return (
+                        <span className="hidden sm:block text-[10px] font-bold text-neutral-500 w-16 text-right">
+                          ${task.estimated_fees.toLocaleString()}
+                        </span>
+                      );
+                    })()}
 
                     {/* Actions Menu */}
                     <div className="relative">
