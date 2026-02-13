@@ -3642,7 +3642,15 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
   const handleQuickAdd = async () => {
     if (!quickAddName.trim()) return;
     try {
-      await api.createTask({ name: quickAddName.trim(), project_id: projectId, company_id: effectiveCompanyId, status: 'not_started', created_by: user?.id });
+      await api.createTask({
+        name: quickAddName.trim(),
+        project_id: projectId,
+        company_id: effectiveCompanyId,
+        status: 'not_started',
+        created_by: user?.id,
+        // On shared projects, auto-assign to the collaborator so they can see the task
+        ...(isSharedProject && user?.id ? { assigned_to: user.id } : {}),
+      });
       setQuickAddName('');
       onTasksChange();
     } catch (error) {
