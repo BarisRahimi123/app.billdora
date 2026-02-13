@@ -15,7 +15,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { invoiceId, clientEmail, clientName, invoiceNumber, projectName, companyName, senderName, totalAmount, dueDate, emailContent, portalUrl, ccRecipients } = await req.json();
+    const body = await req.json();
+    const { invoiceId, clientEmail, clientName, invoiceNumber, projectName, companyName, senderName, totalAmount, dueDate, emailContent, portalUrl, ccRecipients } = body;
+
+    console.log('[send-invoice] Received CC recipients:', JSON.stringify(ccRecipients));
+    console.log('[send-invoice] Client email (To):', clientEmail);
 
     const SENDGRID_API_KEY = Deno.env.get('SENDGRID_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -163,7 +167,12 @@ Deno.serve(async (req) => {
       if (validCc.length > 0) {
         personalization.cc = validCc;
       }
+      console.log('[send-invoice] Valid CC after filtering:', JSON.stringify(validCc));
+    } else {
+      console.log('[send-invoice] No CC recipients provided or empty array');
     }
+
+    console.log('[send-invoice] Final personalizations:', JSON.stringify([personalization]));
 
     const sendgridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -182,16 +191,21 @@ Deno.serve(async (req) => {
       })
     });
 
+    console.log('[send-invoice] SendGrid response status:', sendgridResponse.status);
     if (!sendgridResponse.ok) {
       const err = await sendgridResponse.text();
-      console.error('SendGrid error response:', err);
+      console.error('[send-invoice] SendGrid error response:', err);
       throw new Error(`SendGrid error (${sendgridResponse.status}): ${err}`);
     }
+
+    const ccCount = personalization.cc ? (personalization.cc as unknown[]).length : 0;
+    console.log('[send-invoice] Email sent successfully. To:', clientEmail, 'CC count:', ccCount);
 
     return new Response(JSON.stringify({ 
       success: true, 
       message: 'Invoice sent successfully',
-      viewUrl: viewInvoiceUrl
+      viewUrl: viewInvoiceUrl,
+      ccSent: ccCount
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
