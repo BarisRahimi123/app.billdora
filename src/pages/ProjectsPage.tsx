@@ -1465,7 +1465,7 @@ export default function ProjectsPage() {
           <TaskModal
             task={editingTask}
             projectId={selectedProject.id}
-            companyId={profile?.company_id || ''}
+            companyId={selectedProject.company_id || profile?.company_id || ''}
             teamMembers={companyProfiles.map(p => ({ staff_member_id: p.id, profile: p }))}
             companyProfiles={companyProfiles}
             onClose={() => { setShowTaskModal(false); setEditingTask(null); }}
@@ -2712,6 +2712,7 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
   onDelete?: (taskId: string) => void;
   canViewFinancials?: boolean;
 }) {
+  const { user } = useAuth();
   const [name, setName] = useState(task?.name || '');
   const [description, setDescription] = useState(task?.description || '');
   const [status, setStatus] = useState(task?.status || 'not_started');
@@ -2754,7 +2755,7 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
         await api.updateTask(task.id, data);
         savedTaskId = task.id;
       } else {
-        const result = await api.createTask({ ...data, project_id: projectId, company_id: companyId });
+        const result = await api.createTask({ ...data, project_id: projectId, company_id: companyId, created_by: user?.id });
         savedTaskId = result?.id;
       }
 
@@ -3428,6 +3429,7 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
   canViewFinancials?: boolean;
   projectCompanyId?: string;
 }) {
+  const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -3464,10 +3466,13 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
     return true;
   });
 
+  // Use project owner's company_id so tasks are visible to all project participants
+  const effectiveCompanyId = projectCompanyId || companyId;
+
   const handleQuickAdd = async () => {
     if (!quickAddName.trim()) return;
     try {
-      await api.createTask({ name: quickAddName.trim(), project_id: projectId, company_id: companyId, status: 'not_started' });
+      await api.createTask({ name: quickAddName.trim(), project_id: projectId, company_id: effectiveCompanyId, status: 'not_started', created_by: user?.id });
       setQuickAddName('');
       onTasksChange();
     } catch (error) {
