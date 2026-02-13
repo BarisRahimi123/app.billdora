@@ -7,6 +7,7 @@ import {
   AlertTriangle, ArrowUp, Minus, ArrowDown
 } from 'lucide-react';
 import { ProjectComment, projectCommentsApi, commentTasksApi, CommentTask, TaskPriority, api, Project, Task } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 // ─── Priority Config ─────────────────────────────────────
@@ -267,6 +268,27 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
   useEffect(() => {
     if (isOpen) loadData();
   }, [isOpen, loadData]);
+
+  // Real-time: reload when any comment for this company changes
+  useEffect(() => {
+    if (!isOpen || !companyId) return;
+
+    const channel = supabase
+      .channel(`comms-panel-${companyId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'project_comments' },
+        () => {
+          // Simply reload all data when any comment changes
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOpen, companyId, loadData]);
 
   // Load tasks when project is selected
   useEffect(() => {

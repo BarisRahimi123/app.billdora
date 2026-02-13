@@ -3942,7 +3942,7 @@ export const projectCommentsApi = {
       .from('project_comments')
       .select('*')
       .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
@@ -3951,10 +3951,12 @@ export const projectCommentsApi = {
     const topLevel = comments.filter(c => !c.parent_id);
     const replies = comments.filter(c => c.parent_id);
 
-    // Attach replies to their parent comments
+    // Attach replies to their parent comments (replies stay chronological within a thread)
     return topLevel.map(comment => ({
       ...comment,
-      replies: replies.filter(r => r.parent_id === comment.id)
+      replies: replies
+        .filter(r => r.parent_id === comment.id)
+        .sort((a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime())
     }));
   },
 

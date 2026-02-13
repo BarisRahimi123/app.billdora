@@ -17,6 +17,7 @@ import {
   AtSign
 } from 'lucide-react';
 import { ProjectComment, projectCommentsApi, Task } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProjectCommentsProps {
@@ -179,6 +180,71 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
     loadComments();
   }, [projectId]);
 
+  // Real-time subscription: auto-update when comments are added, edited, or deleted
+  useEffect(() => {
+    const channel = supabase
+      .channel(`project-comments-${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_comments',
+          filter: `project_id=eq.${projectId}`,
+        },
+        (payload) => {
+          console.log('[ProjectComments] Real-time event:', payload.eventType);
+          if (payload.eventType === 'INSERT') {
+            const newComment = payload.new as ProjectComment;
+            // Skip if this is a comment we just created locally (already in state)
+            setComments(prev => {
+              if (prev.some(c => c.id === newComment.id) ||
+                  prev.some(c => c.replies?.some(r => r.id === newComment.id))) {
+                return prev;
+              }
+              if (newComment.parent_id) {
+                // It's a reply — attach to parent
+                return prev.map(c =>
+                  c.id === newComment.parent_id
+                    ? { ...c, replies: [...(c.replies || []), newComment] }
+                    : c
+                );
+              }
+              // Top-level comment — prepend (newest first)
+              return [{ ...newComment, replies: [] }, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as ProjectComment;
+            setComments(prev =>
+              prev.map(c => {
+                if (c.id === updated.id) return { ...c, ...updated };
+                if (c.replies?.some(r => r.id === updated.id)) {
+                  return { ...c, replies: c.replies!.map(r => r.id === updated.id ? { ...r, ...updated } : r) };
+                }
+                return c;
+              })
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id;
+            if (!deletedId) return;
+            setComments(prev =>
+              prev
+                .filter(c => c.id !== deletedId)
+                .map(c => ({
+                  ...c,
+                  replies: c.replies?.filter(r => r.id !== deletedId)
+                }))
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId]);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
@@ -227,7 +293,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
       });
 
       console.log('[ProjectComments] Comment created successfully:', comment);
-      setComments(prev => [...prev, { ...comment, replies: [] }]);
+      setComments(prev => [{ ...comment, replies: [] }, ...prev]);
       setNewComment('');
       setMentionsMap({});
       setVisibility('all');
