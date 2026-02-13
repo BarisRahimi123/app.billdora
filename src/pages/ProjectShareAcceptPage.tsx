@@ -63,14 +63,11 @@ export default function ProjectShareAcceptPage() {
       setIsLoading(true);
       setError(null);
 
-      // Fetch the invitation with project and company details
+      // Fetch invitation and project separately to avoid PostgREST 400 errors
+      // from ambiguous FK joins (two FKs to companies) and cross-company RLS blocks.
       const { data, error: fetchError } = await supabase
         .from('project_collaborators')
-        .select(`
-          *,
-          project:projects(id, name, description, status, start_date, end_date, client:clients(name, company_name)),
-          invited_by_company:companies!invited_by_company_id(company_name)
-        `)
+        .select('*')
         .eq('id', id)
         .single();
 
@@ -91,8 +88,26 @@ export default function ProjectShareAcceptPage() {
       }
 
       setInvitation(data);
-      setProject(data.project);
-      setInvitedByCompany(data.invited_by_company);
+
+      // Fetch project details separately (RLS allows collaborators to see shared projects)
+      if (data.project_id) {
+        const { data: projData } = await supabase
+          .from('projects')
+          .select('id, name, description, status, start_date, end_date')
+          .eq('id', data.project_id)
+          .single();
+        if (projData) setProject(projData);
+      }
+
+      // Fetch inviter company name separately (may fail due to cross-company RLS — that's ok)
+      if (data.invited_by_company_id) {
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('company_name')
+          .eq('id', data.invited_by_company_id)
+          .single();
+        if (companyData) setInvitedByCompany(companyData);
+      }
     } catch (err) {
       console.error('Failed to load invitation:', err);
       setError('Failed to load invitation. It may have expired or been removed.');
