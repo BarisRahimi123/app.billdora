@@ -238,13 +238,13 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
         // Try batch fetch first
         const extraProjs = await api.getProjectsByIds(missingIds);
         const fetchedIds = new Set(extraProjs.map(p => p.id));
-        allProjs = [...projs, ...extraProjs.map(ep => ({ ...ep }) as Project)];
+        allProjs = [...projs, ...extraProjs.map(ep => ({ ...ep, company_id: '' }) as Project)];
 
         // For any still-missing projects, try fetching individually (different RLS path)
         const stillMissing = missingIds.filter(id => !fetchedIds.has(id));
         if (stillMissing.length > 0) {
           const individualFetches = await Promise.allSettled(
-            stillMissing.map(id => api.getProject(id))
+            stillMissing.map(id => api.getProject(id).catch(() => null))
           );
           for (const result of individualFetches) {
             if (result.status === 'fulfilled' && result.value) {
@@ -271,7 +271,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
   // Load tasks when project is selected
   useEffect(() => {
     if (!selectedProjectId || !companyId) { setProjectTasks([]); return; }
-    api.getTasks(companyId, selectedProjectId).then(setProjectTasks).catch(() => setProjectTasks([]));
+    api.getTasks(selectedProjectId).then(setProjectTasks).catch(() => setProjectTasks([]));
   }, [selectedProjectId, companyId]);
 
   // ─── Group comments by project ─────────────────────────
@@ -289,7 +289,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
       return {
         projectId,
         projectName: proj?.name || comments[0]?.project_name || 'Unknown Project',
-        projectNumber: proj?.project_number || comments[0]?.project_number || '',
+        projectNumber: (proj as any)?.project_number || comments[0]?.project_number || '',
         comments: sorted,
         lastActivity: sorted[0]?.created_at || '',
         unreadCount: 0,
@@ -571,7 +571,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
         ...task,
         comment,
         projectName: proj?.name || comment?.project_name || 'Unknown Project',
-        projectNumber: proj?.project_number || comment?.project_number || '',
+        projectNumber: (proj as any)?.project_number || comment?.project_number || '',
       };
     });
   }, [commentTasks, allComments, projects]);

@@ -613,10 +613,10 @@ export const api = {
   },
 
   /** Fetch minimal project info by IDs (works across companies via RLS). */
-  async getProjectsByIds(ids: string[]): Promise<Pick<Project, 'id' | 'name' | 'project_number'>[]> {
+  async getProjectsByIds(ids: string[]): Promise<Pick<Project, 'id' | 'name'>[]> {
     if (ids.length === 0) return [];
     const { data, error } = await supabase.from('projects')
-      .select('id, name, project_number')
+      .select('id, name')
       .in('id', ids);
     if (error) {
       console.error('getProjectsByIds error:', error);
