@@ -2433,15 +2433,8 @@ function PaymentReminderSection({
     }
     setSchedulingReminder(true);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const res = await fetch(`${supabaseUrl}/functions/v1/send-payment-reminder`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('send-payment-reminder', {
+        body: {
           invoiceId: invoice.id,
           clientEmail: reminderEmail,
           clientName: reminderName || 'Client',
@@ -2449,10 +2442,10 @@ function PaymentReminderSection({
           totalAmount: formatCurrency(invoice.total),
           dueDate: invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A',
           portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`
-        })
+        }
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (error) throw error;
+      if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to send reminder');
       showToast('Payment reminder sent successfully', 'success');
       setShowReminderModal(false);
     } catch (err: any) {
@@ -4735,16 +4728,9 @@ function InvoiceDetailView({
                   }
                   setSendingInvoice(true);
                   try {
-                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                     const enabledCc = ccRecipients.filter(c => c.enabled).map(c => ({ email: c.email, name: c.name }));
-                    const res = await fetch(`${supabaseUrl}/functions/v1/send-invoice`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseAnonKey}`
-                      },
-                      body: JSON.stringify({
+                    const { data, error } = await supabase.functions.invoke('send-invoice', {
+                      body: {
                         invoiceId: invoice.id,
                         clientEmail: sendToEmail,
                         clientName: sendToName,
@@ -4757,10 +4743,10 @@ function InvoiceDetailView({
                         emailContent,
                         portalUrl: `${(window.location.origin.includes('capacitor://') || window.location.origin.includes('localhost')) ? 'https://billdora.com' : window.location.origin}/invoice-view/${invoice.id}`,
                         ccRecipients: enabledCc
-                      })
+                      }
                     });
-                    const data = await res.json();
-                    if (data.error) throw new Error(data.error);
+                    if (error) throw error;
+                    if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to send invoice');
                     setShowSendModal(false);
                     setStatus('sent');
                     setSentDate(new Date().toISOString().split('T')[0]);

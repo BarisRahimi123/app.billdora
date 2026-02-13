@@ -4,13 +4,15 @@
 export const ALLOWED_ORIGINS = [
   'https://app.billdora.com',
   'https://billdora.com',
+  'https://app-billdora.vercel.app',
   'capacitor://localhost',  // iOS app
   'http://localhost:5173',  // Local dev
   'http://localhost:3000',  // Local dev alt
+  'http://localhost',       // Capacitor/WebView
 ];
 
 export function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowedOrigin = origin && (ALLOWED_ORIGINS.includes(origin) || (origin.endsWith('.vercel.app'))) ? origin : ALLOWED_ORIGINS[0];
   
   return {
     'Access-Control-Allow-Origin': allowedOrigin,

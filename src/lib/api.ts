@@ -2113,19 +2113,12 @@ export const api = {
     companyName?: string;
     total?: number;
   }) {
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(params),
+    const { data, error } = await supabase.functions.invoke('send-email', {
+      body: params,
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to send email');
-    }
-    return response.json();
+    if (error) throw error;
+    if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to send email');
+    return data;
   },
 
   // === PROPOSAL TEMPLATES ===
