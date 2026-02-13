@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useFeatureGating } from '../hooks/useFeatureGating';
-import { api, Project, Task, Client, TimeEntry, Invoice, Expense, ProjectTeamMember, settingsApi, FieldValue, StatusCode, CostCenter, projectCollaboratorsApi } from '../lib/api';
+import { api, Project, Task, Client, TimeEntry, Invoice, Expense, ProjectTeamMember, settingsApi, FieldValue, StatusCode, CostCenter, projectCollaboratorsApi, ProjectCollaborator } from '../lib/api';
 import { SubmittalsTab } from '../components/SubmittalsTab';
 import { TEAM_MEMBERS_BATCH_LIMIT } from '../lib/constants';
 import { supabase } from '../lib/supabase';
@@ -98,6 +98,7 @@ export default function ProjectsPage() {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState<ProjectTeamMember[]>([]);
   const [companyProfiles, setCompanyProfiles] = useState<{ id: string; full_name?: string; avatar_url?: string; email?: string; role?: string }[]>([]);
+  const [projectCollaborators, setProjectCollaborators] = useState<ProjectCollaborator[]>([]);
   const [showAddTeamMemberModal, setShowAddTeamMemberModal] = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [projectTeamsMap, setProjectTeamsMap] = useState<Record<string, { id: string; full_name?: string; avatar_url?: string }[]>>({});
@@ -519,6 +520,15 @@ export default function ProjectsPage() {
       setExpenses([]);
       setCompanyProfiles([]);
     }
+
+    // Load project collaborators (for task assignment dropdown)
+    try {
+      const collabs = await projectCollaboratorsApi.getByProject(id);
+      setProjectCollaborators(collabs.filter(c => c.status === 'accepted'));
+    } catch (error) {
+      console.error('Failed to load project collaborators:', error);
+      setProjectCollaborators([]);
+    }
   }
 
   // Compute billing stats for each project - MUST be defined before filteredProjects
@@ -886,6 +896,37 @@ export default function ProjectsPage() {
               </div>
             )}
 
+            {/* Collaborator Budget Card — visible only to collaborators viewing a shared project */}
+            {isSharedProject && user && (
+              (() => {
+                const myTasks = tasks.filter(t => t.assigned_to === user.id);
+                const myBudget = myTasks.reduce((sum, t) => sum + (t.estimated_fees || 0), 0);
+                const myHours = myTasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+                return myTasks.length > 0 ? (
+                  <div
+                    className="bg-white rounded-2xl p-6 border border-blue-100/80 hover:border-blue-200 transition-all cursor-pointer"
+                    style={{ boxShadow: '0 2px 10px -4px rgba(59,130,246,0.06)' }}
+                    onClick={() => setActiveTab('tasks')}
+                  >
+                    <div className="flex flex-col h-full justify-between">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">Your Budget</span>
+                        <DollarSign className="w-3.5 h-3.5 text-blue-300" />
+                      </div>
+                      <div>
+                        <span className="text-3xl font-light tracking-tight text-neutral-900 truncate">
+                          {formatCurrency(myBudget)}
+                        </span>
+                        <div className="mt-2 text-xs text-neutral-400 font-medium">
+                          {myTasks.length} task{myTasks.length !== 1 ? 's' : ''} · {myHours}h allocated
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()
+            )}
+
             {/* Tasks Card */}
             <div
               className="bg-white rounded-2xl p-6 border border-neutral-100/60 hover:border-neutral-200 transition-all cursor-pointer"
@@ -997,6 +1038,7 @@ export default function ProjectsPage() {
               projectId={selectedProject.id}
               companyId={profile?.company_id || ''}
               projectCompanyId={selectedProject.company_id}
+              projectCollaborators={projectCollaborators}
               onTasksChange={() => { if (projectId) loadProjectDetails(projectId); }}
               onEditTask={(task) => { setEditingTask(task); setShowTaskModal(true); }}
               onAddTask={() => { setEditingTask(null); setShowTaskModal(true); }}
@@ -1086,6 +1128,53 @@ export default function ProjectsPage() {
                   <p className="text-xl font-bold text-neutral-900">{formatCurrency(stats.billedAmount)}</p>
                 </div>
               </div>
+
+              {/* Collaborator Allocations — only show when there are tasks assigned to collaborators */}
+              {(() => {
+                const collabTasks = tasks.filter(t => t.collaborator_company_id);
+                if (collabTasks.length === 0) return null;
+                // Group by collaborator company
+                const byCompany: Record<string, { name: string; tasks: Task[]; budget: number; hours: number }> = {};
+                for (const t of collabTasks) {
+                  const key = t.collaborator_company_id!;
+                  if (!byCompany[key]) byCompany[key] = { name: t.collaborator_company_name || 'Collaborator', tasks: [], budget: 0, hours: 0 };
+                  byCompany[key].tasks.push(t);
+                  byCompany[key].budget += t.estimated_fees || 0;
+                  byCompany[key].hours += t.estimated_hours || 0;
+                }
+                const totalCollabBudget = collabTasks.reduce((sum, t) => sum + (t.estimated_fees || 0), 0);
+                return (
+                  <div>
+                    <h4 className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest mb-3">Collaborator Allocations</h4>
+                    <div className="bg-white rounded-sm border border-neutral-200 overflow-hidden">
+                      <div className="px-4 py-3 bg-blue-50/50 border-b border-neutral-100 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-neutral-700">
+                          Allocated to collaborators
+                        </span>
+                        <span className="text-sm font-bold text-neutral-900">
+                          {formatCurrency(totalCollabBudget)}
+                          {selectedProject.budget ? (
+                            <span className="text-[10px] text-neutral-400 font-normal ml-1.5">
+                              / {formatCurrency(selectedProject.budget)} ({Math.round((totalCollabBudget / selectedProject.budget) * 100)}%)
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-neutral-50">
+                        {Object.entries(byCompany).map(([companyId, data]) => (
+                          <div key={companyId} className="px-4 py-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-neutral-900">{data.name}</p>
+                              <p className="text-[10px] text-neutral-400">{data.tasks.length} task{data.tasks.length !== 1 ? 's' : ''} · {data.hours}h</p>
+                            </div>
+                            <span className="text-sm font-semibold text-neutral-900">{formatCurrency(data.budget)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Time Entries - Compact List */}
               <div>
@@ -1265,6 +1354,20 @@ export default function ProjectsPage() {
                                 {formatCurrency(remainingToBill)}
                               </p>
                             </div>
+                            {/* Collaborator Allocation in Billing Metrics */}
+                            {(() => {
+                              const collabBudget = tasks.filter(t => t.collaborator_company_id).reduce((sum, t) => sum + (t.estimated_fees || 0), 0);
+                              if (collabBudget === 0) return null;
+                              return (
+                                <div className="bg-blue-50/50 rounded-sm p-4 border border-blue-100">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Collaborators</span>
+                                  </div>
+                                  <p className="text-lg font-bold text-blue-700">{formatCurrency(collabBudget)}</p>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1468,6 +1571,7 @@ export default function ProjectsPage() {
             companyId={selectedProject.company_id || profile?.company_id || ''}
             teamMembers={companyProfiles.map(p => ({ staff_member_id: p.id, profile: p }))}
             companyProfiles={companyProfiles}
+            projectCollaborators={projectCollaborators}
             onClose={() => { setShowTaskModal(false); setEditingTask(null); }}
             onSave={() => { if (projectId) loadProjectDetails(projectId); setShowTaskModal(false); setEditingTask(null); }}
             onDelete={async (taskId) => { await deleteTask(taskId); setShowTaskModal(false); setEditingTask(null); }}
@@ -2701,12 +2805,13 @@ function ProjectModal({ project, clients, companyId, onClose, onSave }: {
   );
 }
 
-function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, onClose, onSave, onDelete, canViewFinancials = true }: {
+function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, projectCollaborators = [], onClose, onSave, onDelete, canViewFinancials = true }: {
   task: Task | null;
   projectId: string;
   companyId: string;
   teamMembers: { staff_member_id: string; profile?: { id?: string; full_name?: string; avatar_url?: string } }[];
   companyProfiles: { id: string; full_name?: string; avatar_url?: string; email?: string; role?: string }[];
+  projectCollaborators?: ProjectCollaborator[];
   onClose: () => void;
   onSave: () => void;
   onDelete?: (taskId: string) => void;
@@ -2744,6 +2849,16 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
         due_date: dueDate || null,
         start_date: startDate || null,
       };
+
+      // Set collaborator fields if assignee is a collaborator
+      const assignedCollab = assignedTo ? projectCollaborators.find(c => c.invited_user_id === assignedTo) : null;
+      if (assignedCollab) {
+        (data as any).collaborator_company_id = assignedCollab.invited_company_id || null;
+        (data as any).collaborator_company_name = assignedCollab.invited_company?.name || assignedCollab.invited_user_name || null;
+      } else {
+        (data as any).collaborator_company_id = null;
+        (data as any).collaborator_company_name = null;
+      }
 
       // Track if this is a new assignment
       const wasAssigned = task?.assigned_to;
@@ -2877,11 +2992,27 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, o
                   }`}
               >
                 <option value="">Unassigned</option>
-                {companyProfiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || 'Unknown'}
-                  </option>
-                ))}
+                {companyProfiles.length > 0 && (
+                  <optgroup label="Team">
+                    {companyProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name || 'Unknown'}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {projectCollaborators.length > 0 && (
+                  <optgroup label="Collaborators">
+                    {projectCollaborators
+                      .filter(c => c.invited_user_id && !companyProfiles.some(p => p.id === c.invited_user_id))
+                      .map((c) => (
+                        <option key={c.invited_user_id} value={c.invited_user_id!}>
+                          {c.invited_user_name || c.invited_email || 'Collaborator'}
+                          {c.invited_company?.name ? ` (${c.invited_company.name})` : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
@@ -3418,7 +3549,7 @@ function ClientTabContent({ client, onClientUpdate, canViewFinancials = true, is
 }
 
 // Tasks Tab Component - Clean Unified Design
-function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true, projectCompanyId }: {
+function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTasksChange, onEditTask, onAddTask, canViewFinancials = true, projectCompanyId, projectCollaborators = [] }: {
   tasks: Task[];
   timeEntries?: TimeEntry[];
   projectId: string;
@@ -3428,6 +3559,7 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
   onAddTask: () => void;
   canViewFinancials?: boolean;
   projectCompanyId?: string;
+  projectCollaborators?: ProjectCollaborator[];
 }) {
   const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
@@ -3468,6 +3600,22 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
 
   // Use project owner's company_id so tasks are visible to all project participants
   const effectiveCompanyId = projectCompanyId || companyId;
+
+  // Resolve assignee: check team first, then collaborators
+  const resolveAssignee = (userId?: string) => {
+    if (!userId) return null;
+    const teamMatch = teamMembers.find(m => m.id === userId);
+    if (teamMatch) return { ...teamMatch, isCollaborator: false };
+    const collabMatch = projectCollaborators.find(c => c.invited_user_id === userId);
+    if (collabMatch) return {
+      id: collabMatch.invited_user_id!,
+      full_name: collabMatch.invited_user_name || collabMatch.invited_email || 'Collaborator',
+      avatar_url: undefined as string | undefined,
+      isCollaborator: true,
+      companyName: collabMatch.invited_company?.name,
+    };
+    return null;
+  };
 
   const handleQuickAdd = async () => {
     if (!quickAddName.trim()) return;
@@ -3622,7 +3770,7 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
         ) : (
           <div className="divide-y divide-neutral-100">
             {filteredTasks.map(task => {
-              const assignee = teamMembers.find(m => m.id === task.assigned_to);
+              const assignee = resolveAssignee(task.assigned_to);
               const isCompleted = task.status === 'completed';
               const taskTimeEntries = timeEntries.filter(te => te.task_id === task.id);
               const isExpanded = expandedTasks.has(task.id);
@@ -3661,17 +3809,24 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
                     )}
 
                     {/* Assignee */}
-                    <div className="hidden sm:flex items-center gap-2 w-28">
+                    <div className="hidden sm:flex items-center gap-2 w-32">
                       {assignee ? (
                         <>
-                          {assignee.avatar_url ? (
-                            <img src={assignee.avatar_url} alt="" className="w-6 h-6 rounded-full border border-neutral-100" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center text-[10px] font-bold text-neutral-500">
-                              {assignee.full_name?.charAt(0) || '?'}
-                            </div>
-                          )}
-                          <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide truncate">{assignee.full_name}</span>
+                          <div className="relative flex-shrink-0">
+                            {assignee.avatar_url ? (
+                              <img src={assignee.avatar_url} alt="" className="w-6 h-6 rounded-full border border-neutral-100" />
+                            ) : (
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${assignee.isCollaborator ? 'bg-blue-50 border border-blue-200 text-blue-600' : 'bg-neutral-100 border border-neutral-200 text-neutral-500'}`}>
+                                {assignee.full_name?.charAt(0) || '?'}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wide truncate block">{assignee.full_name}</span>
+                            {assignee.isCollaborator && assignee.companyName && (
+                              <span className="text-[9px] text-blue-500 truncate block leading-tight">{assignee.companyName}</span>
+                            )}
+                          </div>
                         </>
                       ) : (
                         <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-wide">Unassigned</span>
