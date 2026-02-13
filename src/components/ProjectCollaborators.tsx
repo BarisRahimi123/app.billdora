@@ -81,6 +81,22 @@ export function ProjectCollaborators({
     c => c.invited_email?.toLowerCase() !== currentUserEmail && c.invited_user_id !== currentUserId
   );
 
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  const handleResend = async (id: string) => {
+    try {
+      setResendingId(id);
+      setOpenMenuId(null);
+      await projectCollaboratorsApi.resendInvitation(id);
+      alert('Invitation resent successfully.');
+    } catch (err) {
+      console.error('Failed to resend invitation:', err);
+      alert('Failed to resend invitation. Please try again.');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const handleRemove = async (id: string) => {
     if (!confirm('Are you sure you want to remove this collaborator?')) return;
 
@@ -352,14 +368,16 @@ export function ProjectCollaborators({
                     >
                       {collab.status === 'pending' && (
                         <button
-                          onClick={() => {
-                            // TODO: Resend invitation
-                            setOpenMenuId(null);
-                          }}
-                          className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2"
+                          onClick={() => handleResend(collab.id)}
+                          disabled={resendingId === collab.id}
+                          className="w-full px-3 py-2 text-left text-xs hover:bg-neutral-50 flex items-center gap-2 disabled:opacity-50"
                         >
-                          <Mail className="w-3.5 h-3.5" />
-                          Resend Invitation
+                          {resendingId === collab.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Mail className="w-3.5 h-3.5" />
+                          )}
+                          {resendingId === collab.id ? 'Sending...' : 'Resend Invitation'}
                         </button>
                       )}
                       <button

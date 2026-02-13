@@ -4541,6 +4541,82 @@ export const projectCollaboratorsApi = {
     return data;
   },
 
+  // Resend invitation email for a pending collaborator
+  async resendInvitation(collaboratorId: string): Promise<void> {
+    // Fetch the existing collaborator record
+    const { data: collab, error: fetchErr } = await supabase
+      .from('project_collaborators')
+      .select('*')
+      .eq('id', collaboratorId)
+      .single();
+
+    if (fetchErr || !collab) throw fetchErr || new Error('Collaborator not found');
+    if (collab.status !== 'pending') throw new Error('Can only resend pending invitations');
+
+    // Fetch project name
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('name')
+      .eq('id', collab.project_id)
+      .single();
+    const projectName = proj?.name || 'Untitled Project';
+
+    // Fetch inviter details
+    const { data: inviterProfile } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', collab.invited_by_user_id)
+      .single();
+    const inviterName = inviterProfile?.full_name || inviterProfile?.email || 'A team member';
+
+    // Fetch inviter company
+    const { data: inviterCompany } = await supabase
+      .from('companies')
+      .select('company_name')
+      .eq('id', collab.invited_by_company_id)
+      .single();
+    const companyName = inviterCompany?.company_name || 'a company';
+
+    // Build the login URL (same format as new invite flow)
+    const inviteEmail = encodeURIComponent(collab.invited_email.toLowerCase());
+    const returnTo = encodeURIComponent(`/project-share/${collab.id}`);
+    const acceptUrl = `${window.location.origin}/login?email=${inviteEmail}&return_to=${returnTo}`;
+
+    const emailResult = await supabase.functions.invoke('send-email', {
+      body: {
+        to: collab.invited_email.toLowerCase(),
+        subject: `Reminder: ${inviterName} invited you to collaborate on "${projectName}"`,
+        type: 'project_collaboration_invite',
+        data: {
+          inviterName,
+          companyName,
+          projectName,
+          role: collab.role || 'collaborator',
+          acceptUrl,
+          permissions: {
+            can_comment: collab.can_comment ?? true,
+            can_view_financials: collab.can_view_financials ?? false,
+            can_view_time_entries: collab.can_view_time_entries ?? false,
+            can_edit_tasks: collab.can_edit_tasks ?? false,
+          }
+        }
+      }
+    });
+
+    if (emailResult.error) {
+      console.error('[projectCollaboratorsApi] resendInvitation - email error:', emailResult.error);
+      throw new Error('Failed to resend invitation email');
+    }
+
+    // Update the invited_at timestamp to track the resend
+    await supabase
+      .from('project_collaborators')
+      .update({ invited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', collaboratorId);
+
+    console.log('[projectCollaboratorsApi] resendInvitation - sent successfully to:', collab.invited_email);
+  },
+
   // Accept an invitation
   async accept(id: string, userId: string, companyId: string): Promise<ProjectCollaborator> {
     const { data, error } = await supabase
