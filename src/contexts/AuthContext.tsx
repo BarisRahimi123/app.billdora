@@ -261,6 +261,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               logger.auth('No profile on auth state change, attempting recovery...');
               profileData = await recoverProfile(session.user.id, session.user.email);
             }
+
+            // RECOVERY: Profile exists but has no company — create one now
+            if (profileData && !profileData.company_id && session.user.email) {
+              logger.auth('Profile exists but no company_id, creating company...');
+              try {
+                const meta = session.user.user_metadata || {};
+                const fullName = meta.full_name || profileData.full_name || session.user.email.split('@')[0];
+                const compName = meta.company_name || `${fullName}'s Company`;
+                const phone = meta.phone || profileData.phone || '';
+
+                const { data: newCompanyId } = await supabase.rpc('create_company_for_user', {
+                  p_user_id: session.user.id,
+                  p_company_name: compName,
+                  p_full_name: fullName,
+                  p_phone: phone
+                });
+
+                if (newCompanyId) {
+                  logger.auth('Company created for existing profile:', newCompanyId);
+                  // Update the profile with the new company_id
+                  const { data: updatedProfile } = await supabase
+                    .from('profiles')
+                    .update({ company_id: newCompanyId, full_name: fullName, phone: phone || profileData.phone })
+                    .eq('id', session.user.id)
+                    .select()
+                    .single();
+                  if (updatedProfile) profileData = updatedProfile;
+                }
+              } catch (e) {
+                console.error('[Auth] Company creation for existing profile failed:', e);
+              }
+            }
             
             logger.auth('Profile loaded on state change:', profileData?.email, 'companyId:', profileData?.company_id);
             if (mounted) {
@@ -491,10 +523,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('[Auth] Failed to check invitations during recovery:', e);
       }
       
+      // If no company from invitation, create a new company for this user
+      // This handles: project collaborator invitations, regular signups with email confirmation
+      if (!companyId) {
+        try {
+          // Get user metadata stored during signup
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          const meta = authUser?.user_metadata || {};
+          const fullName = meta.full_name || email.split('@')[0];
+          const compName = meta.company_name || `${fullName}'s Company`;
+          const phone = meta.phone || '';
+
+          logger.auth('Creating company for new user during recovery:', email, 'company:', compName);
+          const { data: newCompanyId } = await supabase.rpc('create_company_for_user', {
+            p_user_id: userId,
+            p_company_name: compName,
+            p_full_name: fullName,
+            p_phone: phone
+          });
+          if (newCompanyId) {
+            companyId = newCompanyId;
+            logger.auth('Company created during recovery:', companyId);
+          }
+        } catch (e) {
+          console.error('[Auth] Company creation during recovery failed:', e);
+        }
+      }
+
       // Create the profile
+      const { data: { user: authUserForProfile } } = await supabase.auth.getUser();
+      const metaForProfile = authUserForProfile?.user_metadata || {};
+
       const profileInsert: any = {
         id: userId,
         email: email.toLowerCase(),
+        full_name: metaForProfile.full_name || email.split('@')[0],
+        phone: metaForProfile.phone || null,
+        company_name: metaForProfile.company_name || null,
         is_active: true,
         is_billable: true,
         role: userRole,
@@ -537,7 +602,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signUp({ 
       email, 
       password,
-      options: { emailRedirectTo: getRedirectUrl('/login') }
+      options: {
+        emailRedirectTo: getRedirectUrl('/login'),
+        data: {
+          full_name: fullName,
+          company_name: companyName || '',
+          phone: phone || '',
+        },
+      }
     });
     
     if (error) return { error };
