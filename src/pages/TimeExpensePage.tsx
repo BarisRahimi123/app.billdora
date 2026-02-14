@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, Task, TimeEntry, Expense } from '../lib/api';
-import { Plus, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, X, Edit2, Play, Pause, Square, Copy, Paperclip, CheckCircle, XCircle, AlertCircle, Send, Save, Calendar, ChevronDown } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, X, Edit2, Play, Pause, Square, Copy, Paperclip, CheckCircle, XCircle, AlertCircle, Send, Save, Calendar, ChevronDown, Download } from 'lucide-react';
 import { ExpenseModal } from '../components/ExpenseModal';
 
 type TimeTab = 'timesheet' | 'expenses' | 'approvals' | 'approved';
@@ -158,6 +158,7 @@ interface DraftRow {
   task: Task | null;
   projectId: string;
   taskId: string | null;
+  activity: string;
 }
 
 interface SubmittedRow {
@@ -223,8 +224,106 @@ export default function TimeExpensePage() {
     const today = new Date();
     return today.getDay();
   });
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Computed: group saved draft entries by project/task (from timer or copy) - includes rejected entries
+  // Close export menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showExportMenu]);
+
+  // CSV Export helpers
+  function splitName(fullName: string): { firstName: string; lastName: string } {
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 0) return { firstName: '', lastName: '' };
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  }
+
+  function escapeCSV(value: string): string {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return `"${value}"`;
+  }
+
+  function formatDateMDY(dateStr: string): string {
+    const d = new Date(dateStr + 'T00:00:00');
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+  }
+
+  function downloadCSV(content: string, filename: string) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportQuickBooksCSV() {
+    if (approvedTimeEntries.length === 0) return;
+    const headers = ['First Name', 'Last Name', 'Date', 'Hours', 'Job Name', 'Service Item', 'Billable', 'Notes'];
+    const rows = approvedTimeEntries.map(entry => {
+      const fullName = entry.user?.full_name || entry.user?.email || 'Unknown';
+      const { firstName, lastName } = splitName(fullName);
+      const serviceItem = entry.task?.name || entry.description || '';
+      const notes = entry.description && entry.description !== (entry.task?.name || '') ? entry.description : '';
+      return [
+        escapeCSV(firstName),
+        escapeCSV(lastName),
+        formatDateMDY(entry.date),
+        Number(entry.hours).toFixed(2),
+        escapeCSV(entry.project?.name || ''),
+        escapeCSV(serviceItem),
+        entry.billable !== false ? 'Y' : 'N',
+        escapeCSV(notes),
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    downloadCSV(csv, `timesheets_quickbooks_${dateRange.startDate}_${dateRange.endDate}.csv`);
+    setShowExportMenu(false);
+  }
+
+  function exportDetailedCSV() {
+    if (approvedTimeEntries.length === 0) return;
+    const headers = ['Employee', 'Email', 'Date', 'Project', 'Task', 'Activity/Description', 'Hours', 'Hourly Rate', 'Total Amount', 'Billable', 'Approved Date'];
+    const rows = approvedTimeEntries.map(entry => {
+      const fullName = entry.user?.full_name || 'Unknown';
+      const email = entry.user?.email || '';
+      const rate = entry.hourly_rate || 0;
+      const amount = Number(entry.hours) * rate;
+      return [
+        escapeCSV(fullName),
+        escapeCSV(email),
+        formatDateMDY(entry.date),
+        escapeCSV(entry.project?.name || ''),
+        escapeCSV(entry.task?.name || ''),
+        escapeCSV(entry.description || ''),
+        Number(entry.hours).toFixed(2),
+        rate.toFixed(2),
+        amount.toFixed(2),
+        entry.billable !== false ? 'Yes' : 'No',
+        entry.approved_at ? formatDateMDY(entry.approved_at.split('T')[0]) : '',
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    downloadCSV(csv, `timesheets_detailed_${dateRange.startDate}_${dateRange.endDate}.csv`);
+    setShowExportMenu(false);
+  }
+
+  // Computed: group saved draft entries by project/task/activity (from timer or copy) - includes rejected entries
   // Uses allDraftEntries for row generation (persists across weeks) but timeEntries for current week values
   const savedDraftRows = useMemo(() => {
     const rows: SubmittedRow[] = [];
@@ -232,7 +331,7 @@ export default function TimeExpensePage() {
 
     // First, create rows from all draft entries (regardless of week)
     allDraftEntries.forEach(entry => {
-      const key = `${entry.project_id}-${entry.task_id || 'null'}`;
+      const key = `${entry.project_id}-${entry.task_id || 'null'}-${(entry.description || '').trim().toLowerCase()}`;
       if (!seen.has(key)) {
         seen.add(key);
         const project = projects.find(p => p.id === entry.project_id) || null;
@@ -244,7 +343,7 @@ export default function TimeExpensePage() {
     // Then, populate entries from current week's timeEntries
     timeEntries.forEach(entry => {
       if (entry.approval_status !== 'draft' && entry.approval_status !== 'rejected') return;
-      const row = rows.find(r => r.id === `${entry.project_id}-${entry.task_id || 'null'}`);
+      const row = rows.find(r => r.id === `${entry.project_id}-${entry.task_id || 'null'}-${(entry.description || '').trim().toLowerCase()}`);
       if (row) {
         row.entries[entry.date] = entry;
       }
@@ -253,7 +352,7 @@ export default function TimeExpensePage() {
     return rows;
   }, [allDraftEntries, timeEntries, projects, tasks]);
 
-  // Computed: group submitted entries by project/task (only pending and approved)
+  // Computed: group submitted entries by project/task/activity (only pending and approved)
   const submittedRows = useMemo(() => {
     const rows: SubmittedRow[] = [];
     const seen = new Set<string>();
@@ -261,14 +360,14 @@ export default function TimeExpensePage() {
     timeEntries.forEach(entry => {
       // Only show pending and approved entries in the submitted section (not rejected)
       if (entry.approval_status !== 'pending' && entry.approval_status !== 'approved') return;
-      const key = `${entry.project_id}-${entry.task_id || 'null'}`;
+      const key = `${entry.project_id}-${entry.task_id || 'null'}-${(entry.description || '').trim().toLowerCase()}`;
       if (!seen.has(key)) {
         seen.add(key);
         const project = projects.find(p => p.id === entry.project_id) || null;
         const task = entry.task_id ? tasks[entry.project_id]?.find(t => t.id === entry.task_id) || null : null;
         rows.push({ id: key, project, task, entries: {} });
       }
-      const row = rows.find(r => r.id === `${entry.project_id}-${entry.task_id || 'null'}`);
+      const row = rows.find(r => r.id === `${entry.project_id}-${entry.task_id || 'null'}-${(entry.description || '').trim().toLowerCase()}`);
       if (row) {
         row.entries[entry.date] = entry;
       }
@@ -540,6 +639,7 @@ export default function TimeExpensePage() {
               user_id: user.id,
               project_id: row.projectId,
               task_id: row.taskId,
+              description: row.activity || undefined,
               date: dateKey,
               hours,
               billable: true,
@@ -570,13 +670,14 @@ export default function TimeExpensePage() {
     }
   };
 
-  async function updateTimeEntry(projectId: string, taskId: string | null, date: string, hours: number) {
+  async function updateTimeEntry(projectId: string, taskId: string | null, date: string, hours: number, description?: string) {
     if (!profile?.company_id || !user?.id) return;
 
     const existing = timeEntries.find(e =>
       e.project_id === projectId &&
       e.task_id === taskId &&
-      e.date === date
+      e.date === date &&
+      (e.description || '').trim().toLowerCase() === (description || '').trim().toLowerCase()
     );
 
     try {
@@ -592,6 +693,7 @@ export default function TimeExpensePage() {
           user_id: user.id,
           project_id: projectId,
           task_id: taskId,
+          description: description || undefined,
           date,
           hours,
           billable: true,
@@ -605,18 +707,18 @@ export default function TimeExpensePage() {
     }
   }
 
-  const addDraftRow = (projectId: string, taskId: string | null) => {
+  const addDraftRow = (projectId: string, taskId: string | null, activity: string) => {
     const project = projects.find(p => p.id === projectId) || null;
     const task = taskId ? tasks[projectId]?.find(t => t.id === taskId) || null : null;
-    const key = `${projectId}-${taskId || 'null'}`;
+    const key = `${projectId}-${taskId || 'null'}-${activity.trim().toLowerCase()}`;
 
     // Check if row already exists in drafts, saved drafts (from timer), or submitted
     if (draftRows.some(r => r.id === key) || savedDraftRows.some(r => r.id === key) || submittedRows.some(r => r.id === key)) {
-      alert('This project/task already has a row. Please use the existing row.');
+      alert('This project/task/activity combination already exists in your timesheet.');
       return;
     }
 
-    setDraftRows([...draftRows, { id: key, project, task, projectId, taskId }]);
+    setDraftRows([...draftRows, { id: key, project, task, projectId, taskId, activity: activity.trim() }]);
     setShowTimeEntryModal(false);
   };
 
@@ -878,6 +980,7 @@ export default function TimeExpensePage() {
                   {/* Saved draft entries from timer/copy - includes rejected entries */}
                   {savedDraftRows.map((row) => {
                     const hasRejected = Object.values(row.entries).some(e => e.approval_status === 'rejected');
+                    const rowDescription = Object.values(row.entries)[0]?.description || '';
                     return (
                       <tr key={`saved-${row.id}`} className={hasRejected ? "hover:bg-red-50/50 bg-red-50/30" : "hover:bg-green-50/50 bg-green-50/30"}>
                         <td className="px-4 py-3">
@@ -885,6 +988,9 @@ export default function TimeExpensePage() {
                             {row.project?.name || 'Unknown Project'}
                             {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
                           </div>
+                          {rowDescription && rowDescription !== row.task?.name && (
+                            <span className="text-[11px] font-medium text-neutral-500 italic">{rowDescription}</span>
+                          )}
                           {hasRejected ? (
                             <span className="text-xs text-red-600 font-medium">⚠️ Rejected - Please revise and resubmit</span>
                           ) : (
@@ -948,6 +1054,9 @@ export default function TimeExpensePage() {
                         <div className="flex flex-col">
                           <span className="font-bold text-sm text-neutral-900">{row.project?.name || 'Unknown Project'}</span>
                           {row.task && <span className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide mt-0.5">{row.task.name}</span>}
+                          {row.activity && row.activity !== row.task?.name && (
+                            <span className="text-[11px] font-medium text-neutral-500 italic mt-0.5">{row.activity}</span>
+                          )}
                         </div>
                       </td>
                       {weekDays.map((day, i) => {
@@ -1061,6 +1170,7 @@ export default function TimeExpensePage() {
                     const todayStr = new Date().toISOString().split('T')[0];
                     const isFutureDate = dateKey > todayStr;
                     const hasRejected = Object.values(row.entries).some(e => e.approval_status === 'rejected');
+                    const mobileRowDescription = Object.values(row.entries)[0]?.description || '';
                     return (
                       <tr key={`saved-${row.id}`} className={hasRejected ? "bg-red-50/30" : "bg-green-50/30"}>
                         <td className="px-3 py-3">
@@ -1068,6 +1178,9 @@ export default function TimeExpensePage() {
                             {row.project?.name || 'Unknown Project'}
                             {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
                           </div>
+                          {mobileRowDescription && mobileRowDescription !== row.task?.name && (
+                            <span className="text-[11px] font-medium text-neutral-500 italic">{mobileRowDescription}</span>
+                          )}
                           {hasRejected ? (
                             <span className="text-xs text-red-600 font-medium">⚠️ Rejected</span>
                           ) : (
@@ -1124,6 +1237,9 @@ export default function TimeExpensePage() {
                             {row.project?.name || 'Unknown Project'}
                             {row.task && <span className="text-neutral-600"> / {row.task.name}</span>}
                           </div>
+                          {row.activity && row.activity !== row.task?.name && (
+                            <span className="text-[11px] font-medium text-neutral-500 italic">{row.activity}</span>
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <input
@@ -1254,6 +1370,7 @@ export default function TimeExpensePage() {
                       }
                       return rowsForDay.map((row) => {
                         const entry = row.entries[dateKey];
+                        const mobileSubmittedDesc = Object.values(row.entries)[0]?.description || '';
                         return (
                           <tr key={row.id} className="bg-neutral-50">
                             <td className="px-3 py-2">
@@ -1261,6 +1378,9 @@ export default function TimeExpensePage() {
                                 {row.project?.name || 'Unknown'}
                                 {row.task && <span className="text-neutral-500"> / {row.task.name}</span>}
                               </div>
+                              {mobileSubmittedDesc && mobileSubmittedDesc !== row.task?.name && (
+                                <span className="text-[10px] font-medium text-neutral-500 italic">{mobileSubmittedDesc}</span>
+                              )}
                             </td>
                             <td className="px-2 py-2 text-center">
                               <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${entry?.approval_status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
@@ -1314,13 +1434,18 @@ export default function TimeExpensePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {submittedRows.map((row) => (
+                    {submittedRows.map((row) => {
+                      const submittedDescription = Object.values(row.entries)[0]?.description || '';
+                      return (
                       <tr key={row.id} className="bg-neutral-50">
                         <td className="px-4 py-3">
                           <div className="font-medium text-neutral-600">
                             {row.project?.name || 'Unknown Project'}
                             {row.task && <span className="text-neutral-500"> / {row.task.name}</span>}
                           </div>
+                          {submittedDescription && submittedDescription !== row.task?.name && (
+                            <span className="text-[11px] font-medium text-neutral-500 italic">{submittedDescription}</span>
+                          )}
                         </td>
                         {weekDays.map((day, i) => {
                           const dateKey = formatDateKey(day);
@@ -1351,7 +1476,8 @@ export default function TimeExpensePage() {
                           })()}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                   <tfoot className="bg-neutral-100 border-t border-neutral-200">
                     <tr>
@@ -1894,14 +2020,46 @@ export default function TimeExpensePage() {
       {/* Approved History Tab */}
       {activeTab === 'approved' && canApprove && (
         <div className="space-y-3 sm:space-y-4">
-          {/* Date Range Picker */}
+          {/* Date Range Picker + Export */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">Approved History</h2>
-            <DateRangePicker
-              startDate={dateRange.startDate}
-              endDate={dateRange.endDate}
-              onDateChange={(start, end) => setDateRange({ startDate: start, endDate: end })}
-            />
+            <div className="flex items-center gap-2">
+              <DateRangePicker
+                startDate={dateRange.startDate}
+                endDate={dateRange.endDate}
+                onDateChange={(start, end) => setDateRange({ startDate: start, endDate: end })}
+              />
+              {/* Export Dropdown */}
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  disabled={approvedTimeEntries.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={approvedTimeEntries.length === 0 ? 'No approved entries to export' : 'Export to CSV'}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Export</span>
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-neutral-200 shadow-lg z-50 overflow-hidden">
+                    <button
+                      onClick={exportQuickBooksCSV}
+                      className="w-full px-4 py-3 text-left hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                    >
+                      <div className="text-sm font-medium text-neutral-900">QuickBooks CSV</div>
+                      <p className="text-[10px] text-neutral-500 mt-0.5">Import-ready for QuickBooks Time & Payroll</p>
+                    </button>
+                    <button
+                      onClick={exportDetailedCSV}
+                      className="w-full px-4 py-3 text-left hover:bg-neutral-50 transition-colors"
+                    >
+                      <div className="text-sm font-medium text-neutral-900">Detailed CSV</div>
+                      <p className="text-[10px] text-neutral-500 mt-0.5">Full details with rates & amounts</p>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Approved Time Entries - Collapsible by Project then User */}
@@ -2220,6 +2378,18 @@ export default function TimeExpensePage() {
   );
 }
 
+// Flatten hierarchical tasks for dropdown display with indentation
+function flattenTasksForDropdown(tasks: Task[], depth = 0): Array<Task & { depth: number }> {
+  const result: Array<Task & { depth: number }> = [];
+  for (const task of tasks) {
+    result.push({ ...task, depth });
+    if (task.children?.length) {
+      result.push(...flattenTasksForDropdown(task.children, depth + 1));
+    }
+  }
+  return result;
+}
+
 function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, existingSavedDraftRows, existingSubmittedRows, onClose, onAdd }: {
   projects: Project[];
   tasks: { [projectId: string]: Task[] };
@@ -2227,14 +2397,15 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
   existingSavedDraftRows: SubmittedRow[];
   existingSubmittedRows: SubmittedRow[];
   onClose: () => void;
-  onAdd: (projectId: string, taskId: string | null) => void;
+  onAdd: (projectId: string, taskId: string | null, activity: string) => void;
 }) {
   const [projectId, setProjectId] = useState('');
   const [taskId, setTaskId] = useState('');
+  const [activity, setActivity] = useState('');
   const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
 
-  // Load tasks when project changes
+  // Load tasks when project changes (use hierarchical method)
   useEffect(() => {
     if (!projectId) {
       setAvailableTasks([]);
@@ -2245,16 +2416,27 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
       setAvailableTasks(initialTasks[projectId]);
       return;
     }
-    // Otherwise fetch from API
+    // Otherwise fetch from API with hierarchical structure
     setLoadingTasks(true);
-    api.getTasks(projectId)
+    api.getTasksWithChildren(projectId)
       .then(tasks => setAvailableTasks(tasks))
       .catch(() => setAvailableTasks([]))
       .finally(() => setLoadingTasks(false));
   }, [projectId, initialTasks]);
 
-  const rowKey = `${projectId}-${taskId || 'null'}`;
+  // Auto-populate activity when a task is selected
+  useEffect(() => {
+    if (taskId) {
+      const flatTasks = flattenTasksForDropdown(availableTasks);
+      const selectedTask = flatTasks.find(t => t.id === taskId);
+      if (selectedTask) setActivity(selectedTask.name);
+    }
+  }, [taskId, availableTasks]);
+
+  const rowKey = `${projectId}-${taskId || 'null'}-${activity.trim().toLowerCase()}`;
   const isRowExists = existingDraftRows.some(r => r.id === rowKey) || existingSavedDraftRows.some(r => r.id === rowKey) || existingSubmittedRows.some(r => r.id === rowKey);
+  const isActivityRequired = !taskId;
+  const canAdd = projectId && (!isActivityRequired || activity.trim().length > 0) && !isRowExists;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2268,7 +2450,7 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Project *</label>
             <select
               value={projectId}
-              onChange={(e) => { setProjectId(e.target.value); setTaskId(''); }}
+              onChange={(e) => { setProjectId(e.target.value); setTaskId(''); setActivity(''); }}
               className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
             >
               <option value="">Select a project</option>
@@ -2279,22 +2461,44 @@ function AddTimeRowModal({ projects, tasks: initialTasks, existingDraftRows, exi
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Task (optional)</label>
             <select
               value={taskId}
-              onChange={(e) => setTaskId(e.target.value)}
+              onChange={(e) => { setTaskId(e.target.value); if (!e.target.value) setActivity(''); }}
               className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
               disabled={!projectId || loadingTasks}
             >
               <option value="">{loadingTasks ? 'Loading tasks...' : 'No specific task'}</option>
-              {availableTasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {flattenTasksForDropdown(availableTasks).map(t => (
+                <option key={t.id} value={t.id}>
+                  {'\u00A0\u00A0'.repeat(t.depth)}{t.depth > 0 ? '-- ' : ''}{t.name}
+                </option>
+              ))}
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 mb-1.5">
+              Activity / Description {isActivityRequired ? '*' : ''}
+            </label>
+            <input
+              type="text"
+              value={activity}
+              onChange={(e) => setActivity(e.target.value)}
+              placeholder={taskId ? 'Override task name or add detail...' : 'e.g., Drafting, Surveying, Site Visit...'}
+              className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-[#476E66] focus:border-transparent outline-none"
+              disabled={!projectId}
+            />
+            {!taskId && (
+              <p className="text-xs text-neutral-500 mt-1">
+                Describe the work activity. This allows multiple rows per project.
+              </p>
+            )}
+          </div>
           {isRowExists && (
-            <p className="text-sm text-neutral-900">This project/task combination already exists in your timesheet.</p>
+            <p className="text-sm text-red-600">This project/task/activity combination already exists in your timesheet.</p>
           )}
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors">Cancel</button>
             <button
-              onClick={() => onAdd(projectId, taskId || null)}
-              disabled={!projectId || isRowExists}
+              onClick={() => onAdd(projectId, taskId || null, activity.trim())}
+              disabled={!canAdd}
               className="flex-1 px-4 py-2.5 bg-[#476E66] text-white rounded-xl hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
             >
               Add Row

@@ -2651,10 +2651,13 @@ function InvoiceDetailView({
   const [sendToName, setSendToName] = useState('');
   const [ccRecipients, setCcRecipients] = useState<{ email: string; name: string; enabled: boolean; label: string }[]>([]);
   const [customCcEmail, setCustomCcEmail] = useState('');
+  const sendModalInitialized = useRef(false);
 
-  // Initialize email content and contacts when modal opens
+  // Initialize email content and contacts ONLY when modal first opens
+  // Using a ref to prevent re-initialization on dependency changes (which would wipe custom CCs)
   useEffect(() => {
-    if (showSendModal && invoice.client) {
+    if (showSendModal && invoice.client && !sendModalInitialized.current) {
+      sendModalInitialized.current = true;
       const client = clients.find(c => c.id === invoice.client_id) || invoice.client;
       const billingEmail = (client as any).billing_contact_email;
       const billingName = (client as any).billing_contact_name;
@@ -2696,6 +2699,10 @@ function InvoiceDetailView({
       const recipientName = billingName || primaryName || clientName || 'Client';
       const defaultContent = `Please find attached Invoice ${invoiceNumber} for ${invoice.project?.name || 'services rendered'}.\n\nThe total amount due is ${formatCurrency(invoice.total)}${dueDate ? ` and payment is due by ${new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : ''}.\n\nThank you for your business. Please don't hesitate to reach out if you have any questions.`;
       setEmailContent(defaultContent);
+    }
+    // Reset the ref when modal closes so it re-initializes next time
+    if (!showSendModal) {
+      sendModalInitialized.current = false;
     }
   }, [showSendModal, invoice, invoiceNumber, dueDate, clients]);
 
@@ -4729,6 +4736,8 @@ function InvoiceDetailView({
                   setSendingInvoice(true);
                   try {
                     const enabledCc = ccRecipients.filter(c => c.enabled).map(c => ({ email: c.email, name: c.name }));
+                    console.log('[send-invoice] All CC recipients:', JSON.stringify(ccRecipients));
+                    console.log('[send-invoice] Enabled CC being sent:', JSON.stringify(enabledCc));
                     const { data, error } = await supabase.functions.invoke('send-invoice', {
                       body: {
                         invoiceId: invoice.id,
@@ -4745,6 +4754,7 @@ function InvoiceDetailView({
                         ccRecipients: enabledCc
                       }
                     });
+                    console.log('[send-invoice] Response:', JSON.stringify(data), 'Error:', error);
                     if (error) throw error;
                     if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message || 'Failed to send invoice');
                     setShowSendModal(false);
