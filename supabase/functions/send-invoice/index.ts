@@ -154,25 +154,41 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-    // Build personalizations with optional CC
-    const personalization: Record<string, unknown> = {
-      to: [{ email: clientEmail, name: clientName }]
-    };
+    // Filter valid CC recipients (exclude primary recipient)
+    const validCc = (ccRecipients && Array.isArray(ccRecipients))
+      ? ccRecipients
+          .filter((r: { email: string; name?: string }) => r.email && r.email.toLowerCase() !== clientEmail.toLowerCase())
+          .map((r: { email: string; name?: string }) => ({ email: r.email, name: r.name || r.email }))
+      : [];
 
-    // Add CC recipients if provided (filter out duplicates of the primary recipient)
-    if (ccRecipients && Array.isArray(ccRecipients) && ccRecipients.length > 0) {
-      const validCc = ccRecipients
-        .filter((r: { email: string; name?: string }) => r.email && r.email.toLowerCase() !== clientEmail.toLowerCase())
-        .map((r: { email: string; name?: string }) => ({ email: r.email, ...(r.name ? { name: r.name } : {}) }));
-      if (validCc.length > 0) {
-        personalization.cc = validCc;
+    console.log('[send-invoice] To:', clientEmail, '| CC count:', validCc.length, '| CC:', JSON.stringify(validCc));
+
+    // Build personalizations: one for primary recipient, one for EACH CC recipient
+    // Sending CC as separate direct-to recipients guarantees delivery (CC field is unreliable)
+    const personalizations: Record<string, unknown>[] = [
+      {
+        to: [{ email: clientEmail, name: clientName }],
+        subject: `Invoice ${invoiceNumber} from ${companyName}`
       }
-      console.log('[send-invoice] Valid CC after filtering:', JSON.stringify(validCc));
-    } else {
-      console.log('[send-invoice] No CC recipients provided or empty array');
+    ];
+
+    for (const cc of validCc) {
+      personalizations.push({
+        to: [{ email: cc.email, name: cc.name }],
+        subject: `[CC] Invoice ${invoiceNumber} from ${companyName}`
+      });
     }
 
-    console.log('[send-invoice] Final personalizations:', JSON.stringify([personalization]));
+    const sendgridPayload = {
+      personalizations,
+      from: { email: 'info@billdora.com', name: companyName },
+      content: [
+        { type: 'text/plain', value: `Hello ${clientName},\n\n${emailContent}\n\nInvoice: ${invoiceNumber}\nAmount Due: ${totalAmount}\n${dueDate ? `Due Date: ${dueDate}` : ''}\n\nView your invoice: ${viewInvoiceUrl}\n\nBest regards,\n${senderName}\n${companyName}` },
+        { type: 'text/html', value: emailHtml }
+      ]
+    };
+
+    console.log('[send-invoice] Sending to SendGrid with', personalizations.length, 'personalizations');
 
     const sendgridResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -180,15 +196,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${SENDGRID_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        personalizations: [personalization],
-        from: { email: 'info@billdora.com', name: companyName },
-        subject: `Invoice ${invoiceNumber} from ${companyName}`,
-        content: [
-          { type: 'text/plain', value: `Hello ${clientName},\n\n${emailContent}\n\nInvoice: ${invoiceNumber}\nAmount Due: ${totalAmount}\n${dueDate ? `Due Date: ${dueDate}` : ''}\n\nView your invoice: ${viewInvoiceUrl}\n\nBest regards,\n${senderName}\n${companyName}` },
-          { type: 'text/html', value: emailHtml }
-        ]
-      })
+      body: JSON.stringify(sendgridPayload)
     });
 
     console.log('[send-invoice] SendGrid response status:', sendgridResponse.status);
@@ -198,14 +206,13 @@ Deno.serve(async (req) => {
       throw new Error(`SendGrid error (${sendgridResponse.status}): ${err}`);
     }
 
-    const ccCount = personalization.cc ? (personalization.cc as unknown[]).length : 0;
-    console.log('[send-invoice] Email sent successfully. To:', clientEmail, 'CC count:', ccCount);
+    console.log('[send-invoice] Email sent successfully. To:', clientEmail, '+ CC:', validCc.length);
 
     return new Response(JSON.stringify({ 
       success: true, 
       message: 'Invoice sent successfully',
       viewUrl: viewInvoiceUrl,
-      ccSent: ccCount
+      ccSent: validCc.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
