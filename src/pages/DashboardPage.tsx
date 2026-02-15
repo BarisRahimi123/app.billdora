@@ -198,17 +198,17 @@ export default function DashboardPage() {
       if (!canViewAllProjects && user?.id) {
         const [staffProjects, assignedTasks, myPendingTaskCount] = await Promise.all([
           api.getStaffProjects(user.id).catch(() => []),
-          supabase
+          Promise.resolve(supabase
             .from('tasks')
             .select('project_id')
-            .eq('assigned_to', user.id)
+            .eq('assigned_to', user.id))
             .then(({ data }) => data || [])
             .catch(() => []),
-          supabase
+          Promise.resolve(supabase
             .from('tasks')
             .select('*', { count: 'exact', head: true })
             .eq('assigned_to', user.id)
-            .in('status', ['not_started', 'in_progress'])
+            .in('status', ['not_started', 'in_progress']))
             .then(({ count }) => count || 0)
             .catch(() => 0),
         ]);

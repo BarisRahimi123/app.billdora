@@ -260,10 +260,10 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
       if (!canViewAllProjects && user?.id) {
         const [staffProjects, assignedTasks] = await Promise.all([
           api.getStaffProjects(user.id).catch(() => []),
-          supabase
+          Promise.resolve(supabase
             .from('tasks')
             .select('project_id')
-            .eq('assigned_to', user.id)
+            .eq('assigned_to', user.id))
             .then(({ data }) => data || [])
             .catch(() => []),
         ]);
@@ -1567,8 +1567,8 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                               <span className="truncate">{task.name}</span>
                               {task.status && (
                                 <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${task.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                  sk.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                    'bneutral-100 text-neutral-500'
+                                  task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                    'bg-neutral-100 text-neutral-500'
                                   }`}>{task.status.replace('_', ' ')}</span>
                               )}
                             </button>

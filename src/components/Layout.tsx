@@ -157,10 +157,10 @@ export default function Layout() {
           if (!canViewAllProjects && profile?.id) {
             const [staffProjects, assignedTasks] = await Promise.all([
               api.getStaffProjects(profile.id).catch(() => []),
-              supabase
+              Promise.resolve(supabase
                 .from('tasks')
                 .select('project_id')
-                .eq('assigned_to', profile.id)
+                .eq('assigned_to', profile.id))
                 .then(({ data }) => data || [])
                 .catch(() => []),
             ]);
@@ -330,7 +330,7 @@ export default function Layout() {
           const [allProjects, staffProjects, assignedTasks] = await Promise.all([
             api.getProjects(profile.company_id),
             api.getStaffProjects(profile.id).catch(() => []),
-            supabase.from('tasks').select('project_id').eq('assigned_to', profile.id).then(({ data }) => data || []).catch(() => []),
+            Promise.resolve(supabase.from('tasks').select('project_id').eq('assigned_to', profile.id)).then(({ data }) => data || []).catch(() => []),
           ]);
           const assignedIds = new Set([
             ...(staffProjects || []).map((sp: any) => sp.project_id),

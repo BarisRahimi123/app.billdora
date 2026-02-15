@@ -528,10 +528,10 @@ export default function TimeExpensePage() {
       if (!canViewAllProjects && user?.id) {
         const [staffProjects, assignedTasks] = await Promise.all([
           api.getStaffProjects(user.id).catch(() => []),
-          supabase
+          Promise.resolve(supabase
             .from('tasks')
             .select('project_id')
-            .eq('assigned_to', user.id)
+            .eq('assigned_to', user.id))
             .then(({ data }) => data || [])
             .catch(() => []),
         ]);
