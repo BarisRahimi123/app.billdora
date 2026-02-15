@@ -459,7 +459,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: to }] }],
-        from: { email: 'noreply@billdora.com', name: 'Billdora' },
+        from: { email: 'info@billdora.com', name: 'Billdora' },
         subject: subject,
         content: [{ type: 'text/html', value: htmlContent }],
       }),

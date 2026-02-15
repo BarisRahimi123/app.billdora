@@ -151,11 +151,11 @@ Deno.serve(async (req) => {
           subject: `Payment Reminder - Invoice ${invoiceNumber}`,
         }],
         from: {
-          email: 'invoices@billdora.com',
+          email: 'info@billdora.com',
           name: 'Billdora'
         },
         reply_to: {
-          email: 'support@billdora.com',
+          email: 'info@billdora.com',
           name: 'Billdora Support'
         },
         content: [

@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         personalizations: [{ to: [{ email }] }],
-        from: { email: 'noreply@billdora.com', name: 'Billdora' },
+        from: { email: 'info@billdora.com', name: 'Billdora' },
         subject: 'Reset Your Billdora Password',
         content: [{ type: 'text/html', value: emailHtml }]
       })
