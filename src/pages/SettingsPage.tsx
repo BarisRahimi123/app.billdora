@@ -1453,8 +1453,9 @@ function InviteUserModal({ companyId, currentUserId, roles, onClose, onInvite }:
   onInvite: () => void;
 }) {
   const { showToast } = useToast();
+  const staffRole = roles.find(r => r.name.toLowerCase() === 'staff');
   const [email, setEmail] = useState('');
-  const [roleId, setRoleId] = useState('');
+  const [roleId, setRoleId] = useState(staffRole?.id || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -6379,6 +6380,7 @@ function CollaboratorCategoriesTab({ companyId }: { companyId: string }) {
 function NotificationsTab() {
   const { profile } = useAuth();
   const { showToast } = useToast();
+  const { canViewFinancials } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState({
@@ -6390,7 +6392,7 @@ function NotificationsTab() {
     password_reset: true,
   });
 
-  const EMAIL_NOTIFICATIONS = [
+  const ALL_EMAIL_NOTIFICATIONS = [
     {
       key: 'team_invitation',
       title: 'Team Invitations',
@@ -6428,6 +6430,12 @@ function NotificationsTab() {
       category: 'Proposals'
     },
   ];
+
+  // Hide invoicing and proposal notifications for staff users without financial access
+  const FINANCIAL_CATEGORIES = ['Invoicing', 'Proposals'];
+  const EMAIL_NOTIFICATIONS = canViewFinancials
+    ? ALL_EMAIL_NOTIFICATIONS
+    : ALL_EMAIL_NOTIFICATIONS.filter(n => !FINANCIAL_CATEGORIES.includes(n.category));
 
   useEffect(() => {
     let mounted = true;

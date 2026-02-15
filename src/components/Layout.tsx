@@ -501,7 +501,7 @@ export default function Layout() {
             {/* Main Nav Items */}
             {mainNavItems.filter(item => {
               if (item.path === '/invoicing' && !isAdmin && !canView('invoicing') && !canViewFinancials) return false;
-              if (item.path === '/sales' && !isAdmin && !canView('quotes') && !canViewFinancials) return false;
+              if (item.path === '/sales' && !isAdmin && !canViewFinancials) return false;
               if (item.path === '/resourcing' && !isAdmin && !canView('team')) return false;
               return true;
             }).map((item) => (

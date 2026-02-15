@@ -562,7 +562,17 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          {settingsCategories.map((category) => (
+          {settingsCategories
+          .filter(cat => canViewFinancials || (cat.key !== 'proposals' && cat.key !== 'invoices'))
+          .map((category) => {
+            // For non-financial users, filter out budget_warning from projects
+            const items = !canViewFinancials
+              ? category.items.filter(item => item.key !== 'budget_warning')
+              : category.items;
+            return { ...category, items };
+          })
+          .filter(category => category.items.length > 0)
+          .map((category) => (
             <div key={category.key} className="bg-white rounded-2xl border border-neutral-100 overflow-hidden">
               <button
                 onClick={() => {
