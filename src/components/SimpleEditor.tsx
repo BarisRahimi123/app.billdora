@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Heading1, Heading2, List, Bold, Italic, Type, ChevronDown } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 export const FONT_OPTIONS: { id: string; label: string; fontFamily: string; weight?: string; group: string }[] = [
     { id: 'default', label: 'Default', fontFamily: 'Inter', group: 'Default' },
@@ -74,7 +75,7 @@ export function SimpleMarkdownRenderer({ content, className }: { content: string
         return () => { document.head.removeChild(link); };
     }, []);
 
-    const html = parseMarkdown(content);
+    const html = DOMPurify.sanitize(parseMarkdown(content), { ADD_ATTR: ['data-type', 'data-font-id'] });
     return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 

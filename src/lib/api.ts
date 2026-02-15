@@ -812,6 +812,17 @@ export const api = {
 
   async getCompanyProfiles(companyId: string) {
     const { data, error } = await supabase.from('profiles')
+      .select('id, full_name, avatar_url, email, role')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('full_name');
+    if (error) throw error;
+    return data;
+  },
+
+  // Admin-only: includes hourly rates (pay rate + billing rate)
+  async getCompanyProfilesAdmin(companyId: string) {
+    const { data, error } = await supabase.from('profiles')
       .select('id, full_name, avatar_url, email, role, hourly_pay_rate, hourly_rate')
       .eq('company_id', companyId)
       .eq('is_active', true)
@@ -825,7 +836,7 @@ export const api = {
     return apiCall(async () => {
       let query = supabase
         .from('time_entries')
-        .select('*, project:projects(id, name, client:clients(id, name)), task:tasks(id, name)')
+        .select('*, project:projects(id, name, client:clients(id, name)), task:tasks(id, name, estimated_hours, estimated_fees)')
         .eq('company_id', companyId);
 
       if (userId) query = query.eq('user_id', userId);
@@ -942,7 +953,7 @@ export const api = {
   async getApprovedTimeEntries(companyId: string, startDate?: string, endDate?: string) {
     let query = supabase
       .from('time_entries')
-      .select('*, project:projects(id, name), task:tasks(id, name)')
+      .select('*, project:projects(id, name), task:tasks(id, name, estimated_hours, estimated_fees)')
       .eq('company_id', companyId)
       .eq('approval_status', 'approved');
 
@@ -986,7 +997,7 @@ export const api = {
   async getPendingTimeEntries(companyId: string) {
     // First get time entries
     const { data: entries, error } = await supabase.from('time_entries')
-      .select('*, project:projects(id, name), task:tasks(id, name)')
+      .select('*, project:projects(id, name), task:tasks(id, name, estimated_hours, estimated_fees)')
       .eq('company_id', companyId)
       .eq('approval_status', 'pending')
       .order('date', { ascending: false });
@@ -1100,7 +1111,7 @@ export const api = {
   async getApprovedTimeEntriesForInvoice(companyId: string, projectId?: string) {
     let query = supabase
       .from('time_entries')
-      .select('*, project:projects(id, name), task:tasks(id, name)')
+      .select('*, project:projects(id, name), task:tasks(id, name, estimated_hours, estimated_fees)')
       .eq('company_id', companyId)
       .eq('approval_status', 'approved')
       .is('invoice_id', null);
@@ -1696,7 +1707,8 @@ export const api = {
 
   async deleteQuote(id: string) {
     // First delete related line items
-    await supabase.from('quote_line_items').delete().eq('quote_id', id);
+    const { error: lineError } = await supabase.from('quote_line_items').delete().eq('quote_id', id);
+    if (lineError) throw lineError;
     // Then delete the quote
     const { error } = await supabase.from('quotes').delete().eq('id', id);
     if (error) throw error;
@@ -2468,9 +2480,20 @@ export interface CostCenter {
 }
 
 // Settings API
+const ALLOWED_SETTINGS_TABLES = new Set([
+  'project_types', 'project_statuses', 'billing_statuses', 'project_groups',
+  'project_functions', 'project_locations', 'cost_centers', 'activity_types',
+  'field_values', 'status_codes',
+]);
+
+function validateSettingsTable(tableName: string) {
+  if (!ALLOWED_SETTINGS_TABLES.has(tableName)) throw new Error(`Invalid table: ${tableName}`);
+}
+
 export const settingsApi = {
   // Generic CRUD for simple tables
   async getItems<T>(tableName: string, companyId: string, includeInactive = false): Promise<T[]> {
+    validateSettingsTable(tableName);
     let query = supabase.from(tableName).select('*').eq('company_id', companyId);
     if (!includeInactive) query = query.eq('is_inactive', false);
     const { data, error } = await query.order('sort_order').order('name', { ascending: true });
@@ -2479,18 +2502,21 @@ export const settingsApi = {
   },
 
   async createItem<T>(tableName: string, item: Partial<T>): Promise<T> {
+    validateSettingsTable(tableName);
     const { data, error } = await supabase.from(tableName).insert(item).select().single();
     if (error) throw error;
     return data as T;
   },
 
   async updateItem<T>(tableName: string, id: string, updates: Partial<T>): Promise<T> {
+    validateSettingsTable(tableName);
     const { data, error } = await supabase.from(tableName).update(updates).eq('id', id).select().single();
     if (error) throw error;
     return data as T;
   },
 
   async deleteItem(tableName: string, id: string): Promise<void> {
+    validateSettingsTable(tableName);
     const { error } = await supabase.from(tableName).delete().eq('id', id);
     if (error) throw error;
   },
@@ -3111,9 +3137,10 @@ export const bankStatementsApi = {
 
   async deleteStatement(id: string) {
     // First delete all transactions
-    await supabase.from('bank_transactions')
+    const { error: txnError } = await supabase.from('bank_transactions')
       .delete()
       .eq('statement_id', id);
+    if (txnError) throw txnError;
 
     // Then delete the statement
     const { error } = await supabase.from('bank_statements')

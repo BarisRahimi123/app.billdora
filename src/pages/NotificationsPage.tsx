@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck, Trash2, Settings, Mail, Filter, FileText, Clock, ChevronRight, ChevronDown, FolderKanban, Receipt, Eye, Send, AlertTriangle, DollarSign, UserPlus, Rocket, TestTube, Smartphone, Sparkles, RefreshCw, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { notificationsApi } from '../lib/api';
 import { NotificationService } from '../lib/notificationService';
 import { sendLocalNotification, requestPushPermission, isPushNotificationsAvailable } from '../lib/pushNotifications';
@@ -115,15 +116,24 @@ const settingsCategories = [
   },
 ];
 
+// Notification types that require financial/sales access
+const FINANCIAL_NOTIFICATION_TYPES = [
+  'proposal_viewed', 'proposal_signed', 'proposal_declined',
+  'invoice_overdue', 'invoice_viewed', 'invoice_paid', 'invoice_sent', 'payment_received',
+  'collaboration_invited', 'collaboration_response_submitted', 'collaborators_ready',
+  'new_client_added',
+];
+
 export default function NotificationsPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { canViewFinancials, canViewAllProjects } = usePermissions();
   const { showToast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   // INSTANT LOADING: Start with false, render cached data immediately
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'proposals' | 'projects' | 'invoices' | 'collaborations' | 'settings'>('proposals');
+  const [activeTab, setActiveTab] = useState<'proposals' | 'projects' | 'invoices' | 'collaborations' | 'settings'>(canViewFinancials ? 'proposals' : 'projects');
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['proposals', 'invoices', 'projects', 'other']));
@@ -202,7 +212,7 @@ export default function NotificationsPage() {
   async function markAsRead(id: string) {
     try {
       await notificationsApi.markAsRead(id);
-      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -212,7 +222,7 @@ export default function NotificationsPage() {
     if (!profile?.company_id) return;
     try {
       await notificationsApi.markAllAsRead(profile.company_id);
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -311,16 +321,21 @@ export default function NotificationsPage() {
     return <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center shrink-0"><Bell className="w-5 h-5 text-neutral-600" /></div>;
   }
 
+  // Filter out financial/sales notifications for restricted users
+  const visibleNotifications = (canViewAllProjects && canViewFinancials)
+    ? notifications
+    : notifications.filter(n => !FINANCIAL_NOTIFICATION_TYPES.includes(n.type));
+
   const getCategoryNotifications = () => {
-    let categoryNotifs = notifications;
-    if (activeTab === 'proposals') categoryNotifs = notifications.filter(n => n.type?.includes('proposal'));
-    else if (activeTab === 'projects') categoryNotifs = notifications.filter(n => n.type?.includes('project'));
-    else if (activeTab === 'invoices') categoryNotifs = notifications.filter(n => n.type?.includes('invoice'));
-    else if (activeTab === 'collaborations') categoryNotifs = notifications.filter(n => n.type?.includes('collaboration'));
+    let categoryNotifs = visibleNotifications;
+    if (activeTab === 'proposals') categoryNotifs = visibleNotifications.filter(n => n.type?.includes('proposal'));
+    else if (activeTab === 'projects') categoryNotifs = visibleNotifications.filter(n => n.type?.includes('project'));
+    else if (activeTab === 'invoices') categoryNotifs = visibleNotifications.filter(n => n.type?.includes('invoice'));
+    else if (activeTab === 'collaborations') categoryNotifs = visibleNotifications.filter(n => n.type?.includes('collaborat'));
     return filter === 'unread' ? categoryNotifs.filter(n => !n.is_read) : categoryNotifs;
   };
   const filteredNotifications = getCategoryNotifications();
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = visibleNotifications.filter(n => !n.is_read).length;
 
   // Test in-app notification function
   async function sendTestNotification() {
@@ -406,20 +421,22 @@ export default function NotificationsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-neutral-100 rounded-xl w-fit">
-        <button
-          onClick={() => setActiveTab('proposals')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            activeTab === 'proposals' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Proposals
-          {notifications.filter(n => n.type?.includes('proposal') && !n.is_read).length > 0 && (
-            <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-              {notifications.filter(n => n.type?.includes('proposal') && !n.is_read).length}
-            </span>
-          )}
-        </button>
+        {canViewFinancials && (
+          <button
+            onClick={() => setActiveTab('proposals')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'proposals' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Proposals
+            {visibleNotifications.filter(n => n.type?.includes('proposal') && !n.is_read).length > 0 && (
+              <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                {visibleNotifications.filter(n => n.type?.includes('proposal') && !n.is_read).length}
+              </span>
+            )}
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('projects')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -428,40 +445,44 @@ export default function NotificationsPage() {
         >
           <FolderKanban className="w-4 h-4" />
           Projects
-          {notifications.filter(n => n.type?.includes('project') && !n.is_read).length > 0 && (
+          {visibleNotifications.filter(n => n.type?.includes('project') && !n.is_read).length > 0 && (
             <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-              {notifications.filter(n => n.type?.includes('project') && !n.is_read).length}
+              {visibleNotifications.filter(n => n.type?.includes('project') && !n.is_read).length}
             </span>
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('invoices')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            activeTab === 'invoices' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          <Receipt className="w-4 h-4" />
-          Invoices
-          {notifications.filter(n => n.type?.includes('invoice') && !n.is_read).length > 0 && (
-            <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-              {notifications.filter(n => n.type?.includes('invoice') && !n.is_read).length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('collaborations')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            activeTab === 'collaborations' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Collaborations
-          {notifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length > 0 && (
-            <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
-              {notifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length}
-            </span>
-          )}
-        </button>
+        {canViewFinancials && (
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'invoices' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            Invoices
+            {visibleNotifications.filter(n => n.type?.includes('invoice') && !n.is_read).length > 0 && (
+              <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                {visibleNotifications.filter(n => n.type?.includes('invoice') && !n.is_read).length}
+              </span>
+            )}
+          </button>
+        )}
+        {canViewFinancials && (
+          <button
+            onClick={() => setActiveTab('collaborations')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'collaborations' ? 'bg-[#476E66] text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Collaborations
+            {visibleNotifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length > 0 && (
+              <span className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                {visibleNotifications.filter(n => n.type?.includes('collaboration') && !n.is_read).length}
+              </span>
+            )}
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('settings')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${

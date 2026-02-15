@@ -2,10 +2,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, Task, TimeEntry, Expense } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { Plus, ChevronLeft, ChevronRight, Clock, Receipt, Trash2, X, Edit2, Play, Pause, Square, Copy, Paperclip, CheckCircle, XCircle, AlertCircle, Send, Save, Calendar, ChevronDown, Download } from 'lucide-react';
 import { ExpenseModal } from '../components/ExpenseModal';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, ReferenceLine } from 'recharts';
 
-type TimeTab = 'timesheet' | 'expenses' | 'approvals' | 'approved';
+type TimeTab = 'timesheet' | 'expenses' | 'approvals' | 'approved' | 'reports';
+type ReportGroupBy = 'project' | 'user' | 'task' | 'day' | 'week';
+type ReportView = 'detailed' | 'insights';
 type DatePreset = 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_year' | 'custom';
 
 // Date Range Picker Component
@@ -170,7 +174,7 @@ interface SubmittedRow {
 
 export default function TimeExpensePage() {
   const { user, profile, loading: authLoading } = useAuth();
-  const { canViewFinancials, canApprove } = usePermissions();
+  const { canViewFinancials, canApprove, canViewAllProjects } = usePermissions();
   const [activeTab, setActiveTab] = useState<TimeTab>('timesheet');
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<{ [projectId: string]: Task[] }>({});
@@ -186,6 +190,22 @@ export default function TimeExpensePage() {
   const [expandedTimeUsers, setExpandedTimeUsers] = useState<Set<string>>(new Set());
   const [expandedExpenseProjects, setExpandedExpenseProjects] = useState<Set<string>>(new Set());
   const [expandedExpenseUsers, setExpandedExpenseUsers] = useState<Set<string>>(new Set());
+  // Reports tab state
+  const [reportGroupBy, setReportGroupBy] = useState<ReportGroupBy>('project');
+  const [reportEntries, setReportEntries] = useState<TimeEntry[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'approved' | 'pending' | 'draft'>('all');
+  const [reportProjectFilter, setReportProjectFilter] = useState('all');
+  const [reportUserFilter, setReportUserFilter] = useState('all');
+  const [reportBillableFilter, setReportBillableFilter] = useState<'all' | 'yes' | 'no'>('all');
+  const [reportDateRange, setReportDateRange] = useState(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { startDate: start.toISOString().split('T')[0], endDate: end.toISOString().split('T')[0] };
+  });
+  const [expandedReportGroups, setExpandedReportGroups] = useState<Set<string>>(new Set());
+  const [reportView, setReportView] = useState<ReportView>('detailed');
   // Unified date range for approvals and approved tabs
   const [dateRange, setDateRange] = useState(() => {
     const now = new Date();
@@ -493,7 +513,7 @@ export default function TimeExpensePage() {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
 
-      const [projectsData, entriesData, expensesData, allDraftData] = await Promise.all([
+      const [allProjectsData, entriesData, expensesData, allDraftData] = await Promise.all([
         api.getProjects(profile.company_id),
         api.getTimeEntries(profile.company_id, user.id, weekStart.toISOString().split('T')[0], weekEnd.toISOString().split('T')[0]),
         api.getExpenses(profile.company_id, user.id),
@@ -502,6 +522,25 @@ export default function TimeExpensePage() {
           entries.filter(e => e.approval_status === 'draft' || e.approval_status === 'rejected')
         ),
       ]);
+
+      // For staff, only show assigned projects (team member or has tasks assigned)
+      let projectsData = allProjectsData;
+      if (!canViewAllProjects && user?.id) {
+        const [staffProjects, assignedTasks] = await Promise.all([
+          api.getStaffProjects(user.id).catch(() => []),
+          supabase
+            .from('tasks')
+            .select('project_id')
+            .eq('assigned_to', user.id)
+            .then(({ data }) => data || [])
+            .catch(() => []),
+        ]);
+        const assignedIds = new Set([
+          ...(staffProjects || []).map((sp: any) => sp.project_id),
+          ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+        ]);
+        projectsData = allProjectsData.filter(p => assignedIds.has(p.id));
+      }
 
       setProjects(projectsData);
       setTimeEntries(entriesData);
@@ -521,16 +560,14 @@ export default function TimeExpensePage() {
         await loadApprovedData();
       }
 
-      // Load tasks for each project
+      // Load tasks for all projects in parallel (N+1 fix)
+      const taskResults = await Promise.allSettled(
+        projectsData.map(project => api.getTasks(project.id).then(tasks => ({ projectId: project.id, tasks })))
+      );
       const tasksMap: { [key: string]: Task[] } = {};
-      for (const project of projectsData) {
-        try {
-          const projectTasks = await api.getTasks(project.id);
-          tasksMap[project.id] = projectTasks;
-        } catch (e) {
-          tasksMap[project.id] = [];
-        }
-      }
+      taskResults.forEach(result => {
+        if (result.status === 'fulfilled') tasksMap[result.value.projectId] = result.value.tasks;
+      });
       setTasks(tasksMap);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -541,17 +578,54 @@ export default function TimeExpensePage() {
 
   const loadApprovedData = async () => {
     if (!profile?.company_id || !canApprove) return;
-    const [approvedTime, approvedExp] = await Promise.all([
-      api.getApprovedTimeEntries(profile.company_id, dateRange.startDate, dateRange.endDate),
-      api.getApprovedExpenses(profile.company_id, dateRange.startDate, dateRange.endDate),
-    ]);
-    setApprovedTimeEntries(approvedTime);
-    setApprovedExpenses(approvedExp);
+    try {
+      const [approvedTime, approvedExp] = await Promise.all([
+        api.getApprovedTimeEntries(profile.company_id, dateRange.startDate, dateRange.endDate),
+        api.getApprovedExpenses(profile.company_id, dateRange.startDate, dateRange.endDate),
+      ]);
+      setApprovedTimeEntries(approvedTime);
+      setApprovedExpenses(approvedExp);
+    } catch (err) {
+      console.error('Failed to load approved data:', err);
+    }
   };
 
   useEffect(() => {
     if (canApprove) loadApprovedData();
   }, [dateRange, canApprove]);
+
+  // Reports data loading
+  const loadReportData = async () => {
+    if (!profile?.company_id || !canApprove) return;
+    setReportLoading(true);
+    try {
+      let entries: TimeEntry[];
+      if (reportStatusFilter === 'approved') {
+        entries = await api.getApprovedTimeEntries(profile.company_id, reportDateRange.startDate, reportDateRange.endDate);
+      } else {
+        entries = await api.getTimeEntries(profile.company_id, undefined, reportDateRange.startDate, reportDateRange.endDate);
+        if (reportStatusFilter !== 'all') {
+          entries = entries.filter(e => e.approval_status === reportStatusFilter);
+        }
+        // Enrich with user data (getTimeEntries doesn't include user profiles)
+        const userIds = [...new Set(entries.map(e => e.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+          const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+          entries = entries.map(e => ({ ...e, user: profileMap.get(e.user_id) || e.user || null }));
+        }
+      }
+      setReportEntries(entries);
+    } catch (err) {
+      console.error('Failed to load report data:', err);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports' && canApprove) loadReportData();
+  }, [activeTab, reportDateRange, reportStatusFilter, canApprove]);
 
   const weekDays = useMemo(() => {
     const days = [];
@@ -818,6 +892,15 @@ export default function TimeExpensePage() {
               }`}
           >
             History
+          </button>
+        )}
+        {canApprove && (
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`pb-3 text-[11px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeTab === 'reports' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-600'
+              }`}
+          >
+            Reports
           </button>
         )}
       </div>
@@ -1759,7 +1842,11 @@ export default function TimeExpensePage() {
                                   {entry.user?.full_name || entry.user?.email || '-'}
                                 </div>
                                 <div className="text-xs text-neutral-600 mb-1">
-                                  {entry.task?.name || entry.description || '-'}
+                                  {entry.task?.name && <span className="font-medium text-neutral-700">{entry.task.name}</span>}
+                                  {entry.description && (
+                                    <span className="text-neutral-400 italic">{entry.task?.name ? ' — ' : ''}{entry.description}</span>
+                                  )}
+                                  {!entry.task?.name && !entry.description && '-'}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-neutral-500">
                                   <span>{entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</span>
@@ -1779,7 +1866,7 @@ export default function TimeExpensePage() {
                               <th className="w-10 px-3 py-2"></th>
                               <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Date</th>
                               <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Submitted By</th>
-                              <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Task</th>
+                              <th className="text-left px-2 py-2 text-xs font-medium text-neutral-600">Task / Activity</th>
                               <th className="text-right px-2 py-2 text-xs font-medium text-neutral-600">Hours</th>
                             </tr>
                           </thead>
@@ -1804,7 +1891,15 @@ export default function TimeExpensePage() {
                                 </td>
                                 <td className="px-2 py-2.5 text-xs text-neutral-600">{entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
                                 <td className="px-2 py-2.5 text-sm font-medium text-neutral-900">{entry.user?.full_name || entry.user?.email || '-'}</td>
-                                <td className="px-2 py-2.5 text-xs text-neutral-600">{entry.task?.name || entry.description || '-'}</td>
+                                <td className="px-2 py-2.5 text-xs text-neutral-600">
+                                  <div>
+                                    {entry.task?.name && <span className="font-medium text-neutral-700">{entry.task.name}</span>}
+                                    {entry.description && (
+                                      <span className="text-neutral-400 italic">{entry.task?.name ? ' — ' : ''}{entry.description}</span>
+                                    )}
+                                    {!entry.task?.name && !entry.description && '-'}
+                                  </div>
+                                </td>
                                 <td className="px-2 py-2.5 text-right text-sm font-medium text-[#476E66]">{Number(entry.hours).toFixed(1)}h</td>
                               </tr>
                             ))}
@@ -2163,7 +2258,7 @@ export default function TimeExpensePage() {
                                       <thead className="bg-white border-b border-neutral-100">
                                         <tr>
                                           <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Date</th>
-                                          <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Task</th>
+                                          <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Task / Activity</th>
                                           <th className="text-right px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Hours</th>
                                           <th className="text-left px-4 py-2 text-xs font-medium text-neutral-500 uppercase">Approved</th>
                                         </tr>
@@ -2172,7 +2267,15 @@ export default function TimeExpensePage() {
                                         {user.entries.map(entry => (
                                           <tr key={entry.id} className="hover:bg-neutral-50">
                                             <td className="px-4 py-2.5 text-sm text-neutral-600">{entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString() : '-'}</td>
-                                            <td className="px-4 py-2.5 text-sm text-neutral-600">{entry.task?.name || entry.description || '-'}</td>
+                                            <td className="px-4 py-2.5 text-sm text-neutral-600">
+                                              <div>
+                                                {entry.task?.name && <span className="font-medium text-neutral-700">{entry.task.name}</span>}
+                                                {entry.description && (
+                                                  <span className="text-neutral-400 italic">{entry.task?.name ? ' — ' : ''}{entry.description}</span>
+                                                )}
+                                                {!entry.task?.name && !entry.description && '-'}
+                                              </div>
+                                            </td>
                                             <td className="px-4 py-2.5 text-right text-sm font-medium text-neutral-900">{Number(entry.hours).toFixed(2)}</td>
                                             <td className="px-4 py-2.5 text-xs text-neutral-500">
                                               {entry.approved_at ? new Date(entry.approved_at).toLocaleDateString() : '-'}
@@ -2349,6 +2452,690 @@ export default function TimeExpensePage() {
           </div>
         </div>
       )}
+
+      {/* Reports Tab */}
+      {activeTab === 'reports' && canApprove && (() => {
+        // Apply client-side filters
+        const filtered = reportEntries.filter(e => {
+          if (reportProjectFilter !== 'all' && e.project_id !== reportProjectFilter) return false;
+          if (reportUserFilter !== 'all' && e.user_id !== reportUserFilter) return false;
+          if (reportBillableFilter === 'yes' && !e.billable) return false;
+          if (reportBillableFilter === 'no' && e.billable) return false;
+          return true;
+        });
+
+        // Summary calculations
+        const totalHours = filtered.reduce((sum, e) => sum + Number(e.hours || 0), 0);
+        const billableEntries = filtered.filter(e => e.billable);
+        const billableHours = billableEntries.reduce((sum, e) => sum + Number(e.hours || 0), 0);
+        const billableAmount = billableEntries.reduce((sum, e) => sum + Number(e.hours || 0) * Number(e.hourly_rate || 0), 0);
+        const nonBillableHours = totalHours - billableHours;
+        const teamMemberIds = new Set(filtered.map(e => e.user_id).filter(Boolean));
+
+        // Unique projects and users for filter dropdowns
+        const uniqueProjects = [...new Map(reportEntries.filter(e => e.project).map(e => [e.project_id, e.project!])).values()];
+        const uniqueUsers = [...new Map(reportEntries.filter(e => e.user).map(e => [e.user_id, e.user!])).values()];
+
+        // Grouping logic (for Detailed view)
+        function getGroupKey(entry: TimeEntry): string {
+          switch (reportGroupBy) {
+            case 'project': return entry.project?.name || 'No Project';
+            case 'user': return entry.user?.full_name || entry.user?.email || 'Unknown User';
+            case 'task': return entry.task?.name || entry.description || 'No Task';
+            case 'day': return entry.date || 'No Date';
+            case 'week': {
+              if (!entry.date) return 'No Date';
+              const d = new Date(entry.date + 'T00:00:00');
+              const day = d.getDay();
+              const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+              const weekStart = new Date(d.setDate(diff));
+              return `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            }
+            default: return 'Other';
+          }
+        }
+
+        const groupedMap = new Map<string, TimeEntry[]>();
+        filtered.forEach(entry => {
+          const key = getGroupKey(entry);
+          if (!groupedMap.has(key)) groupedMap.set(key, []);
+          groupedMap.get(key)!.push(entry);
+        });
+
+        const groups = [...groupedMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+        // CSV Export
+        function exportReportCSV() {
+          const headers = ['Date', 'User', 'Project', 'Task', 'Activity/Description', 'Hours', 'Rate', 'Amount', 'Billable', 'Status'];
+          const rows = filtered.map(e => [
+            e.date || '',
+            e.user?.full_name || e.user?.email || '',
+            e.project?.name || '',
+            e.task?.name || '',
+            e.description || '',
+            Number(e.hours || 0).toFixed(2),
+            Number(e.hourly_rate || 0).toFixed(2),
+            (Number(e.hours || 0) * Number(e.hourly_rate || 0)).toFixed(2),
+            e.billable ? 'Yes' : 'No',
+            e.approval_status || 'draft',
+          ]);
+          const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `time-report-${reportDateRange.startDate}-to-${reportDateRange.endDate}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        // ---- Team Insights Data Computations ----
+
+        // Hours trend over time (aggregate by day)
+        const trendMap = new Map<string, { date: string; billable: number; nonBillable: number }>();
+        filtered.forEach(e => {
+          const d = e.date || 'unknown';
+          if (!trendMap.has(d)) trendMap.set(d, { date: d, billable: 0, nonBillable: 0 });
+          const row = trendMap.get(d)!;
+          const hrs = Number(e.hours || 0);
+          if (e.billable) row.billable += hrs; else row.nonBillable += hrs;
+        });
+        const trendData = [...trendMap.values()].sort((a, b) => a.date.localeCompare(b.date)).map(r => ({
+          date: r.date !== 'unknown' ? new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?',
+          billable: Math.round(r.billable * 10) / 10,
+          nonBillable: Math.round(r.nonBillable * 10) / 10,
+        }));
+
+        // Staff utilization data
+        const userMap = new Map<string, { name: string; billable: number; nonBillable: number; revenue: number }>();
+        filtered.forEach(e => {
+          const uid = e.user_id || 'unknown';
+          if (!userMap.has(uid)) userMap.set(uid, { name: e.user?.full_name || e.user?.email || 'Unknown', billable: 0, nonBillable: 0, revenue: 0 });
+          const row = userMap.get(uid)!;
+          const hrs = Number(e.hours || 0);
+          if (e.billable) {
+            row.billable += hrs;
+            row.revenue += hrs * Number(e.hourly_rate || 0);
+          } else {
+            row.nonBillable += hrs;
+          }
+        });
+        const utilizationData = [...userMap.values()]
+          .map(u => ({
+            name: u.name.length > 18 ? u.name.slice(0, 16) + '..' : u.name,
+            fullName: u.name,
+            billable: Math.round(u.billable * 10) / 10,
+            nonBillable: Math.round(u.nonBillable * 10) / 10,
+            total: Math.round((u.billable + u.nonBillable) * 10) / 10,
+            utilization: u.billable + u.nonBillable > 0 ? Math.round((u.billable / (u.billable + u.nonBillable)) * 100) : 0,
+            revenue: Math.round(u.revenue * 100) / 100,
+          }))
+          .sort((a, b) => b.total - a.total);
+
+        // Budget vs Actual per project
+        const projectBudgetMap = new Map<string, { name: string; estimated: number; actual: number; taskIds: Set<string> }>();
+        filtered.forEach(e => {
+          if (!e.project_id || !e.project) return;
+          if (!projectBudgetMap.has(e.project_id)) projectBudgetMap.set(e.project_id, { name: e.project.name, estimated: 0, actual: 0, taskIds: new Set() });
+          const row = projectBudgetMap.get(e.project_id)!;
+          row.actual += Number(e.hours || 0);
+          // Add estimated hours from unique tasks
+          if (e.task_id && e.task?.estimated_hours && !row.taskIds.has(e.task_id)) {
+            row.taskIds.add(e.task_id);
+            row.estimated += Number(e.task.estimated_hours);
+          }
+        });
+        const budgetData = [...projectBudgetMap.values()]
+          .filter(p => p.estimated > 0)
+          .map(p => ({
+            name: p.name.length > 20 ? p.name.slice(0, 18) + '..' : p.name,
+            fullName: p.name,
+            estimated: Math.round(p.estimated * 10) / 10,
+            actual: Math.round(p.actual * 10) / 10,
+            isOver: p.actual > p.estimated,
+          }))
+          .sort((a, b) => b.actual - a.actual);
+
+        // Overspend alerts (per task)
+        const taskSpendMap = new Map<string, { taskName: string; projectName: string; estimated: number; actual: number; users: Map<string, { name: string; hours: number }> }>();
+        filtered.forEach(e => {
+          if (!e.task_id || !e.task?.estimated_hours) return;
+          if (!taskSpendMap.has(e.task_id)) taskSpendMap.set(e.task_id, {
+            taskName: e.task.name,
+            projectName: e.project?.name || '-',
+            estimated: Number(e.task.estimated_hours),
+            actual: 0,
+            users: new Map(),
+          });
+          const row = taskSpendMap.get(e.task_id)!;
+          row.actual += Number(e.hours || 0);
+          const uid = e.user_id || 'unknown';
+          if (!row.users.has(uid)) row.users.set(uid, { name: e.user?.full_name || e.user?.email || 'Unknown', hours: 0 });
+          row.users.get(uid)!.hours += Number(e.hours || 0);
+        });
+        const overspendAlerts = [...taskSpendMap.values()]
+          .filter(t => t.actual > t.estimated)
+          .map(t => ({
+            taskName: t.taskName,
+            projectName: t.projectName,
+            estimated: Math.round(t.estimated * 10) / 10,
+            actual: Math.round(t.actual * 10) / 10,
+            overPercent: Math.round(((t.actual - t.estimated) / t.estimated) * 100),
+            topUser: [...t.users.values()].sort((a, b) => b.hours - a.hours)[0],
+          }))
+          .sort((a, b) => b.overPercent - a.overPercent)
+          .slice(0, 10);
+
+        // Top contributors by revenue
+        const topContributors = [...userMap.values()]
+          .filter(u => u.revenue > 0)
+          .map(u => ({
+            name: u.name.length > 18 ? u.name.slice(0, 16) + '..' : u.name,
+            fullName: u.name,
+            revenue: Math.round(u.revenue * 100) / 100,
+            hours: Math.round(u.billable * 10) / 10,
+          }))
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 10);
+
+        // Donut chart data
+        const billablePct = totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
+        const donutData = [
+          { name: 'Billable', value: Math.round(billableHours * 10) / 10 },
+          { name: 'Non-Billable', value: Math.round(nonBillableHours * 10) / 10 },
+        ];
+        const DONUT_COLORS = ['#476E66', '#E8A87C'];
+
+        // Chart color palette
+        const CHART_COLORS = {
+          billable: '#476E66',
+          billableLight: '#6BA39A',
+          nonBillable: '#E8A87C',
+          nonBillableLight: '#F2CDB0',
+          estimated: '#94A3B8',
+          overBudget: '#E76F51',
+          accent: '#476E66',
+        };
+
+        // Chart tooltip style
+        const tooltipStyle = { contentStyle: { fontSize: 12, borderRadius: 8, border: 'none', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', background: '#fff' } };
+
+        return (
+          <div className="space-y-4">
+            {/* Controls Bar */}
+            <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                {/* Row 1: Title + View Toggle + Date Range + Export */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-medium text-neutral-900 uppercase tracking-widest">Time Reports</h2>
+                    {/* View Toggle */}
+                    <div className="flex bg-neutral-100 rounded p-0.5">
+                      <button
+                        onClick={() => setReportView('detailed')}
+                        className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${reportView === 'detailed' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                      >
+                        Detailed
+                      </button>
+                      <button
+                        onClick={() => setReportView('insights')}
+                        className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${reportView === 'insights' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-400 hover:text-neutral-600'}`}
+                      >
+                        Team Insights
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <DateRangePicker
+                      startDate={reportDateRange.startDate}
+                      endDate={reportDateRange.endDate}
+                      onDateChange={(start, end) => setReportDateRange({ startDate: start, endDate: end })}
+                    />
+                    <button
+                      onClick={exportReportCSV}
+                      disabled={filtered.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#476E66] text-white rounded hover:bg-[#3A5B54] transition-colors disabled:opacity-50"
+                    >
+                      <Download size={12} />
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+
+                {/* Row 2: Filters */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Group By (only for Detailed view) */}
+                  {reportView === 'detailed' && (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-neutral-500 uppercase">Group by</span>
+                        <select
+                          value={reportGroupBy}
+                          onChange={(e) => { setReportGroupBy(e.target.value as ReportGroupBy); setExpandedReportGroups(new Set()); }}
+                          className="px-2 py-1 text-xs border border-neutral-200 rounded bg-white focus:ring-1 focus:ring-[#476E66] outline-none"
+                        >
+                          <option value="project">Project</option>
+                          <option value="user">User</option>
+                          <option value="task">Task</option>
+                          <option value="day">Day</option>
+                          <option value="week">Week</option>
+                        </select>
+                      </div>
+                      <div className="w-px h-4 bg-neutral-200" />
+                    </>
+                  )}
+
+                  {/* Project Filter */}
+                  <select
+                    value={reportProjectFilter}
+                    onChange={(e) => setReportProjectFilter(e.target.value)}
+                    className="px-2 py-1 text-xs border border-neutral-200 rounded bg-white focus:ring-1 focus:ring-[#476E66] outline-none"
+                  >
+                    <option value="all">All Projects</option>
+                    {uniqueProjects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  {/* User Filter */}
+                  <select
+                    value={reportUserFilter}
+                    onChange={(e) => setReportUserFilter(e.target.value)}
+                    className="px-2 py-1 text-xs border border-neutral-200 rounded bg-white focus:ring-1 focus:ring-[#476E66] outline-none"
+                  >
+                    <option value="all">All Users</option>
+                    {uniqueUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+                    ))}
+                  </select>
+
+                  {/* Billable Filter */}
+                  <select
+                    value={reportBillableFilter}
+                    onChange={(e) => setReportBillableFilter(e.target.value as 'all' | 'yes' | 'no')}
+                    className="px-2 py-1 text-xs border border-neutral-200 rounded bg-white focus:ring-1 focus:ring-[#476E66] outline-none"
+                  >
+                    <option value="all">All Billable</option>
+                    <option value="yes">Billable Only</option>
+                    <option value="no">Non-Billable Only</option>
+                  </select>
+
+                  {/* Status Filter */}
+                  <select
+                    value={reportStatusFilter}
+                    onChange={(e) => setReportStatusFilter(e.target.value as 'all' | 'approved' | 'pending' | 'draft')}
+                    className="px-2 py-1 text-xs border border-neutral-200 rounded bg-white focus:ring-1 focus:ring-[#476E66] outline-none"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="approved">Approved</option>
+                    <option value="pending">Pending</option>
+                    <option value="draft">Draft</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-sm border border-neutral-200 p-3 shadow-sm">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-widest mb-1">Total Hours</p>
+                <p className="text-xl font-bold text-neutral-900">{totalHours.toFixed(1)}<span className="text-sm font-normal text-neutral-400">h</span></p>
+              </div>
+              <div className="bg-white rounded-sm border border-neutral-200 p-3 shadow-sm">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-widest mb-1">Billable Hours</p>
+                <p className="text-xl font-bold text-[#476E66]">{billableHours.toFixed(1)}<span className="text-sm font-normal text-neutral-400">h</span></p>
+              </div>
+              <div className="bg-white rounded-sm border border-neutral-200 p-3 shadow-sm">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-widest mb-1">Billable Amount</p>
+                <p className="text-xl font-bold text-neutral-900">${billableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-white rounded-sm border border-neutral-200 p-3 shadow-sm">
+                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-widest mb-1">Team Members</p>
+                <p className="text-xl font-bold text-neutral-900">{teamMemberIds.size}</p>
+              </div>
+            </div>
+
+            {/* ============ DETAILED VIEW ============ */}
+            {reportView === 'detailed' && (
+              <div className="bg-white rounded-sm border border-neutral-200 shadow-sm overflow-hidden">
+                {reportLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-6 h-6 border-2 border-neutral-300 border-t-[#476E66] rounded-full animate-spin" />
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
+                    <Clock size={32} className="mb-2 opacity-40" />
+                    <p className="text-sm">No time entries found for the selected filters.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-neutral-100">
+                    {groups.map(([groupName, entries]) => {
+                      const isExpanded = expandedReportGroups.has(groupName);
+                      const groupHours = entries.reduce((s, e) => s + Number(e.hours || 0), 0);
+                      const groupBillable = entries.filter(e => e.billable).reduce((s, e) => s + Number(e.hours || 0) * Number(e.hourly_rate || 0), 0);
+                      return (
+                        <div key={groupName}>
+                          <button
+                            onClick={() => {
+                              const next = new Set(expandedReportGroups);
+                              if (isExpanded) next.delete(groupName); else next.add(groupName);
+                              setExpandedReportGroups(next);
+                            }}
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-neutral-50 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronDown size={14} className={`text-neutral-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                              <span className="text-sm font-medium text-neutral-900">{groupName}</span>
+                              <span className="text-[10px] font-medium text-neutral-400 bg-neutral-100 px-1.5 py-0.5 rounded">
+                                {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs">
+                              <span className="text-neutral-500">{groupHours.toFixed(1)}h</span>
+                              {groupBillable > 0 && (
+                                <span className="text-[#476E66] font-medium">${groupBillable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              )}
+                            </div>
+                          </button>
+                          {isExpanded && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left">
+                                <thead className="bg-neutral-50 border-y border-neutral-100">
+                                  <tr>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase">Date</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase">User</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase">Project</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase">Task / Activity</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase text-right">Hours</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase text-right">Rate</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase text-right">Amount</th>
+                                    <th className="px-4 py-1.5 text-[10px] font-medium text-neutral-500 uppercase text-center">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-50">
+                                  {entries.map(entry => {
+                                    const amt = Number(entry.hours || 0) * Number(entry.hourly_rate || 0);
+                                    return (
+                                      <tr key={entry.id} className="hover:bg-neutral-50/50">
+                                        <td className="px-4 py-2 text-xs text-neutral-600">
+                                          {entry.date ? new Date(entry.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-neutral-700 font-medium">{entry.user?.full_name || entry.user?.email || '-'}</td>
+                                        <td className="px-4 py-2 text-xs text-neutral-600">{entry.project?.name || '-'}</td>
+                                        <td className="px-4 py-2 text-xs text-neutral-600">
+                                          <div>
+                                            {entry.task?.name && <span className="font-medium text-neutral-700">{entry.task.name}</span>}
+                                            {entry.description && (
+                                              <span className="text-neutral-400 italic">{entry.task?.name ? ' — ' : ''}{entry.description}</span>
+                                            )}
+                                            {!entry.task?.name && !entry.description && '-'}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-right font-medium text-neutral-900">{Number(entry.hours).toFixed(1)}h</td>
+                                        <td className="px-4 py-2 text-xs text-right text-neutral-500">
+                                          {entry.billable && entry.hourly_rate ? `$${Number(entry.hourly_rate).toFixed(0)}` : '-'}
+                                        </td>
+                                        <td className="px-4 py-2 text-xs text-right font-medium text-neutral-900">
+                                          {entry.billable && amt > 0 ? `$${amt.toFixed(2)}` : '-'}
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                          {entry.approval_status === 'approved' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px]">Approved</span>}
+                                          {entry.approval_status === 'pending' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px]">Pending</span>}
+                                          {entry.approval_status === 'draft' && <span className="px-1.5 py-0.5 bg-neutral-100 text-neutral-500 rounded-full text-[10px]">Draft</span>}
+                                          {entry.approval_status === 'rejected' && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px]">Rejected</span>}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                  <tr className="bg-neutral-50/50">
+                                    <td colSpan={4} className="px-4 py-2 text-xs font-medium text-neutral-500 text-right">Subtotal</td>
+                                    <td className="px-4 py-2 text-xs text-right font-bold text-neutral-900">{groupHours.toFixed(1)}h</td>
+                                    <td className="px-4 py-2"></td>
+                                    <td className="px-4 py-2 text-xs text-right font-bold text-neutral-900">
+                                      {groupBillable > 0 ? `$${groupBillable.toFixed(2)}` : '-'}
+                                    </td>
+                                    <td></td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center justify-between px-4 py-3 bg-neutral-50 border-t border-neutral-200">
+                      <span className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Grand Total</span>
+                      <div className="flex items-center gap-6 text-xs">
+                        <span className="font-bold text-neutral-900">{totalHours.toFixed(1)}h</span>
+                        <span className="font-bold text-[#476E66]">${billableAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============ TEAM INSIGHTS VIEW ============ */}
+            {reportView === 'insights' && (
+              <>
+                {reportLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-6 h-6 border-2 border-neutral-300 border-t-[#476E66] rounded-full animate-spin" />
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="bg-white rounded-sm border border-neutral-200 shadow-sm flex flex-col items-center justify-center py-12 text-neutral-400">
+                    <Clock size={32} className="mb-2 opacity-40" />
+                    <p className="text-sm">No time entries found for the selected filters.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Hours Trend Over Time */}
+                    <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+                      <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-4">Hours Trend</h3>
+                      <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            <defs>
+                              <linearGradient id="gradBillable" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={CHART_COLORS.billable} stopOpacity={0.7} />
+                                <stop offset="100%" stopColor={CHART_COLORS.billable} stopOpacity={0.1} />
+                              </linearGradient>
+                              <linearGradient id="gradNonBillable" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={CHART_COLORS.nonBillable} stopOpacity={0.6} />
+                                <stop offset="100%" stopColor={CHART_COLORS.nonBillable} stopOpacity={0.05} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                            <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#737373' }} tickLine={false} axisLine={{ stroke: '#e5e5e5' }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#737373' }} tickLine={false} axisLine={false} unit="h" />
+                            <Tooltip {...tooltipStyle} />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Area type="monotone" dataKey="billable" name="Billable" stackId="1" stroke={CHART_COLORS.billable} strokeWidth={2} fill="url(#gradBillable)" />
+                            <Area type="monotone" dataKey="nonBillable" name="Non-Billable" stackId="1" stroke={CHART_COLORS.nonBillable} strokeWidth={2} fill="url(#gradNonBillable)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Row: Staff Utilization + Billable Split Donut */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                      {/* Staff Utilization */}
+                      <div className="lg:col-span-2 bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+                        <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-4">Staff Utilization</h3>
+                        {utilizationData.length === 0 ? (
+                          <p className="text-xs text-neutral-400 py-8 text-center">No user data available.</p>
+                        ) : (
+                          <div style={{ height: Math.max(200, utilizationData.length * 44) }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={utilizationData} layout="vertical" margin={{ top: 0, right: 60, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 10, fill: '#737373' }} tickLine={false} axisLine={false} unit="h" />
+                                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#525252' }} tickLine={false} axisLine={false} width={120} />
+                                <Tooltip {...tooltipStyle} formatter={(value: number, name: string) => [`${value}h`, name]} />
+                                <Legend wrapperStyle={{ fontSize: 11 }} />
+                                <Bar dataKey="billable" name="Billable" stackId="a" fill={CHART_COLORS.billable} radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="nonBillable" name="Non-Billable" stackId="a" fill={CHART_COLORS.nonBillable} radius={[0, 4, 4, 0]}
+                                  label={({ x, y, width, height, index }: { x: number; y: number; width: number; height: number; index: number }) => {
+                                    const item = utilizationData[index];
+                                    if (!item) return null;
+                                    return (
+                                      <text x={x + width + 6} y={y + height / 2} textAnchor="start" dominantBaseline="middle" fontSize={10} fill={item.utilization >= 80 ? CHART_COLORS.billable : item.utilization >= 50 ? '#D4A017' : CHART_COLORS.overBudget} fontWeight={600}>
+                                        {item.utilization}%
+                                      </text>
+                                    );
+                                  }}
+                                />
+                                {utilizationData.length > 0 && (
+                                  <ReferenceLine x={Math.max(...utilizationData.map(u => u.total)) * 0.8} stroke={CHART_COLORS.billableLight} strokeDasharray="4 4" strokeOpacity={0.6} label={{ value: '80% target', position: 'top', fontSize: 9, fill: CHART_COLORS.billableLight }} />
+                                )}
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Billable vs Non-Billable Donut */}
+                      <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm flex flex-col items-center">
+                        <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-4 self-start">Billable Split</h3>
+                        <div className="h-52 w-full relative">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={donutData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                dataKey="value"
+                                stroke="none"
+                              >
+                                {donutData.map((_entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip {...tooltipStyle} formatter={(value: number, name: string) => [`${value}h`, name]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          {/* Center label */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="text-center">
+                              <span className="text-2xl font-bold text-neutral-900">{billablePct}%</span>
+                              <br />
+                              <span className="text-[10px] text-neutral-400 uppercase">billable</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.billable }} />
+                            <span className="text-neutral-600">Billable {billableHours.toFixed(1)}h</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.nonBillable }} />
+                            <span className="text-neutral-600">Non-Bill {nonBillableHours.toFixed(1)}h</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Budget vs Actual per Project */}
+                    {budgetData.length > 0 && (
+                      <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+                        <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-4">Budget vs Actual Hours (by Project)</h3>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={budgetData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                              <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#737373' }} tickLine={false} axisLine={{ stroke: '#e5e5e5' }} />
+                              <YAxis tick={{ fontSize: 10, fill: '#737373' }} tickLine={false} axisLine={false} unit="h" />
+                              <Tooltip {...tooltipStyle} formatter={(value: number, name: string) => [`${value}h`, name]} />
+                              <Legend wrapperStyle={{ fontSize: 11 }} />
+                              <Bar dataKey="estimated" name="Estimated" fill={CHART_COLORS.estimated} radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="actual" name="Actual" radius={[4, 4, 0, 0]}>
+                                {budgetData.map((entry, index) => (
+                                  <Cell key={`actual-${index}`} fill={entry.isOver ? CHART_COLORS.overBudget : CHART_COLORS.billable} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Row: Overspend Alerts + Top Contributors */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {/* Overspend Alerts */}
+                      <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+                        <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-3">Overspend Alerts</h3>
+                        {overspendAlerts.length === 0 ? (
+                          <div className="flex flex-col items-center py-6 text-neutral-400">
+                            <CheckCircle size={24} className="mb-1.5 opacity-40" />
+                            <p className="text-xs">All tasks are within budget.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 max-h-80 overflow-y-auto">
+                            {overspendAlerts.map((alert, i) => (
+                              <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg border border-orange-100 bg-orange-50/40">
+                                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: CHART_COLORS.overBudget }} />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-neutral-900 truncate">{alert.taskName}</p>
+                                  <p className="text-[10px] text-neutral-500">{alert.projectName}</p>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-[10px] text-neutral-500">Est: {alert.estimated}h</span>
+                                    <span className="text-[10px] text-neutral-500">Actual: {alert.actual}h</span>
+                                    <span className="text-[10px] font-bold" style={{ color: CHART_COLORS.overBudget }}>+{alert.overPercent}% over</span>
+                                  </div>
+                                  {alert.topUser && (
+                                    <p className="text-[10px] text-neutral-400 mt-0.5">Top: {alert.topUser.name} ({alert.topUser.hours.toFixed(1)}h)</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Top Contributors by Revenue */}
+                      <div className="bg-white rounded-sm border border-neutral-200 p-4 shadow-sm">
+                        <h3 className="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-3">Top Contributors by Revenue</h3>
+                        {topContributors.length === 0 ? (
+                          <div className="flex flex-col items-center py-6 text-neutral-400">
+                            <Clock size={24} className="mb-1.5 opacity-40" />
+                            <p className="text-xs">No billable entries found.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {topContributors.map((c, i) => {
+                              const maxRevenue = topContributors[0]?.revenue || 1;
+                              const barWidth = Math.max(8, (c.revenue / maxRevenue) * 100);
+                              return (
+                                <div key={i} className="flex items-center gap-3">
+                                  <span className="text-[10px] font-bold text-neutral-400 w-5 text-right">{i + 1}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-0.5">
+                                      <span className="text-xs font-medium text-neutral-700 truncate" title={c.fullName}>{c.fullName}</span>
+                                      <span className="text-xs font-bold text-[#476E66] flex-shrink-0 ml-2">${c.revenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                                    </div>
+                                    <div className="w-full bg-neutral-100 rounded-full h-2">
+                                      <div className="h-2 rounded-full transition-all" style={{ width: `${barWidth}%`, background: `linear-gradient(90deg, ${CHART_COLORS.billable}, ${CHART_COLORS.billableLight})` }} />
+                                    </div>
+                                    <span className="text-[10px] text-neutral-400">{c.hours}h billable</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Add Time Entry Row Modal */}
       {showTimeEntryModal && (

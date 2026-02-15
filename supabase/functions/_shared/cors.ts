@@ -12,7 +12,8 @@ export const ALLOWED_ORIGINS = [
 ];
 
 export function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = origin && (ALLOWED_ORIGINS.includes(origin) || (origin.endsWith('.vercel.app'))) ? origin : ALLOWED_ORIGINS[0];
+  const isAllowedVercelPreview = origin ? /^https:\/\/app-billdora-[a-z0-9]+-[a-z0-9]+\.vercel\.app$/.test(origin) : false;
+  const allowedOrigin = origin && (ALLOWED_ORIGINS.includes(origin) || isAllowedVercelPreview) ? origin : ALLOWED_ORIGINS[0];
   
   return {
     'Access-Control-Allow-Origin': allowedOrigin,

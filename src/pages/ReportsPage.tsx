@@ -360,7 +360,7 @@ export default function ReportsPage() {
         api.getTimeEntries(profile.company_id, undefined, startStr, endStr),
         api.getInvoices(profile.company_id),
         api.getExpenses(profile.company_id),
-        api.getCompanyProfiles(profile.company_id),
+        api.getCompanyProfilesAdmin(profile.company_id),
       ]);
       setData({ projects, timeEntries, invoices, expenses, profiles: profiles || [] });
     } catch (error) {

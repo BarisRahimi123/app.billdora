@@ -122,8 +122,12 @@ export default function LoginPage() {
       setError('Please enter and confirm your new password');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setError('Password must contain at least one uppercase letter, one lowercase letter, and one number');
       return;
     }
     if (newPassword !== confirmPassword) {

@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { api, Project, Client, TimeEntry, Invoice, Quote, Expense, Task, companyExpensesApi, notificationsApi } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { cleanMentionMarkup } from '../lib/mentions';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DashboardSkeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
@@ -63,7 +65,7 @@ interface TopClient {
 
 export default function DashboardPage() {
   const { user, profile, loading: authLoading } = useAuth();
-  const { canViewFinancials } = usePermissions();
+  const { canViewFinancials, canViewAllProjects, loading: permLoading } = usePermissions();
   const { refreshSubscription } = useSubscription();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -144,7 +146,10 @@ export default function DashboardPage() {
 
   // Load dashboard data function
   const loadData = useCallback(async (signal?: AbortSignal) => {
-    console.log('[Dashboard] loadData called - userId:', user?.id, 'companyId:', profile?.company_id, 'authLoading:', authLoading);
+    console.log('[Dashboard] loadData called - userId:', user?.id, 'companyId:', profile?.company_id, 'authLoading:', authLoading, 'permLoading:', permLoading);
+
+    // Wait for permissions to load before fetching data
+    if (permLoading) return;
 
     if (!profile?.company_id || !user?.id) {
       console.log('[Dashboard] Early return - userId:', user?.id, 'profile:', profile ? JSON.stringify({ id: profile.id, email: profile.email, company_id: profile.company_id }) : 'null');
@@ -174,24 +179,64 @@ export default function DashboardPage() {
       console.log('[Dashboard] Starting data fetch for company:', profile.company_id);
       setLoading(true);
 
-      const [statsData, projectsData, timeEntries, invoicesData, quotesData, allTimeEntries, companyExpenses, companyProfiles, clientsData] = await Promise.all([
+      const [statsData, allProjectsData, timeEntries, invoicesData, quotesData, allTimeEntries, companyExpenses, companyProfiles, clientsData] = await Promise.all([
         api.getDashboardStats(profile.company_id, user.id),
         api.getProjects(profile.company_id),
         api.getTimeEntries(profile.company_id, user.id),
-        api.getInvoices(profile.company_id),
-        api.getQuotes(profile.company_id),
+        canViewFinancials ? api.getInvoices(profile.company_id) : Promise.resolve([]),
+        canViewFinancials ? api.getQuotes(profile.company_id) : Promise.resolve([]),
         api.getTimeEntries(profile.company_id),
-        companyExpensesApi.getExpenses(profile.company_id),
+        canViewFinancials ? companyExpensesApi.getExpenses(profile.company_id) : Promise.resolve([]),
         api.getCompanyProfiles(profile.company_id),
         api.getClients(profile.company_id),
       ]);
 
+      // For restricted users (Staff/Viewer), only show projects they are assigned to
+      // This includes projects where they are a team member OR have tasks assigned to them
+      let projectsData = allProjectsData;
+      let staffPendingTasks: number | null = null;
+      if (!canViewAllProjects && user?.id) {
+        const [staffProjects, assignedTasks, myPendingTaskCount] = await Promise.all([
+          api.getStaffProjects(user.id).catch(() => []),
+          supabase
+            .from('tasks')
+            .select('project_id')
+            .eq('assigned_to', user.id)
+            .then(({ data }) => data || [])
+            .catch(() => []),
+          supabase
+            .from('tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('assigned_to', user.id)
+            .in('status', ['not_started', 'in_progress'])
+            .then(({ count }) => count || 0)
+            .catch(() => 0),
+        ]);
+        const assignedProjectIds = new Set([
+          ...(staffProjects || []).map((sp: any) => sp.project_id),
+          ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+        ]);
+        projectsData = (allProjectsData || []).filter(p => assignedProjectIds.has(p.id));
+        staffPendingTasks = myPendingTaskCount as number;
+      }
+
       const activeProjects = projectsData.filter(p => p.status === 'active' || p.status === 'in_progress').length;
-      const totalRevenue = invoicesData.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0);
-      const outstandingInvoices = invoicesData.filter(i => i.status === 'sent').reduce((sum, i) => sum + Number(i.total), 0);
+      const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
+      const totalRevenue = invoicesData
+        .filter((i: Invoice) => i.status === 'paid' && (i.paid_at || i.created_at || '') >= yearStart)
+        .reduce((sum: number, i: Invoice) => sum + Number(i.total), 0);
+      const outstandingInvoices = invoicesData.filter((i: Invoice) => i.status === 'sent').reduce((sum: number, i: Invoice) => sum + Number(i.total), 0);
       const hoursThisWeek = statsData.billableHours + statsData.nonBillableHours;
 
-      setStats({ ...statsData, activeProjects, totalRevenue, outstandingInvoices, hoursThisWeek });
+      setStats({
+        ...statsData,
+        activeProjects,
+        totalRevenue,
+        outstandingInvoices,
+        hoursThisWeek,
+        // Override pending tasks count for staff to only show their assigned tasks
+        ...(staffPendingTasks !== null ? { pendingTasks: staffPendingTasks } : {}),
+      });
       setProjects(projectsData);
 
       const timeActivities: ActivityItem[] = timeEntries.slice(0, 5).map((te: TimeEntry) => ({
@@ -202,15 +247,27 @@ export default function DashboardPage() {
         meta: te.description,
       }));
 
+      // Notification types that require financial/sales access
+      const FINANCIAL_NOTIFICATION_TYPES = [
+        'proposal_viewed', 'proposal_signed', 'proposal_declined',
+        'invoice_overdue', 'invoice_viewed', 'invoice_paid', 'invoice_sent', 'payment_received',
+        'collaboration_invited', 'collaboration_response_submitted', 'collaborators_ready',
+        'new_client_added',
+      ];
+
       let notificationActivities: ActivityItem[] = [];
       try {
-        const notifications = await notificationsApi.getNotifications(profile.company_id, undefined, 10);
+        const allNotifications = await notificationsApi.getNotifications(profile.company_id, user.id, 10);
+        // Filter out financial/sales notifications for restricted users
+        const notifications = (canViewAllProjects && canViewFinancials)
+          ? allNotifications
+          : allNotifications.filter((n: any) => !FINANCIAL_NOTIFICATION_TYPES.includes(n.type));
         notificationActivities = notifications.map((n: any) => ({
           id: n.id,
           type: n.type as ActivityItem['type'],
-          description: n.title?.replace(/^[^\w\s]+\s*/, '') || n.message,
+          description: cleanMentionMarkup(n.title?.replace(/^[^\w\s]+\s*/, '') || n.message || ''),
           date: n.created_at,
-          meta: n.message,
+          meta: cleanMentionMarkup(n.message || ''),
           icon: n.title?.match(/^[^\w\s]+/)?.[0] || undefined,
         }));
       } catch (err) {
@@ -349,7 +406,7 @@ export default function DashboardPage() {
         setLoading(false);
       }
     }
-  }, [profile?.company_id, user?.id]);
+  }, [profile?.company_id, user?.id, canViewAllProjects, canViewFinancials, permLoading]);
 
   const loadDataRef = useRef(loadData);
   loadDataRef.current = loadData;
@@ -363,7 +420,7 @@ export default function DashboardPage() {
     return () => {
       abortController.abort();
     };
-  }, [profile?.company_id, user?.id, authLoading]);
+  }, [profile?.company_id, user?.id, authLoading, permLoading, canViewAllProjects, canViewFinancials]);
 
   useEffect(() => {
     if (timeEntry.project_id && profile?.company_id) {
@@ -422,7 +479,7 @@ export default function DashboardPage() {
     if (!timeEntry.date) {
       errors.date = 'Date is required';
     } else {
-      const entryDate = new Date(timeEntry.date);
+      const entryDate = new Date(timeEntry.date + 'T00:00:00');
       const today = new Date();
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(today.getFullYear() - 1);
@@ -532,14 +589,16 @@ export default function DashboardPage() {
             >
               Overview
             </button>
-            <button
-              onClick={() => setActiveTab('health')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all flex items-center gap-1 sm:gap-1.5 ${activeTab === 'health' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
-                }`}
-            >
-              <TreePine className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Health
-            </button>
+            {canViewFinancials && (
+              <button
+                onClick={() => setActiveTab('health')}
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all flex items-center gap-1 sm:gap-1.5 ${activeTab === 'health' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900'
+                  }`}
+              >
+                <TreePine className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Health
+              </button>
+            )}
           </div>
 
           {/* Quick Add */}
@@ -575,7 +634,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {activeTab === 'health' ? (
+      {activeTab === 'health' && canViewFinancials ? (
         <BusinessHealthTree
           metrics={healthMetrics}
           targets={healthTargets}
@@ -584,7 +643,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* Hero Metrics Row - Minimalist */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid ${canViewFinancials ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-1'} gap-4`}>
             {/* Profit/Loss Card */}
             {canViewFinancials && (
               <div
@@ -686,7 +745,7 @@ export default function DashboardPage() {
               <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-widest">Active Overview</h2>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className={`grid ${canViewFinancials ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'} gap-8`}>
               <div onClick={() => navigate('/projects')} className="group cursor-pointer">
                 <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Active Projects</p>
                 <div className="flex items-baseline gap-2">
@@ -695,7 +754,7 @@ export default function DashboardPage() {
               </div>
 
               <div onClick={() => navigate('/projects')} className="group cursor-pointer">
-                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">Pending Tasks</p>
+                <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest mb-2 group-hover:text-[#476E66] transition-colors">{canViewAllProjects ? 'Pending Tasks' : 'My Tasks'}</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-light text-neutral-900">{stats?.pendingTasks || 0}</span>
                 </div>
@@ -721,7 +780,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Split Row: Pipeline & Top Clients */}
+          {/* Split Row: Pipeline & Top Clients — hidden from Staff/Viewer */}
+          {canViewFinancials && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Sales Pipeline */}
             <div
@@ -791,8 +851,10 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          )}
 
-          {/* Insights Row */}
+          {/* Insights Row — only for users with financial access */}
+          {canViewFinancials && (
           <div className="grid grid-cols-2 gap-4">
             {/* Billability */}
             <div className="bg-white rounded-2xl p-6 border border-neutral-100/60" style={{ boxShadow: '0 2px 10px -4px rgba(0,0,0,0.02)' }}>
@@ -861,6 +923,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Revenue Trend - Minimalist Bar Chart */}
           {canViewFinancials && (

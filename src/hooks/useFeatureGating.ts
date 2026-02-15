@@ -1,6 +1,7 @@
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 export type FeatureLimitType = 'projects' | 'team_members' | 'clients' | 'invoices';
 
@@ -20,10 +21,18 @@ interface FeatureGatingResult {
 
 export function useFeatureGating(): FeatureGatingResult {
   const { checkLimit, isPro, isStarter, currentPlan } = useSubscription();
+  const { isAdmin } = usePermissions();
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   const showUpgradePrompt = () => {
+    if (!isAdmin) {
+      showToast(
+        'Your account has reached its limit. Please contact your administrator.',
+        'info'
+      );
+      return;
+    }
     showToast(
       'You have reached your plan limit. Upgrade to Professional for unlimited access.',
       'info'
@@ -73,6 +82,14 @@ export function useFeatureGating(): FeatureGatingResult {
     if (result.allowed) {
       onAllowed();
     } else {
+      if (!isAdmin) {
+        showToast(
+          'Your account has reached its limit. Please contact your administrator.',
+          'info'
+        );
+        return;
+      }
+
       const limitNames: Record<FeatureLimitType, string> = {
         projects: 'projects',
         team_members: 'team members',

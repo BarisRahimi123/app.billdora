@@ -33,12 +33,6 @@ export async function verifyAuth(req: Request): Promise<AuthResult> {
     return { authenticated: true, isServiceRole: true };
   }
 
-  // Accept anon key as fallback for backward compatibility with older client builds
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-  if (anonKey && token === anonKey) {
-    return { authenticated: true };
-  }
-  
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;

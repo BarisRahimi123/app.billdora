@@ -66,7 +66,7 @@ export default function ProjectsPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { profile, user, loading: authLoading } = useAuth();
-  const { canCreate, canEdit, canDelete, canViewFinancials, isAdmin } = usePermissions();
+  const { canCreate, canEdit, canDelete, canViewFinancials, canViewAllProjects, isAdmin, loading: permLoading } = usePermissions();
   const { checkAndProceed } = useFeatureGating();
   const [projects, setProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
@@ -310,8 +310,8 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    loadData();
-  }, [profile?.company_id]);
+    if (!permLoading) loadData();
+  }, [profile?.company_id, permLoading, canViewAllProjects]);
 
   useEffect(() => {
     if (projectId) {
@@ -334,10 +334,12 @@ export default function ProjectsPage() {
   }, [projectId, projects, sharedProjects]);
 
   async function loadData() {
-    if (!profile?.company_id) {
-      setLoading(false);
-      setProjects([]);
-      setClients([]);
+    if (!profile?.company_id || permLoading) {
+      if (!permLoading && !profile?.company_id) {
+        setLoading(false);
+        setProjects([]);
+        setClients([]);
+      }
       return;
     }
 
@@ -348,15 +350,39 @@ export default function ProjectsPage() {
 
     try {
       // Load projects, clients, and invoices in PARALLEL
-      const [projectsData, clientsData, invoicesData] = await Promise.all([
+      let projectsData: Project[] = [];
+      const [allProjectsData, clientsData, invoicesData] = await Promise.all([
         api.getProjects(companyId).catch(err => { console.error('Failed to load projects:', err); return []; }),
         api.getClients(companyId).catch(err => { console.error('Failed to load clients:', err); return []; }),
-        api.getInvoices(companyId).catch(err => { console.error('Failed to load invoices:', err); return []; }),
+        canViewAllProjects
+          ? api.getInvoices(companyId).catch(err => { console.error('Failed to load invoices:', err); return []; })
+          : Promise.resolve([]),
       ]);
+
+      // For restricted users (Staff/Viewer), only show projects they are assigned to
+      // This includes projects where they are a team member OR have tasks assigned to them
+      if (!canViewAllProjects && user?.id) {
+        const [staffProjects, assignedTasks] = await Promise.all([
+          api.getStaffProjects(user.id).catch(() => []),
+          supabase
+            .from('tasks')
+            .select('project_id')
+            .eq('assigned_to', user.id)
+            .then(({ data }) => data || [])
+            .catch(() => []),
+        ]);
+        const assignedProjectIds = new Set([
+          ...(staffProjects || []).map((sp: any) => sp.project_id),
+          ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+        ]);
+        projectsData = (allProjectsData || []).filter(p => assignedProjectIds.has(p.id));
+      } else {
+        projectsData = allProjectsData || [];
+      }
 
       console.log('[ProjectsPage] Initial data loaded in', Date.now() - startTime, 'ms');
 
-      setProjects(projectsData || []);
+      setProjects(projectsData);
       setClients(clientsData || []);
       setAllInvoices(invoicesData || []);
 
@@ -484,7 +510,7 @@ export default function ProjectsPage() {
 
     if (profile?.company_id) {
       try {
-        const profilesData = await api.getCompanyProfiles(profile.company_id);
+        const profilesData = await api.getCompanyProfilesAdmin(profile.company_id);
         setCompanyProfiles(profilesData || []);
       } catch (error) {
         console.error('Failed to load company profiles:', error);
@@ -782,6 +808,14 @@ export default function ProjectsPage() {
                         status: 'not_started'
                       });
                       if (newProject) {
+                        // Auto-add creator as team member
+                        if (user?.id && profile?.company_id) {
+                          try {
+                            await api.addProjectTeamMember(newProject.id, user.id, profile.company_id, 'Creator', false);
+                          } catch (teamErr) {
+                            console.error('Failed to auto-add creator to duplicated project:', teamErr);
+                          }
+                        }
                         const projectTasks = tasks.filter(t => t.project_id === selectedProject.id);
                         for (const task of projectTasks) {
                           await api.createTask({
@@ -832,6 +866,7 @@ export default function ProjectsPage() {
           <div className="flex gap-1 p-1 bg-neutral-100 rounded-sm w-max sm:w-fit">
             {(['vitals', 'client', 'details', 'tasks', 'submittals', 'financials', 'billing'] as DetailTab[]).filter(tab => {
               if (!effectiveCanViewFinancials && (tab === 'financials' || tab === 'billing')) return false;
+              if (!canViewAllProjects && tab === 'client') return false;
               return true;
             }).map(tab => (
               <button
@@ -1005,6 +1040,7 @@ export default function ProjectsPage() {
                 if (projectId) loadProjectDetails(projectId);
               }}
               canViewFinancials={effectiveCanViewFinancials}
+              canViewAllProjects={canViewAllProjects}
               formatCurrency={formatCurrency}
               companyId={profile?.company_id || ''}
               projectCompanyId={selectedProject.company_id}
@@ -1012,7 +1048,7 @@ export default function ProjectsPage() {
             />
           )}
 
-          {activeTab === 'client' && (
+          {activeTab === 'client' && canViewAllProjects && (
             <ClientTabContent
               client={
                 // For shared projects, show the collaborator's chosen client if available
@@ -1637,6 +1673,8 @@ export default function ProjectsPage() {
             project={editingProject}
             clients={clients}
             companyId={profile?.company_id || ''}
+            userId={user?.id}
+            canViewAllProjects={canViewAllProjects}
             onClose={() => { setShowProjectModal(false); setEditingProject(null); }}
             onSave={() => { loadData(); setShowProjectModal(false); setEditingProject(null); }}
           />
@@ -1957,6 +1995,8 @@ export default function ProjectsPage() {
                   </div>
                   <div className="px-4 py-2 max-h-72 overflow-y-auto">
                     {['Basic', 'Financial', 'Billing', 'Dates'].map(group => {
+                      // Hide Financial and Billing groups for users without financial access
+                      if (!canViewFinancials && (group === 'Financial' || group === 'Billing')) return null;
                       const groupCols = ALL_COLUMNS.filter(col => col.group === group);
                       if (groupCols.length === 0) return null;
                       return (
@@ -2055,6 +2095,8 @@ export default function ProjectsPage() {
                 <div className="px-4 py-2 max-h-80 overflow-y-auto">
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#476E66] mb-3">Visible Columns</p>
                   {['Basic', 'Financial', 'Billing', 'Dates'].map(group => {
+                    // Hide Financial and Billing groups for users without financial access
+                    if (!canViewFinancials && (group === 'Financial' || group === 'Billing')) return null;
                     const groupCols = ALL_COLUMNS.filter(col => col.group === group);
                     if (groupCols.length === 0) return null;
                     return (
@@ -2313,9 +2355,9 @@ export default function ProjectsPage() {
                 {visibleColumns.includes('invoiced') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Invoiced</th>}
                 {visibleColumns.includes('collected') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Collected</th>}
                 {visibleColumns.includes('remaining') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Remaining</th>}
-                {visibleColumns.includes('billing_status') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Billing Status</th>}
-                {visibleColumns.includes('draft_invoices') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Draft Invoices</th>}
-                {visibleColumns.includes('open_invoices') && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Open Invoices</th>}
+                {visibleColumns.includes('billing_status') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Billing Status</th>}
+                {visibleColumns.includes('draft_invoices') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Draft Invoices</th>}
+                {visibleColumns.includes('open_invoices') && canViewFinancials && <th className="text-left px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Open Invoices</th>}
                 <th className="w-16 text-right px-4 py-3 text-[10px] font-bold text-neutral-400 uppercase tracking-widest"></th>
               </tr>
             </thead>
@@ -2433,7 +2475,7 @@ export default function ProjectsPage() {
                         {formatCurrency(projectBillingStats[project.id]?.remaining || 0)}
                       </td>
                     )}
-                    {visibleColumns.includes('billing_status') && (
+                    {visibleColumns.includes('billing_status') && canViewFinancials && (
                       <td className="px-4 py-4">
                         {(() => {
                           const status = projectBillingStats[project.id]?.billingStatus || 'Not Billed';
@@ -2454,7 +2496,7 @@ export default function ProjectsPage() {
                         })()}
                       </td>
                     )}
-                    {visibleColumns.includes('draft_invoices') && (
+                    {visibleColumns.includes('draft_invoices') && canViewFinancials && (
                       <td className="px-4 py-4 font-mono text-sm text-amber-700">
                         {projectBillingStats[project.id]?.draftAmount > 0 ? (
                           formatCurrency(projectBillingStats[project.id]?.draftAmount)
@@ -2463,7 +2505,7 @@ export default function ProjectsPage() {
                         )}
                       </td>
                     )}
-                    {visibleColumns.includes('open_invoices') && (
+                    {visibleColumns.includes('open_invoices') && canViewFinancials && (
                       <td className="px-4 py-4 text-center">
                         {projectBillingStats[project.id]?.openCount > 0 ? (
                           <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
@@ -2509,6 +2551,14 @@ export default function ProjectsPage() {
                                   status: 'not_started'
                                 });
                                 if (newProject) {
+                                  // Auto-add creator as team member
+                                  if (user?.id && profile?.company_id) {
+                                    try {
+                                      await api.addProjectTeamMember(newProject.id, user.id, profile.company_id, 'Creator', false);
+                                    } catch (teamErr) {
+                                      console.error('Failed to auto-add creator to duplicated project:', teamErr);
+                                    }
+                                  }
                                   loadData();
                                 }
                                 setRowMenuOpen(null);
@@ -2644,6 +2694,8 @@ export default function ProjectsPage() {
             project={editingProject}
             clients={clients}
             companyId={profile?.company_id || ''}
+            userId={user?.id}
+            canViewAllProjects={canViewAllProjects}
             onClose={() => { setShowProjectModal(false); setEditingProject(null); }}
             onSave={() => { loadData(); setShowProjectModal(false); setEditingProject(null); }}
           />
@@ -2653,13 +2705,16 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectModal({ project, clients, companyId, onClose, onSave }: {
+function ProjectModal({ project, clients, companyId, userId, canViewAllProjects: canViewAll, onClose, onSave }: {
   project: Project | null;
   clients: Client[];
   companyId: string;
+  userId?: string;
+  canViewAllProjects?: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
+  const { canViewFinancials } = usePermissions();
   const [name, setName] = useState(project?.name || '');
   const [clientId, setClientId] = useState(project?.client_id || '');
   const [description, setDescription] = useState(project?.description || '');
@@ -2702,20 +2757,31 @@ function ProjectModal({ project, clients, companyId, onClose, onSave }: {
     setError(null);
     setSaving(true);
     try {
-      const data = {
+      const data: Record<string, any> = {
         name: name.trim(),
         client_id: clientId || null,
         description: description || null,
-        budget: parseFloat(budget) || null,
         start_date: startDate || null,
         end_date: endDate || null,
         status,
         category,
       };
+      // Only include budget if user has financial access
+      if (canViewFinancials) {
+        data.budget = parseFloat(budget) || null;
+      }
       if (project) {
         await api.updateProject(project.id, data);
       } else {
-        await api.createProject({ ...data, company_id: companyId });
+        const newProject = await api.createProject({ ...data, company_id: companyId });
+        // Auto-add creator as team member so they always appear on the project
+        if (userId && newProject?.id) {
+          try {
+            await api.addProjectTeamMember(newProject.id, userId, companyId, 'Creator', false);
+          } catch (teamErr) {
+            console.error('Failed to auto-add creator to project team:', teamErr);
+          }
+        }
       }
       onSave();
     } catch (err: any) {
@@ -2756,17 +2822,19 @@ function ProjectModal({ project, clients, companyId, onClose, onSave }: {
             <label className="block text-sm font-medium text-neutral-700 mb-1.5">Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none resize-none" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1.5">Budget ($)</label>
-              <input
-                type="number"
-                value={budget}
-                onChange={(e) => { setBudget(e.target.value); setFieldErrors(prev => ({ ...prev, budget: '' })); }}
-                className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none ${fieldErrors.budget ? 'border-red-300' : 'border-neutral-200'}`}
-              />
-              <FieldError message={fieldErrors.budget} />
-            </div>
+          <div className={`grid ${canViewFinancials ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+            {canViewFinancials && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1.5">Budget ($)</label>
+                <input
+                  type="number"
+                  value={budget}
+                  onChange={(e) => { setBudget(e.target.value); setFieldErrors(prev => ({ ...prev, budget: '' })); }}
+                  className={`w-full px-4 py-2.5 rounded-xl border focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none ${fieldErrors.budget ? 'border-red-300' : 'border-neutral-200'}`}
+                />
+                <FieldError message={fieldErrors.budget} />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-1.5">Status</label>
               <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full px-4 py-2.5 rounded-xl border border-neutral-200 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none">
@@ -3155,11 +3223,12 @@ function TaskModal({ task, projectId, companyId, teamMembers, companyProfiles, p
 }
 
 // Project Vitals Tab Component
-function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatCurrency, companyId, projectCompanyId, tasks = [] }: {
+function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, canViewAllProjects = true, formatCurrency, companyId, projectCompanyId, tasks = [] }: {
   project: Project;
   clients: Client[];
   onSave: (updates: Partial<Project>) => Promise<void>;
   canViewFinancials: boolean;
+  canViewAllProjects?: boolean;
   formatCurrency: (amount?: number) => string;
   companyId: string;
   projectCompanyId?: string;
@@ -3313,7 +3382,8 @@ function ProjectVitalsTab({ project, clients, onSave, canViewFinancials, formatC
           projectId={project.id}
           projectName={project.name}
           companyId={companyId}
-          clients={clients}
+          clients={canViewAllProjects ? clients : []}
+          hideContactDetails={!canViewAllProjects}
         />
       </div>
 
@@ -3828,18 +3898,20 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
                     </div>
 
                     {/* Time Entries Badge */}
-                    {taskTimeEntries.length > 0 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                        className="flex items-center gap-1.5 px-2 py-1 bg-neutral-100 hover:bg-neutral-200 rounded-sm text-[10px] font-bold text-neutral-600 transition-colors uppercase tracking-wide"
-                      >
-                        <Clock className="w-3 h-3" />
-                        {taskTimeEntries.length}
-                      </button>
-                    )}
+                    <div className="w-10 flex-shrink-0 flex justify-end">
+                      {taskTimeEntries.length > 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                          className="flex items-center gap-1.5 px-2 py-1 bg-neutral-100 hover:bg-neutral-200 rounded-sm text-[10px] font-bold text-neutral-600 transition-colors uppercase tracking-wide"
+                        >
+                          <Clock className="w-3 h-3" />
+                          {taskTimeEntries.length}
+                        </button>
+                      )}
+                    </div>
 
                     {/* Assignee */}
-                    <div className="hidden sm:flex items-center gap-2 w-32">
+                    <div className="hidden sm:flex items-center gap-2 w-40 flex-shrink-0">
                       {assignee ? (
                         <>
                           <div className="relative flex-shrink-0">
@@ -3886,10 +3958,10 @@ function TasksTabContent({ tasks, timeEntries = [], projectId, companyId, onTask
                     {/* Task budget — visible to owner OR collaborator on their own task */}
                     {(() => {
                       const showBudget = canViewFinancials || (isSharedProject && task.assigned_to === user?.id);
-                      if (!showBudget || !task.estimated_fees) return null;
+                      if (!showBudget) return null;
                       return (
                         <span className="hidden sm:block text-[10px] font-bold text-neutral-500 w-16 text-right">
-                          ${task.estimated_fees.toLocaleString()}
+                          {task.estimated_fees ? `$${task.estimated_fees.toLocaleString()}` : '-'}
                         </span>
                       );
                     })()}

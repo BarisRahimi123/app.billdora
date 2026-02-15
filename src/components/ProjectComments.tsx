@@ -12,13 +12,15 @@ import {
   Clock,
   CornerDownRight,
   User,
+  UserCircle,
   ShieldAlert,
   ListTodo,
   AtSign
 } from 'lucide-react';
-import { ProjectComment, projectCommentsApi, Task } from '../lib/api';
+import { ProjectComment, projectCommentsApi, projectCollaboratorsApi, Task, api, notificationsApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { MentionableUser, extractMentionedUserIds, convertMentionsForStorage as sharedConvertMentions, cleanMentionMarkup } from '../lib/mentions';
 
 interface ProjectCommentsProps {
   projectId: string;
@@ -26,30 +28,45 @@ interface ProjectCommentsProps {
   tasks?: Task[];
 }
 
-// ─── Task mention format: @[task:ID:Name] ──────────────────
-const TASK_MENTION_REGEX = /@\[task:([^:]+):([^\]]+)\]/g;
+// ─── Mention format: @[task:ID:Name] and @[user:ID:Name] ──────────────────
+const ALL_MENTION_REGEX = /@\[(task|user):([^:]+):([^\]]+)\]/g;
 
-function renderCommentContent(content: string) {
+function renderCommentContent(content: string, currentUserId?: string) {
   const parts: (string | JSX.Element)[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  const regex = new RegExp(TASK_MENTION_REGEX.source, 'g');
+  const regex = new RegExp(ALL_MENTION_REGEX.source, 'g');
 
   while ((match = regex.exec(content)) !== null) {
     if (match.index > lastIndex) {
       parts.push(content.slice(lastIndex, match.index));
     }
-    const taskName = match[2];
-    parts.push(
-      <span
-        key={`task-${match.index}`}
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-xs font-medium align-baseline cursor-default"
-        title={`Task: ${taskName}`}
-      >
-        <ListTodo className="w-3 h-3 flex-shrink-0" />
-        {taskName}
-      </span>
-    );
+    const kind = match[1]; // 'task' or 'user'
+    const mentionId = match[2];
+    const name = match[3];
+    if (kind === 'task') {
+      parts.push(
+        <span
+          key={`task-${match.index}`}
+          className="inline-flex items-center gap-0.5 text-[#476E66] font-light text-xs align-baseline cursor-default"
+          title={`Task: ${name}`}
+        >
+          <ListTodo className="w-3 h-3 flex-shrink-0 opacity-60" />
+          @{name}
+        </span>
+      );
+    } else {
+      const displayName = currentUserId && mentionId === currentUserId ? 'you' : name;
+      parts.push(
+        <span
+          key={`user-${match.index}`}
+          className="font-light text-neutral-500 text-xs align-baseline cursor-default"
+          title={name}
+        >
+          @{displayName}
+        </span>
+      );
+    }
     lastIndex = regex.lastIndex;
   }
 
@@ -81,31 +98,76 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
   const mentionAnchorPos = useRef<number>(0); // cursor position of the @ character
-  // Map of friendly display name -> task ID for converting before submit
-  const [mentionsMap, setMentionsMap] = useState<Record<string, string>>({});
+  // Map of friendly display name -> { id, kind } for converting before submit
+  const [mentionsMap, setMentionsMap] = useState<Record<string, { id: string; kind: 'user' | 'task' }>>({});
+
+  // Mentionable users (team members + project collaborators)
+  const [mentionableUsers, setMentionableUsers] = useState<MentionableUser[]>([]);
+
+  // Load mentionable users when component mounts
+  useEffect(() => {
+    if (!companyId) return;
+    (async () => {
+      try {
+        const [profiles, collabs] = await Promise.all([
+          api.getCompanyProfiles(companyId),
+          projectCollaboratorsApi.getByProject(projectId),
+        ]);
+
+        // Team members
+        const teamUsers: MentionableUser[] = (profiles || []).map((p: { id: string; full_name?: string; email?: string }) => ({
+          id: p.id,
+          name: p.full_name || p.email || 'Unknown',
+          email: p.email || '',
+          type: 'team' as const,
+        }));
+
+        // Accepted collaborators with a user ID
+        const collabUsers: MentionableUser[] = (collabs || [])
+          .filter(c => c.status === 'accepted' && c.invited_user_id)
+          .map(c => ({
+            id: c.invited_user_id!,
+            name: c.invited_user_name || c.invited_email || 'Collaborator',
+            email: c.invited_email || '',
+            type: 'collaborator' as const,
+            companyId: c.invited_company_id || undefined,
+          }));
+
+        // Deduplicate: team members take priority
+        const teamIds = new Set(teamUsers.map(u => u.id));
+        const uniqueCollabs = collabUsers.filter(c => !teamIds.has(c.id));
+        setMentionableUsers([...teamUsers, ...uniqueCollabs]);
+      } catch (err) {
+        console.error('[ProjectComments] Failed to load mentionable users:', err);
+      }
+    })();
+  }, [companyId, projectId]);
 
   const filteredTasks = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
-    return tasks.filter(t => t.name.toLowerCase().includes(q)).slice(0, 8);
+    return tasks.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
   }, [tasks, mentionQuery]);
+
+  const filteredUsers = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionableUsers
+      .filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [mentionableUsers, mentionQuery]);
+
+  // Total dropdown items count for keyboard navigation
+  const totalMentionItems = filteredUsers.length + filteredTasks.length;
 
   const closeMention = useCallback(() => {
     setMentionQuery(null);
     setMentionIndex(0);
   }, []);
 
-  // Convert friendly @Task Name to storage format @[task:id:Task Name] before saving
+  // Convert friendly @Name to storage format @[type:id:Name] before saving
   function convertMentionsForStorage(text: string): string {
-    let result = text;
-    // Sort by name length descending to avoid partial matches
-    const entries = Object.entries(mentionsMap).sort((a, b) => b[0].length - a[0].length);
-    for (const [name, id] of entries) {
-      const friendlyMention = `@${name}`;
-      const storageMention = `@[task:${id}:${name}]`;
-      result = result.split(friendlyMention).join(storageMention);
-    }
-    return result;
+    return sharedConvertMentions(text, mentionsMap);
   }
 
   function handleMentionInput(value: string, textarea: HTMLTextAreaElement | null, target: 'new' | 'reply') {
@@ -131,9 +193,16 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
     closeMention();
   }
 
-  function insertMention(task: Task, target: 'new' | 'reply') {
-    // Show friendly format in textarea: @Task Name
-    const friendlyMention = `@${task.name}`;
+  function insertTaskMention(task: Task, target: 'new' | 'reply') {
+    insertMentionItem({ id: task.id, name: task.name, kind: 'task' }, target);
+  }
+
+  function insertUserMention(u: MentionableUser, target: 'new' | 'reply') {
+    insertMentionItem({ id: u.id, name: u.name, kind: 'user' }, target);
+  }
+
+  function insertMentionItem(item: { id: string; name: string; kind: 'user' | 'task' }, target: 'new' | 'reply') {
+    const friendlyMention = `@${item.name}`;
     const setter = target === 'new' ? setNewComment : setReplyContent;
     const currentValue = target === 'new' ? newComment : replyContent;
     const textarea = target === 'new' ? textareaRef.current : null;
@@ -144,8 +213,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
     const newValue = before + friendlyMention + ' ' + after;
 
     setter(newValue);
-    // Remember the task name -> ID mapping for conversion on submit
-    setMentionsMap(prev => ({ ...prev, [task.name]: task.id }));
+    setMentionsMap(prev => ({ ...prev, [item.name]: { id: item.id, kind: item.kind } }));
     closeMention();
 
     // Refocus textarea
@@ -159,17 +227,22 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
   }
 
   function handleMentionKeyDown(e: React.KeyboardEvent, target: 'new' | 'reply') {
-    if (mentionQuery === null || filteredTasks.length === 0) return;
+    if (mentionQuery === null || totalMentionItems === 0) return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setMentionIndex(i => Math.min(i + 1, filteredTasks.length - 1));
+      setMentionIndex(i => Math.min(i + 1, totalMentionItems - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setMentionIndex(i => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
-      insertMention(filteredTasks[mentionIndex], target);
+      // Users come first, then tasks
+      if (mentionIndex < filteredUsers.length) {
+        insertUserMention(filteredUsers[mentionIndex], target);
+      } else {
+        insertTaskMention(filteredTasks[mentionIndex - filteredUsers.length], target);
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       closeMention();
@@ -279,8 +352,9 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
         author_email: user.email
       });
       
-      // Convert friendly @Task Name mentions to storage format before saving
+      // Convert friendly @Name mentions to storage format before saving
       const contentForStorage = convertMentionsForStorage(newComment.trim());
+      const mentionedUserIds = extractMentionedUserIds(contentForStorage);
 
       const comment = await projectCommentsApi.create({
         project_id: projectId,
@@ -289,14 +363,40 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
         author_name: profile?.full_name || user.email,
         author_email: user.email || '',
         content: contentForStorage,
-        visibility
+        visibility,
+        mentions: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       });
 
+      // Optimistically update state IMMEDIATELY so the real-time dedup guard works
       console.log('[ProjectComments] Comment created successfully:', comment);
       setComments(prev => [{ ...comment, replies: [] }, ...prev]);
       setNewComment('');
       setMentionsMap({});
       setVisibility('all');
+
+      // Send notifications to mentioned users (async, after state is updated)
+      const authorName = profile?.full_name || user.email || 'Someone';
+      for (const uid of mentionedUserIds) {
+        if (uid === user.id) continue;
+        try {
+          // Use the mentioned user's own company ID for cross-company notifications
+          const mentionedUser = mentionableUsers.find(u => u.id === uid);
+          const targetCompanyId = mentionedUser?.companyId || companyId;
+          const cleanMsg = cleanMentionMarkup(contentForStorage);
+          await notificationsApi.createNotification({
+            company_id: targetCompanyId,
+            user_id: uid,
+            type: 'mention',
+            title: 'You were mentioned',
+            message: `${authorName} mentioned you in a comment: "${cleanMsg.slice(0, 80)}${cleanMsg.length > 80 ? '...' : ''}"`,
+            reference_id: projectId,
+            reference_type: 'project',
+            is_read: false,
+          });
+        } catch (notifErr) {
+          console.error('[ProjectComments] Failed to send mention notification:', notifErr);
+        }
+      }
     } catch (err: any) {
       console.error('[ProjectComments] Failed to post comment:', err);
       alert(`Failed to post comment: ${err.message || 'Unknown error'}`);
@@ -311,6 +411,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
     try {
       setIsSubmitting(true);
       const replyContentForStorage = convertMentionsForStorage(replyContent.trim());
+      const mentionedUserIds = extractMentionedUserIds(replyContentForStorage);
 
       const reply = await projectCommentsApi.create({
         project_id: projectId,
@@ -320,9 +421,11 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
         author_email: user.email,
         content: replyContentForStorage,
         parent_id: parentId,
-        visibility: 'all'
+        visibility: 'all',
+        mentions: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       });
 
+      // Optimistically update state IMMEDIATELY so the real-time dedup guard works
       setComments(prev => prev.map(c =>
         c.id === parentId
           ? { ...c, replies: [...(c.replies || []), reply] }
@@ -331,6 +434,30 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
       setReplyingTo(null);
       setReplyContent('');
       setMentionsMap({});
+
+      // Send notifications to mentioned users (async, after state is updated)
+      const authorName = profile?.full_name || user.email || 'Someone';
+      for (const uid of mentionedUserIds) {
+        if (uid === user.id) continue;
+        try {
+          // Use the mentioned user's own company ID for cross-company notifications
+          const mentionedUser = mentionableUsers.find(u => u.id === uid);
+          const targetCompanyId = mentionedUser?.companyId || companyId;
+          const cleanMsg = cleanMentionMarkup(replyContentForStorage);
+          await notificationsApi.createNotification({
+            company_id: targetCompanyId,
+            user_id: uid,
+            type: 'mention',
+            title: 'You were mentioned',
+            message: `${authorName} mentioned you in a reply: "${cleanMsg.slice(0, 80)}${cleanMsg.length > 80 ? '...' : ''}"`,
+            reference_id: projectId,
+            reference_type: 'project',
+            is_read: false,
+          });
+        } catch (notifErr) {
+          console.error('[ProjectComments] Failed to send mention notification:', notifErr);
+        }
+      }
     } catch (err) {
       console.error('Failed to post reply:', err);
     } finally {
@@ -538,7 +665,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
                   handleMentionInput(e.target.value, e.target as HTMLTextAreaElement, 'new');
                 }}
                 onKeyDown={(e) => handleMentionKeyDown(e, 'new')}
-                placeholder="Add a note or comment... (type @ to mention a task)"
+                placeholder="Add a note or comment... (type @ to mention someone or a task)"
                 className="w-full bg-transparent border-0 border-b border-neutral-200 px-0 py-2 text-sm focus:ring-0 focus:border-[#476E66] placeholder:text-neutral-400 resize-none transition-colors"
                 rows={1}
                 style={{ minHeight: '2.5rem' }}
@@ -551,32 +678,64 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
               />
 
               {/* @mention dropdown */}
-              {mentionQuery !== null && mentionTarget === 'new' && filteredTasks.length > 0 && (
+              {mentionQuery !== null && mentionTarget === 'new' && totalMentionItems > 0 && (
                 <div
                   ref={mentionDropdownRef}
-                  className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-48 overflow-y-auto"
+                  className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-56 overflow-y-auto"
                 >
-                  <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
-                    <AtSign className="w-3 h-3" /> Tasks
-                  </div>
-                  {filteredTasks.map((task, i) => (
-                    <button
-                      key={task.id}
-                      type="button"
-                      onMouseDown={(e) => { e.preventDefault(); insertMention(task, 'new'); }}
-                      className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
-                    >
-                      <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
-                      <span className="truncate">{task.name}</span>
-                      {task.status && (
-                        <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                          task.status === 'completed' ? 'bg-green-100 text-green-600' :
-                          task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                          'bg-neutral-100 text-neutral-500'
-                        }`}>{task.status.replace('_', ' ')}</span>
-                      )}
-                    </button>
-                  ))}
+                  {filteredUsers.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                        <UserCircle className="w-3 h-3" /> People
+                      </div>
+                      {filteredUsers.map((u, i) => {
+                        const isCollab = u.type === 'collaborator';
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); insertUserMention(u, 'new'); }}
+                            className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? (isCollab ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700') : 'hover:bg-neutral-50 text-neutral-700'}`}
+                          >
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isCollab ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                              {u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </div>
+                            <span className="truncate">{u.name}</span>
+                            {isCollab && <span className="text-[8px] px-1 py-0.5 bg-amber-100 text-amber-600 rounded font-medium flex-shrink-0">External</span>}
+                            <span className="ml-auto text-[9px] text-neutral-400 truncate max-w-[120px]">{u.email}</span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                  {filteredTasks.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                        <AtSign className="w-3 h-3" /> Tasks
+                      </div>
+                      {filteredTasks.map((task, i) => {
+                        const globalIdx = filteredUsers.length + i;
+                        return (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); insertTaskMention(task, 'new'); }}
+                            className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${globalIdx === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
+                          >
+                            <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+                            <span className="truncate">{task.name}</span>
+                            {task.status && (
+                              <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                                task.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                'bg-neutral-100 text-neutral-500'
+                              }`}>{task.status.replace('_', ' ')}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -685,7 +844,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
                   </div>
                 ) : (
                   <div className="mt-1 text-sm text-neutral-600 leading-relaxed break-words whitespace-pre-wrap">
-                    {renderCommentContent(comment.content)}
+                    {renderCommentContent(comment.content, user?.id)}
                   </div>
                 )}
 
@@ -718,36 +877,68 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
                         }}
                         onKeyDown={(e) => handleMentionKeyDown(e, 'reply')}
                         onBlur={() => setTimeout(closeMention, 200)}
-                        placeholder="Write a reply... (type @ to mention a task)"
+                        placeholder="Write a reply... (type @ to mention someone or a task)"
                         className="w-full bg-neutral-50 border-0 rounded-lg p-2 text-sm focus:ring-1 focus:ring-[#476E66] resize-none"
                         rows={1}
                         autoFocus
                       />
 
                       {/* @mention dropdown for replies */}
-                      {mentionQuery !== null && mentionTarget === 'reply' && filteredTasks.length > 0 && (
-                        <div className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-48 overflow-y-auto">
-                          <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
-                            <AtSign className="w-3 h-3" /> Tasks
-                          </div>
-                          {filteredTasks.map((task, i) => (
-                            <button
-                              key={task.id}
-                              type="button"
-                              onMouseDown={(e) => { e.preventDefault(); insertMention(task, 'reply'); }}
-                              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
-                            >
-                              <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
-                              <span className="truncate">{task.name}</span>
-                              {task.status && (
-                                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                                  task.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                  task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
-                                  'bg-neutral-100 text-neutral-500'
-                                }`}>{task.status.replace('_', ' ')}</span>
-                              )}
-                            </button>
-                          ))}
+                      {mentionQuery !== null && mentionTarget === 'reply' && totalMentionItems > 0 && (
+                        <div className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-56 overflow-y-auto">
+                          {filteredUsers.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                                <UserCircle className="w-3 h-3" /> People
+                              </div>
+                              {filteredUsers.map((u, i) => {
+                                const isCollab = u.type === 'collaborator';
+                                return (
+                                  <button
+                                    key={u.id}
+                                    type="button"
+                                    onMouseDown={(e) => { e.preventDefault(); insertUserMention(u, 'reply'); }}
+                                    className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? (isCollab ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700') : 'hover:bg-neutral-50 text-neutral-700'}`}
+                                  >
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isCollab ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                      {u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                                    </div>
+                                    <span className="truncate">{u.name}</span>
+                                    {isCollab && <span className="text-[8px] px-1 py-0.5 bg-amber-100 text-amber-600 rounded font-medium flex-shrink-0">External</span>}
+                                    <span className="ml-auto text-[9px] text-neutral-400 truncate max-w-[120px]">{u.email}</span>
+                                  </button>
+                                );
+                              })}
+                            </>
+                          )}
+                          {filteredTasks.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                                <AtSign className="w-3 h-3" /> Tasks
+                              </div>
+                              {filteredTasks.map((task, i) => {
+                                const globalIdx = filteredUsers.length + i;
+                                return (
+                                  <button
+                                    key={task.id}
+                                    type="button"
+                                    onMouseDown={(e) => { e.preventDefault(); insertTaskMention(task, 'reply'); }}
+                                    className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${globalIdx === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
+                                  >
+                                    <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+                                    <span className="truncate">{task.name}</span>
+                                    {task.status && (
+                                      <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                                        task.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                        task.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                        'bg-neutral-100 text-neutral-500'
+                                      }`}>{task.status.replace('_', ' ')}</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -812,7 +1003,7 @@ export function ProjectComments({ projectId, companyId, tasks = [] }: ProjectCom
                           </div>
                         ) : (
                           <div className="text-sm text-neutral-600 pl-7 whitespace-pre-wrap">
-                            {renderCommentContent(reply.content)}
+                            {renderCommentContent(reply.content, user?.id)}
                           </div>
                         )}
                       </div>

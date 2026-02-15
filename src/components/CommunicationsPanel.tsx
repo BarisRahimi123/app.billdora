@@ -4,11 +4,13 @@ import {
   Filter, Image as ImageIcon, FileText, Check, Reply, Eye, EyeOff,
   ChevronDown, AlertCircle, ListTodo, Download, Bookmark, BookmarkCheck,
   CheckCircle2, Circle, ExternalLink, Calendar, Bell, Flag,
-  AlertTriangle, ArrowUp, Minus, ArrowDown
+  AlertTriangle, ArrowUp, Minus, ArrowDown, UserCircle, AtSign
 } from 'lucide-react';
-import { ProjectComment, projectCommentsApi, commentTasksApi, CommentTask, TaskPriority, api, Project, Task } from '../lib/api';
+import { ProjectComment, projectCommentsApi, projectCollaboratorsApi, commentTasksApi, CommentTask, TaskPriority, api, Project, Task, notificationsApi } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionsContext';
+import { MentionableUser, extractMentionedUserIds, convertMentionsForStorage as sharedConvertMentions, detectMentionQuery, cleanMentionMarkup } from '../lib/mentions';
 
 // ─── Priority Config ─────────────────────────────────────
 const PRIORITY_CONFIG: Record<TaskPriority, { label: string; color: string; bg: string; icon: typeof Flag }> = {
@@ -86,20 +88,33 @@ function isImageType(type: string): boolean {
   return type.startsWith('image/');
 }
 
-// Task mention rendering
-const TASK_MENTION_REGEX = /@\[task:([^:]+):([^\]]+)\]/g;
-function renderContent(content: string) {
+// Mention rendering (task + user) — subtle inline style, no heavy backgrounds
+// currentUserId: if provided, replaces your own mention with "@you"
+const ALL_MENTION_REGEX = /@\[(task|user):([^:]+):([^\]]+)\]/g;
+function renderContent(content: string, currentUserId?: string) {
   const parts: (string | JSX.Element)[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  const regex = new RegExp(TASK_MENTION_REGEX.source, 'g');
+  const regex = new RegExp(ALL_MENTION_REGEX.source, 'g');
   while ((match = regex.exec(content)) !== null) {
     if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index));
-    parts.push(
-      <span key={`task-${match.index}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#476E66]/10 text-[#476E66] rounded text-xs font-medium">
-        <ListTodo className="w-3 h-3" />{match[2]}
-      </span>
-    );
+    const kind = match[1];
+    const mentionId = match[2];
+    const name = match[3];
+    if (kind === 'task') {
+      parts.push(
+        <span key={`task-${match.index}`} className="inline-flex items-center gap-0.5 text-[#476E66] font-light text-[inherit]">
+          <ListTodo className="w-3 h-3 opacity-60" />@{name}
+        </span>
+      );
+    } else {
+      const displayName = currentUserId && mentionId === currentUserId ? 'you' : name;
+      parts.push(
+        <span key={`user-${match.index}`} className="font-light text-[inherit] opacity-80">
+          @{displayName}
+        </span>
+      );
+    }
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < content.length) parts.push(content.slice(lastIndex));
@@ -157,6 +172,7 @@ function AttachmentItem({ att }: { att: { name: string; url: string; type: strin
 // ─── Main Component ──────────────────────────────────────
 export function CommunicationsPanel({ isOpen, onClose, initialTab }: CommunicationsPanelProps) {
   const { user, profile } = useAuth();
+  const { canViewAllProjects } = usePermissions();
   const companyId = profile?.company_id;
 
   // Data
@@ -203,6 +219,15 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
   // Project tasks for selected project
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
 
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionAnchorPos = useRef<number>(0);
+  const [mentionsMap, setMentionsMap] = useState<Record<string, { id: string; kind: 'user' | 'task' }>>({});
+  const [mentionableUsers, setMentionableUsers] = useState<MentionableUser[]>([]);
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
+  const composeTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -229,17 +254,38 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
         commentTasksApi.getAll().catch(() => [] as CommentTask[]),
       ]);
 
+      // For staff users, restrict to only assigned projects
+      let filteredComments = comments;
+      let filteredProjs = projs;
+      if (!canViewAllProjects && user?.id) {
+        const [staffProjects, assignedTasks] = await Promise.all([
+          api.getStaffProjects(user.id).catch(() => []),
+          supabase
+            .from('tasks')
+            .select('project_id')
+            .eq('assigned_to', user.id)
+            .then(({ data }) => data || [])
+            .catch(() => []),
+        ]);
+        const assignedProjectIds = new Set([
+          ...(staffProjects || []).map((sp: any) => sp.project_id),
+          ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+        ]);
+        filteredProjs = projs.filter(p => assignedProjectIds.has(p.id));
+        filteredComments = comments.filter(c => assignedProjectIds.has(c.project_id));
+      }
+
       // Identify project IDs referenced in comments but missing from own-company projects
-      const ownProjectIds = new Set(projs.map(p => p.id));
-      const missingIds = [...new Set(comments.map(c => c.project_id))].filter(id => !ownProjectIds.has(id));
+      const ownProjectIds = new Set(filteredProjs.map(p => p.id));
+      const missingIds = [...new Set(filteredComments.map(c => c.project_id))].filter(id => !ownProjectIds.has(id));
 
       // Fetch missing project names (e.g. collaborator projects from other companies)
-      let allProjs: Project[] = [...projs];
+      let allProjs: Project[] = [...filteredProjs];
       if (missingIds.length > 0) {
         // Try batch fetch first
         const extraProjs = await api.getProjectsByIds(missingIds);
         const fetchedIds = new Set(extraProjs.map(p => p.id));
-        allProjs = [...projs, ...extraProjs.map(ep => ({ ...ep, company_id: '' }) as Project)];
+        allProjs = [...filteredProjs, ...extraProjs.map(ep => ({ ...ep, company_id: '' }) as Project)];
 
         // For any still-missing projects, try fetching individually (different RLS path)
         const stillMissing = missingIds.filter(id => !fetchedIds.has(id));
@@ -255,7 +301,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
         }
       }
 
-      setAllComments(comments);
+      setAllComments(filteredComments);
       setProjects(allProjs);
       setCommentTasks(tasks);
     } catch (err: any) {
@@ -263,7 +309,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
       setLoadError(err?.message || 'Failed to load communications');
     }
     setLoading(false);
-  }, [companyId]);
+  }, [companyId, canViewAllProjects, user?.id]);
 
   useEffect(() => {
     if (isOpen) loadData();
@@ -295,6 +341,134 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
     if (!selectedProjectId || !companyId) { setProjectTasks([]); return; }
     api.getTasks(selectedProjectId).then(setProjectTasks).catch(() => setProjectTasks([]));
   }, [selectedProjectId, companyId]);
+
+  // Load mentionable users (team members + project collaborators)
+  useEffect(() => {
+    if (!companyId) return;
+    (async () => {
+      try {
+        const [profiles, collabs] = await Promise.all([
+          api.getCompanyProfiles(companyId),
+          selectedProjectId
+            ? projectCollaboratorsApi.getByProject(selectedProjectId)
+            : Promise.resolve([]),
+        ]);
+
+        // Team members
+        const teamUsers: MentionableUser[] = (profiles || []).map((p: { id: string; full_name?: string; email?: string }) => ({
+          id: p.id,
+          name: p.full_name || p.email || 'Unknown',
+          email: p.email || '',
+          type: 'team' as const,
+        }));
+
+        // Accepted collaborators with a user ID
+        const collabUsers: MentionableUser[] = (collabs || [])
+          .filter(c => c.status === 'accepted' && c.invited_user_id)
+          .map(c => ({
+            id: c.invited_user_id!,
+            name: c.invited_user_name || c.invited_email || 'Collaborator',
+            email: c.invited_email || '',
+            type: 'collaborator' as const,
+            companyId: c.invited_company_id || undefined,
+          }));
+
+        // Deduplicate: team members take priority
+        const teamIds = new Set(teamUsers.map(u => u.id));
+        const uniqueCollabs = collabUsers.filter(c => !teamIds.has(c.id));
+        setMentionableUsers([...teamUsers, ...uniqueCollabs]);
+      } catch (err) {
+        console.error('[CommsPanel] Failed to load mentionable users:', err);
+      }
+    })();
+  }, [companyId, selectedProjectId]);
+
+  // ─── Mention helpers ──────────────────────────────────────
+  const filteredMentionUsers = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionableUsers
+      .filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+      .slice(0, 5);
+  }, [mentionableUsers, mentionQuery]);
+
+  const filteredMentionTasks = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return projectTasks.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
+  }, [projectTasks, mentionQuery]);
+
+  const totalMentionItems = filteredMentionUsers.length + filteredMentionTasks.length;
+
+  const closeMention = useCallback(() => {
+    setMentionQuery(null);
+    setMentionIndex(0);
+  }, []);
+
+  function handleMentionInput(value: string, textarea: HTMLTextAreaElement | null) {
+    if (!textarea) return;
+    const result = detectMentionQuery(value, textarea.selectionStart);
+    if (result) {
+      setMentionQuery(result.query);
+      setMentionIndex(0);
+      mentionAnchorPos.current = result.anchorPos;
+    } else {
+      closeMention();
+    }
+  }
+
+  function insertMentionItem(item: { id: string; name: string; kind: 'user' | 'task' }) {
+    const friendlyMention = `@${item.name}`;
+    const currentValue = newMessage;
+    const textarea = composeTextareaRef.current;
+
+    const before = currentValue.slice(0, mentionAnchorPos.current);
+    const cursorPos = textarea?.selectionStart || currentValue.length;
+    const after = currentValue.slice(cursorPos);
+    const newValue = before + friendlyMention + ' ' + after;
+
+    setNewMessage(newValue);
+    setMentionsMap(prev => ({ ...prev, [item.name]: { id: item.id, kind: item.kind } }));
+    closeMention();
+
+    setTimeout(() => {
+      if (textarea) {
+        const newCursorPos = before.length + friendlyMention.length + 1;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }
+    }, 0);
+  }
+
+  function handleMentionKeyDown(e: React.KeyboardEvent) {
+    if (mentionQuery === null || totalMentionItems === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex(i => Math.min(i + 1, totalMentionItems - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (totalMentionItems > 0) {
+        e.preventDefault();
+        if (mentionIndex < filteredMentionUsers.length) {
+          const u = filteredMentionUsers[mentionIndex];
+          insertMentionItem({ id: u.id, name: u.name, kind: 'user' });
+        } else {
+          const t = filteredMentionTasks[mentionIndex - filteredMentionUsers.length];
+          insertMentionItem({ id: t.id, name: t.name, kind: 'task' });
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMention();
+    }
+  }
+
+  function convertMentionsForStorage(text: string): string {
+    return sharedConvertMentions(text, mentionsMap);
+  }
 
   // ─── Group comments by project ─────────────────────────
   const projectGroups = useMemo((): ProjectGroup[] => {
@@ -394,12 +568,16 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
 
   // ─── Send Message ──────────────────────────────────────
   const handleSend = async (parentId?: string) => {
-    const content = parentId ? replyContent.trim() : newMessage.trim();
-    if (!content && pendingFiles.length === 0) return;
+    const rawContent = parentId ? replyContent.trim() : newMessage.trim();
+    if (!rawContent && pendingFiles.length === 0) return;
     if (!user?.id || !companyId || !selectedProjectId) return;
 
     setIsSubmitting(true);
     try {
+      // Convert mentions to storage format
+      const contentForStorage = convertMentionsForStorage(rawContent);
+      const mentionedUserIds = extractMentionedUserIds(contentForStorage);
+
       // Upload pending files
       let attachments: Array<{ name: string; url: string; type: string; size: number }> = [];
       if (pendingFiles.length > 0 && !parentId) {
@@ -416,14 +594,40 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
         author_id: user.id,
         author_name: profile?.full_name || profile?.email || undefined,
         author_email: profile?.email || undefined,
-        content: content || (attachments.length > 0 ? `Shared ${attachments.length} file${attachments.length > 1 ? 's' : ''}` : ''),
+        content: contentForStorage || (attachments.length > 0 ? `Shared ${attachments.length} file${attachments.length > 1 ? 's' : ''}` : ''),
         visibility,
         parent_id: parentId,
         attachments: attachments.length > 0 ? attachments : undefined,
+        mentions: mentionedUserIds.length > 0 ? mentionedUserIds : undefined,
       });
 
+      // Send notifications to mentioned users
+      const authorName = profile?.full_name || profile?.email || 'Someone';
+      const projName = selectedGroup?.projectName || 'a project';
+      for (const uid of mentionedUserIds) {
+        if (uid === user.id) continue;
+        try {
+          // Use the mentioned user's own company ID for cross-company notifications
+          const mentionedUser = mentionableUsers.find(u => u.id === uid);
+          const targetCompanyId = mentionedUser?.companyId || companyId;
+          const cleanMsg = cleanMentionMarkup(contentForStorage);
+          await notificationsApi.createNotification({
+            company_id: targetCompanyId,
+            user_id: uid,
+            type: 'mention',
+            title: 'You were mentioned',
+            message: `${authorName} mentioned you in ${projName}: "${cleanMsg.slice(0, 80)}${cleanMsg.length > 80 ? '...' : ''}"`,
+            reference_id: selectedProjectId,
+            reference_type: 'project',
+            is_read: false,
+          });
+        } catch (notifErr) {
+          console.error('[CommsPanel] Failed to send mention notification:', notifErr);
+        }
+      }
+
       if (parentId) { setReplyContent(''); setReplyingTo(null); }
-      else { setNewMessage(''); setPendingFiles([]); }
+      else { setNewMessage(''); setPendingFiles([]); setMentionsMap({}); }
 
       // Reload
       const comments = await projectCommentsApi.getAllByCompany(companyId);
@@ -795,109 +999,119 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                   <p className="text-xs text-neutral-400 mt-1">Start the conversation below</p>
                 </div>
               ) : (
-                selectedThread.map(comment => (
-                  <div key={comment.id}>
-                    {/* Main comment */}
-                    <div className={`group ${comment.visibility === 'internal' ? 'border-l-2 border-amber-300 pl-3' : ''}`}>
-                      <div className="flex gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-[#476E66]/10 text-[#476E66] flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                          {getInitials(comment.author_name, comment.author_email)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold text-neutral-900">{comment.author_name || comment.author_email || 'Unknown'}</span>
-                            <span className="text-[10px] text-neutral-400">{timeAgo(comment.created_at || '')}</span>
-                            {comment.visibility === 'internal' && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded uppercase">Internal</span>}
-                            {comment.is_resolved && <Check className="w-3 h-3 text-emerald-500" />}
-                          </div>
-                          <div className="text-sm text-neutral-700 leading-relaxed whitespace-pre-wrap">{renderContent(comment.content)}</div>
-
-                          {/* Attachments */}
-                          {comment.attachments && comment.attachments.length > 0 && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {comment.attachments.map((att, i) => <AttachmentItem key={i} att={att} />)}
+                selectedThread.map(comment => {
+                  const isMine = comment.author_id === user?.id;
+                  return (
+                    <div key={comment.id}>
+                      {/* Main comment */}
+                      <div className={`group ${comment.visibility === 'internal' ? 'border-l-2 border-amber-300 pl-3' : ''} ${isMine ? 'flex flex-col items-end' : ''}`}>
+                        <div className={`${isMine ? 'flex flex-col items-end' : ''}`} style={{ maxWidth: '88%' }}>
+                          <div className="flex-1 min-w-0">
+                            {/* Name & time */}
+                            <div className={`flex items-center gap-2 mb-1 ${isMine ? 'justify-end' : ''}`}>
+                              <span className={`text-[11px] ${isMine ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-800'}`}>
+                                {isMine ? 'You' : (comment.author_name || comment.author_email || 'Unknown')}
+                              </span>
+                              <span className="text-[10px] font-light text-neutral-400">{timeAgo(comment.created_at || '')}</span>
+                              {comment.visibility === 'internal' && <span className="text-[8px] font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded uppercase">Internal</span>}
+                              {comment.is_resolved && <Check className="w-3 h-3 text-emerald-500" />}
                             </div>
-                          )}
+                            {/* Message */}
+                            <div className={`text-[13px] leading-relaxed whitespace-pre-wrap ${isMine ? 'font-light text-neutral-600' : 'text-neutral-800'}`}>
+                              {renderContent(comment.content, user?.id)}
+                            </div>
 
-                          {/* Actions: Reply + Pin as To-Do */}
-                          <div className="mt-1 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)} className="text-[10px] text-neutral-400 hover:text-[#476E66] flex items-center gap-1">
-                              <Reply className="w-3 h-3" /> Reply
-                            </button>
-                            {pinnedCommentMap.has(comment.id) ? (
-                              pinnedCommentMap.get(comment.id)!.is_completed ? (
-                                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
-                                  <CheckCircle2 className="w-3 h-3" /> Done
-                                  <button onClick={() => handleUnpinTask(comment.id)} className="ml-1 text-neutral-400 hover:text-red-500" title="Remove from To-Do">
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </span>
-                              ) : (
-                                <button onClick={() => handleUnpinTask(comment.id)} className="text-[10px] text-[#476E66] flex items-center gap-1 font-medium" title="Remove from To-Do">
-                                  <BookmarkCheck className="w-3 h-3" /> Pinned
-                                </button>
-                              )
-                            ) : (
-                              <div className="flex items-center">
-                                <button onClick={() => handleQuickPin(comment)} className="text-[10px] text-neutral-400 hover:text-amber-600 flex items-center gap-1" title="Quick pin as To-Do">
-                                  <Bookmark className="w-3 h-3" /> To-Do
-                                </button>
-                                <button onClick={() => openPinPopover(comment)} className="text-[10px] text-neutral-400 hover:text-amber-600 ml-0.5 p-0.5 rounded hover:bg-amber-50" title="Pin with options">
-                                  <ChevronDown className="w-3 h-3" />
-                                </button>
+                            {/* Attachments */}
+                            {comment.attachments && comment.attachments.length > 0 && (
+                              <div className={`flex flex-wrap gap-2 mt-1.5 ${isMine ? 'justify-end' : ''}`}>
+                                {comment.attachments.map((att, i) => <AttachmentItem key={i} att={att} />)}
                               </div>
                             )}
+
+                            {/* Actions: Reply + Pin as To-Do */}
+                            <div className={`mt-1 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity ${isMine ? 'justify-end' : ''}`}>
+                              <button onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)} className="text-[10px] font-light text-neutral-400 hover:text-[#476E66] flex items-center gap-1">
+                                <Reply className="w-3 h-3" /> Reply
+                              </button>
+                              {pinnedCommentMap.has(comment.id) ? (
+                                pinnedCommentMap.get(comment.id)!.is_completed ? (
+                                  <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
+                                    <CheckCircle2 className="w-3 h-3" /> Done
+                                    <button onClick={() => handleUnpinTask(comment.id)} className="ml-1 text-neutral-400 hover:text-red-500" title="Remove from To-Do">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </span>
+                                ) : (
+                                  <button onClick={() => handleUnpinTask(comment.id)} className="text-[10px] text-[#476E66] flex items-center gap-1 font-medium" title="Remove from To-Do">
+                                    <BookmarkCheck className="w-3 h-3" /> Pinned
+                                  </button>
+                                )
+                              ) : (
+                                <div className="flex items-center">
+                                  <button onClick={() => handleQuickPin(comment)} className="text-[10px] font-light text-neutral-400 hover:text-amber-600 flex items-center gap-1" title="Quick pin as To-Do">
+                                    <Bookmark className="w-3 h-3" /> To-Do
+                                  </button>
+                                  <button onClick={() => openPinPopover(comment)} className="text-[10px] text-neutral-400 hover:text-amber-600 ml-0.5 p-0.5 rounded hover:bg-amber-50" title="Pin with options">
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Replies */}
-                    {comment.replies && comment.replies.length > 0 && (
-                      <div className="ml-9 mt-2 space-y-2 border-l border-neutral-200 pl-3">
-                        {comment.replies.map(reply => (
-                          <div key={reply.id} className={`${reply.visibility === 'internal' ? 'border-l-2 border-amber-300 pl-2' : ''}`}>
-                            <div className="flex gap-2">
-                              <div className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-500 flex items-center justify-center text-[8px] font-bold shrink-0 mt-0.5">
-                                {getInitials(reply.author_name, reply.author_email)}
-                              </div>
+                      {/* Replies */}
+                      {comment.replies && comment.replies.length > 0 && (
+                        <div className="mt-2 space-y-2 pl-4 border-l border-neutral-100 ml-3">
+                          {comment.replies.map(reply => {
+                            const isReplyMine = reply.author_id === user?.id;
+                            return (
+                              <div key={reply.id} className={`${reply.visibility === 'internal' ? 'border-l-2 border-amber-300 pl-2' : ''} ${isReplyMine ? 'flex flex-col items-end' : ''}`}>
+                            <div className={`${isReplyMine ? 'flex flex-col items-end' : ''}`} style={{ maxWidth: '82%' }}>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5">
-                                  <span className="text-[10px] font-semibold text-neutral-800">{reply.author_name || 'Unknown'}</span>
-                                  <span className="text-[9px] text-neutral-400">{timeAgo(reply.created_at || '')}</span>
+                                <div className={`flex items-center gap-1.5 mb-0.5 ${isReplyMine ? 'justify-end' : ''}`}>
+                                  <span className={`text-[10px] ${isReplyMine ? 'font-normal text-neutral-400' : 'font-semibold text-neutral-700'}`}>
+                                    {isReplyMine ? 'You' : (reply.author_name || 'Unknown')}
+                                  </span>
+                                  <span className="text-[9px] font-light text-neutral-400">{timeAgo(reply.created_at || '')}</span>
                                 </div>
-                                <div className="text-xs text-neutral-600 whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                                {reply.attachments && reply.attachments.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                    {reply.attachments.map((att, i) => <AttachmentItem key={i} att={att} />)}
+                                <div className={`text-xs whitespace-pre-wrap leading-relaxed ${isReplyMine ? 'font-light text-neutral-500' : 'text-neutral-700'}`}>
+                                  {renderContent(reply.content, user?.id)}
+                                </div>
+                                    {reply.attachments && reply.attachments.length > 0 && (
+                                      <div className={`flex flex-wrap gap-1.5 mt-1.5 ${isReplyMine ? 'justify-end' : ''}`}>
+                                        {reply.attachments.map((att, i) => <AttachmentItem key={i} att={att} />)}
+                                      </div>
+                                    )}
                                   </div>
-                                )}
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </div>
+                      )}
 
-                    {/* Reply input */}
-                    {replyingTo === comment.id && (
-                      <div className="ml-9 mt-2 flex gap-2">
-                        <input
-                          type="text"
-                          value={replyContent}
-                          onChange={e => setReplyContent(e.target.value)}
-                          placeholder="Write a reply..."
-                          className="flex-1 px-3 py-1.5 text-xs border border-neutral-200 rounded-lg outline-none focus:ring-1 focus:ring-[#476E66]/30"
-                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(comment.id); } }}
-                          autoFocus
-                        />
-                        <button onClick={() => handleSend(comment.id)} disabled={!replyContent.trim() || isSubmitting} className="px-2.5 py-1.5 bg-[#476E66] text-white rounded-lg disabled:opacity-40">
-                          <Send className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))
+                      {/* Reply input */}
+                      {replyingTo === comment.id && (
+                        <div className="mt-2 flex gap-2 ml-3 pl-4">
+                          <input
+                            type="text"
+                            value={replyContent}
+                            onChange={e => setReplyContent(e.target.value)}
+                            placeholder="Write a reply..."
+                            className="flex-1 px-3 py-1.5 text-xs border border-neutral-200 rounded-lg outline-none focus:ring-1 focus:ring-[#476E66]/30"
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(comment.id); } }}
+                            autoFocus
+                          />
+                          <button onClick={() => handleSend(comment.id)} disabled={!replyContent.trim() || isSubmitting} className="px-2.5 py-1.5 bg-[#476E66] text-white rounded-lg disabled:opacity-40">
+                            <Send className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
               <div ref={threadEndRef} />
             </div>
@@ -964,7 +1178,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                                 <div className="flex-1 min-w-0">
                                   {task.comment ? (
                                     <div className="text-sm text-neutral-800 font-medium leading-relaxed line-clamp-2">
-                                      {renderContent(task.comment.content)}
+                                      {renderContent(task.comment.content, user?.id)}
                                     </div>
                                   ) : (
                                     <div className="text-sm text-neutral-400 italic">Message removed</div>
@@ -1052,7 +1266,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
 
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm text-neutral-500 line-through decoration-neutral-300">
-                                    {renderContent(task.comment?.content || '')}
+                                    {renderContent(task.comment?.content || '', user?.id)}
                                   </div>
                                 </div>
 
@@ -1147,7 +1361,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                           {/* Body: Message Content (Primary Focus) */}
                           <div className="pl-7 mb-2">
                             <div className={`text-sm font-medium leading-snug line-clamp-3 ${isMe ? 'text-neutral-500 font-normal' : 'text-neutral-900'}`}>
-                              {renderContent(lastComment.content)}
+                              {renderContent(lastComment.content, user?.id)}
                             </div>
 
                             {/* Attachments preview */}
@@ -1159,10 +1373,10 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                             )}
                           </div>
 
-                          {/* Footer: Project (Tertiary - Small & Non-important) */}
+                          {/* Footer: Project */}
                           <div className="pl-7 flex items-center justify-between min-h-[20px]">
-                            <div className="flex items-center gap-2 overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
-                              <span className="text-[9px] text-neutral-400 font-medium bg-neutral-100 px-1.5 py-0.5 rounded truncate max-w-[200px] flex items-center gap-1 uppercase tracking-wide">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <span className="text-[10px] text-neutral-500 font-medium bg-neutral-100 px-1.5 py-0.5 rounded truncate max-w-[220px] flex items-center gap-1">
                                 {group.projectName} {group.projectNumber && ` #${group.projectNumber}`}
                               </span>
                             </div>
@@ -1283,15 +1497,87 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
             <div className="flex items-end gap-2">
               <div className="flex-1 relative">
                 <textarea
+                  ref={composeTextareaRef}
                   value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
+                  onChange={e => {
+                    setNewMessage(e.target.value);
+                    handleMentionInput(e.target.value, e.target as HTMLTextAreaElement);
+                  }}
+                  placeholder="Type a message... (@ to mention someone)"
                   rows={1}
                   className="w-full px-3 py-2.5 text-sm border border-neutral-200 rounded-xl outline-none focus:ring-1 focus:ring-[#476E66]/30 focus:border-[#476E66] resize-none"
                   style={{ minHeight: '40px', maxHeight: '120px' }}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                  onKeyDown={e => {
+                    if (mentionQuery !== null && totalMentionItems > 0) {
+                      handleMentionKeyDown(e);
+                      if (['ArrowDown', 'ArrowUp', 'Escape'].includes(e.key) || ((e.key === 'Enter' || e.key === 'Tab') && totalMentionItems > 0)) return;
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+                  }}
+                  onBlur={() => setTimeout(closeMention, 200)}
                   onInput={e => { const el = e.target as HTMLTextAreaElement; el.style.height = '40px'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }}
                 />
+
+                {/* @mention dropdown */}
+                {mentionQuery !== null && totalMentionItems > 0 && (
+                  <div
+                    ref={mentionDropdownRef}
+                    className="absolute left-0 bottom-full mb-1 w-full max-w-sm bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 max-h-56 overflow-y-auto"
+                  >
+                    {filteredMentionUsers.length > 0 && (
+                      <>
+                        <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                          <UserCircle className="w-3 h-3" /> People
+                        </div>
+                        {filteredMentionUsers.map((u, i) => {
+                          const isCollab = u.type === 'collaborator';
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); insertMentionItem({ id: u.id, name: u.name, kind: 'user' }); }}
+                              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${i === mentionIndex ? (isCollab ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700') : 'hover:bg-neutral-50 text-neutral-700'}`}
+                            >
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isCollab ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                {u.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </div>
+                              <span className="truncate">{u.name}</span>
+                              {isCollab && <span className="text-[8px] px-1 py-0.5 bg-amber-100 text-amber-600 rounded font-medium flex-shrink-0">External</span>}
+                              <span className="ml-auto text-[9px] text-neutral-400 truncate max-w-[120px]">{u.email}</span>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                    {filteredMentionTasks.length > 0 && (
+                      <>
+                        <div className="px-2 py-1 text-[10px] font-medium text-neutral-400 uppercase tracking-wide flex items-center gap-1">
+                          <AtSign className="w-3 h-3" /> Tasks
+                        </div>
+                        {filteredMentionTasks.map((task, i) => {
+                          const globalIdx = filteredMentionUsers.length + i;
+                          return (
+                            <button
+                              key={task.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); insertMentionItem({ id: task.id, name: task.name, kind: 'task' }); }}
+                              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${globalIdx === mentionIndex ? 'bg-[#476E66]/10 text-[#476E66]' : 'hover:bg-neutral-50 text-neutral-700'}`}
+                            >
+                              <ListTodo className="w-3.5 h-3.5 flex-shrink-0 text-neutral-400" />
+                              <span className="truncate">{task.name}</span>
+                              {task.status && (
+                                <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${task.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                  sk.status === 'in_progress' ? 'bg-blue-100 text-blue-600' :
+                                    'bneutral-100 text-neutral-500'
+                                  }`}>{task.status.replace('_', ' ')}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" className="hidden" onChange={handleFileSelect} />
               <button onClick={() => fileInputRef.current?.click()} className="p-2.5 text-neutral-400 hover:text-[#476E66] hover:bg-neutral-100 rounded-xl transition-colors" title="Attach file">
@@ -1309,7 +1595,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
               <button onClick={() => setVisibility(visibility === 'all' ? 'internal' : 'all')} className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600">
                 {visibility === 'internal' ? <><EyeOff className="w-3 h-3 text-amber-500" /> <span className="text-amber-600 font-medium">Internal note</span></> : <><Eye className="w-3 h-3" /> Visible to all</>}
               </button>
-              <span className="text-[10px] text-neutral-300">Shift+Enter for new line</span>
+              <span className="text-[10px] text-neutral-300">Shift+Enter for new line &middot; @ to mention</span>
             </div>
           </div>
         )}
@@ -1351,8 +1637,8 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
                         key={key}
                         onClick={() => setPinPriority(key)}
                         className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border transition-all ${isActive
-                            ? 'border-[#476E66] bg-[#476E66]/5 text-[#476E66] ring-1 ring-[#476E66]'
-                            : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50'
+                          ? 'border-[#476E66] bg-[#476E66]/5 text-[#476E66] ring-1 ring-[#476E66]'
+                          : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 hover:bg-neutral-50'
                           }`}
                       >
                         <Icon className={`w-4 h-4 ${isActive ? 'text-[#476E66]' : 'text-neutral-400'}`} />
@@ -1446,6 +1732,7 @@ export function CommunicationsPanel({ isOpen, onClose, initialTab }: Communicati
           </div>
         </div>
       )}
+
     </>
   );
 }

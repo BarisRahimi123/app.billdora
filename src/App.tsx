@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { SubscriptionProvider } from './contexts/SubscriptionContext';
 import { ToastProvider } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -172,6 +172,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function FinancialRoute({ children }: { children: React.ReactNode }) {
+  const { canViewFinancials, loading: permLoading } = usePermissions();
+
+  if (permLoading) return <PageLoader />;
+  if (!canViewFinancials) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 // Component to handle root route based on domain
 function RootRoute() {
   const { user, loading } = useAuth();
@@ -211,18 +219,18 @@ function AppRoutes() {
 
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
-            <Route path="/sales" element={<ErrorBoundary><SalesPage /></ErrorBoundary>} />
+            <Route path="/sales" element={<FinancialRoute><ErrorBoundary><SalesPage /></ErrorBoundary></FinancialRoute>} />
             <Route path="/quotes/:quoteId/document" element={<ErrorBoundary><QuoteDocumentPage /></ErrorBoundary>} />
             <Route path="/projects" element={<ErrorBoundary><ProjectsPage /></ErrorBoundary>} />
             <Route path="/projects/:projectId" element={<ErrorBoundary><ProjectsPage /></ErrorBoundary>} />
             <Route path="/time-expense" element={<ErrorBoundary><TimeExpensePage /></ErrorBoundary>} />
-            <Route path="/invoicing" element={<ErrorBoundary><InvoicingPage /></ErrorBoundary>} />
-            <Route path="/resourcing" element={<ErrorBoundary><ResourcingPage /></ErrorBoundary>} />
-            <Route path="/reports" element={<ErrorBoundary><ReportsPage /></ErrorBoundary>} />
-            <Route path="/financials" element={<ErrorBoundary><FinancialsPage /></ErrorBoundary>} />
-            <Route path="/company-expenses" element={<Navigate to="/financials?tab=operating" replace />} />
-            <Route path="/bank-statements" element={<Navigate to="/financials" replace />} />
-            <Route path="/receipts" element={<ErrorBoundary><ReceiptsPage /></ErrorBoundary>} />
+            <Route path="/invoicing" element={<FinancialRoute><ErrorBoundary><InvoicingPage /></ErrorBoundary></FinancialRoute>} />
+            <Route path="/resourcing" element={<FinancialRoute><ErrorBoundary><ResourcingPage /></ErrorBoundary></FinancialRoute>} />
+            <Route path="/reports" element={<FinancialRoute><ErrorBoundary><ReportsPage /></ErrorBoundary></FinancialRoute>} />
+            <Route path="/financials" element={<FinancialRoute><ErrorBoundary><FinancialsPage /></ErrorBoundary></FinancialRoute>} />
+            <Route path="/company-expenses" element={<FinancialRoute><Navigate to="/financials?tab=operating" replace /></FinancialRoute>} />
+            <Route path="/bank-statements" element={<FinancialRoute><Navigate to="/financials" replace /></FinancialRoute>} />
+            <Route path="/receipts" element={<FinancialRoute><ErrorBoundary><ReceiptsPage /></ErrorBoundary></FinancialRoute>} />
             <Route path="/notifications" element={<ErrorBoundary><NotificationsPage /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
           </Route>

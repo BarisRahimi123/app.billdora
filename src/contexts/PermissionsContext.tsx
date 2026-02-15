@@ -19,6 +19,7 @@ export type Permissions = {
   settings: ModulePermission;
   approvals: { view: boolean; approve: boolean };
   canViewFinancials: boolean;
+  canViewAllProjects: boolean;
 };
 
 const defaultPermissions: Permissions = {
@@ -31,6 +32,7 @@ const defaultPermissions: Permissions = {
   settings: { view: false, create: false, edit: false, delete: false },
   approvals: { view: false, approve: false },
   canViewFinancials: false,
+  canViewAllProjects: false,
 };
 
 // Admin gets all permissions
@@ -44,6 +46,7 @@ const adminPermissions: Permissions = {
   settings: { view: true, create: true, edit: true, delete: true },
   approvals: { view: true, approve: true },
   canViewFinancials: true,
+  canViewAllProjects: true,
 };
 
 interface PermissionsContextType {
@@ -51,6 +54,7 @@ interface PermissionsContextType {
   loading: boolean;
   isAdmin: boolean;
   canViewFinancials: boolean;
+  canViewAllProjects: boolean;
   canApprove: boolean;
   canView: (module: keyof Permissions) => boolean;
   canCreate: (module: keyof Permissions) => boolean;
@@ -83,12 +87,27 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Resolve role_id: use profile's role_id, or fetch fresh from DB if cached profile is stale
+      let roleId = profile.role_id;
+      if (!roleId) {
+        // Cached profile may be stale and missing role_id -- fetch directly from DB
+        const { data: freshProfile } = await supabase
+          .from('profiles')
+          .select('role_id')
+          .eq('id', profile.id)
+          .single();
+        if (freshProfile?.role_id) {
+          roleId = freshProfile.role_id;
+          console.log('[Permissions] Fetched fresh role_id from DB:', roleId, 'for', profile.email);
+        }
+      }
+
       // Get user's role from roles table
-      if (profile.role_id) {
+      if (roleId) {
         const { data: roleData, error } = await supabase
           .from('roles')
           .select('*')
-          .eq('id', profile.role_id)
+          .eq('id', roleId)
           .single();
 
         if (!error && roleData) {
@@ -98,6 +117,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return;
         }
+        console.warn('[Permissions] Failed to load role:', error?.message, 'roleId:', roleId);
       }
 
       // Fallback: check if user is only user in company (make them admin)
@@ -114,7 +134,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         setIsAdmin(false);
       }
     } catch (error) {
-      console.error('Failed to load permissions:', error);
+      console.error('[Permissions] Failed to load permissions:', error);
       setPermissions(defaultPermissions);
     }
     setLoading(false);
@@ -129,6 +149,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const canEdit = (module: keyof Permissions) => isAdmin || (permissions[module] as ModulePermission)?.edit === true;
   const canDelete = (module: keyof Permissions) => isAdmin || (permissions[module] as ModulePermission)?.delete === true;
   const canViewFinancialsValue = isAdmin || permissions.canViewFinancials === true;
+  const canViewAllProjectsValue = isAdmin || permissions.canViewAllProjects === true;
   const canApproveValue = isAdmin || permissions.approvals?.approve === true;
 
   return (
@@ -137,6 +158,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       loading,
       isAdmin,
       canViewFinancials: canViewFinancialsValue,
+      canViewAllProjects: canViewAllProjectsValue,
       canApprove: canApproveValue,
       canView,
       canCreate,

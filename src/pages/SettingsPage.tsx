@@ -66,7 +66,7 @@ export default function SettingsPage() {
       label: 'Account',
       tabs: [
         { id: 'profile', label: 'My Profile', icon: User, adminOnly: false },
-        { id: 'subscription', label: 'Subscription', icon: CreditCard, adminOnly: false },
+        { id: 'subscription', label: 'Subscription', icon: CreditCard, adminOnly: true },
         { id: 'security', label: 'Security', icon: Shield, adminOnly: false },
         { id: 'notifications', label: 'Notifications', icon: Bell, adminOnly: false },
       ]
@@ -116,6 +116,13 @@ export default function SettingsPage() {
   // Find which group the active tab belongs to
   const activeGroup = filteredGroups.find(g => g.tabs.some(t => t.id === activeTab));
   const activeTabData = tabs.find(t => t.id === activeTab);
+
+  // If the active tab is not in the visible tabs (e.g. staff navigating to ?tab=subscription), fall back to 'profile'
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.some(t => t.id === activeTab)) {
+      setActiveTab(tabs[0]?.id || 'profile');
+    }
+  }, [activeTab, tabs.length]);
 
   useEffect(() => {
     let mounted = true;
@@ -1194,9 +1201,13 @@ function UserManagementTab({ companyId, currentUserId }: { companyId: string; cu
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 py-3 hidden sm:table-cell">
-                    <span className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest ${getRoleColor(getRoleName(user.role_id))}`}>
+                    <button
+                      onClick={() => { setEditingUser(user); setShowEditUserModal(true); }}
+                      className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest cursor-pointer hover:opacity-80 transition-opacity ${getRoleColor(getRoleName(user.role_id))}`}
+                      title="Click to change role"
+                    >
                       {getRoleName(user.role_id)}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-3 sm:px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-widest ${user.is_active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
@@ -6529,6 +6540,7 @@ function NotificationsTab() {
 // IMPORT/EXPORT TAB
 // ============================================
 function ImportExportTab({ companyId, showToast }: { companyId: string; showToast: (msg: string, type: 'success' | 'error') => void }) {
+  const { profile } = useAuth();
   const [importingProjects, setImportingProjects] = useState(false);
   const [importingClients, setImportingClients] = useState(false);
   const [importingTasks, setImportingTasks] = useState(false);
@@ -6724,6 +6736,13 @@ function ImportExportTab({ companyId, showToast }: { companyId: string; showToas
           });
 
           newProjects.push({ id: newProject.id, name: newProject.name });
+
+          // Auto-add creator as team member
+          if (profile?.id && newProject?.id) {
+            try {
+              await api.addProjectTeamMember(newProject.id, profile.id, companyId, 'Creator', false);
+            } catch (_) { /* non-critical */ }
+          }
 
           successCount++;
         } catch (err: any) {

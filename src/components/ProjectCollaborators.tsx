@@ -29,13 +29,15 @@ interface ProjectCollaboratorsProps {
   projectName: string;
   companyId: string;
   clients?: Client[];
+  hideContactDetails?: boolean;
 }
 
 export function ProjectCollaborators({
   projectId,
   projectName,
   companyId,
-  clients = []
+  clients = [],
+  hideContactDetails = false,
 }: ProjectCollaboratorsProps) {
   const { user, profile } = useAuth();
   const [collaborators, setCollaborators] = useState<ProjectCollaborator[]>([]);
@@ -328,7 +330,7 @@ export function ProjectCollaborators({
                         {getRoleBadge(collab.role)}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400">
-                        {showEmailSeparately && (
+                        {showEmailSeparately && !hideContactDetails && (
                           <>
                             <span>{collab.invited_email}</span>
                             <span>·</span>
@@ -408,7 +410,7 @@ export function ProjectCollaborators({
                   </div>
 
                   {/* Expanded Detail Panel */}
-                  {isExpanded && (
+                  {isExpanded && !hideContactDetails && (
                     <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-4">
                       {/* Timeline row */}
                       <div className="flex items-center gap-4 text-[11px] text-neutral-500 mb-4">

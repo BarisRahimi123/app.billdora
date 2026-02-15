@@ -154,11 +154,16 @@ Deno.serve(async (req) => {
 </body>
 </html>`;
 
-    // Filter valid CC recipients (exclude primary recipient)
+    // Filter valid CC recipients (exclude primary recipient and invalid emails)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const validCc = (ccRecipients && Array.isArray(ccRecipients))
       ? ccRecipients
-          .filter((r: { email: string; name?: string }) => r.email && r.email.toLowerCase() !== clientEmail.toLowerCase())
-          .map((r: { email: string; name?: string }) => ({ email: r.email, name: r.name || r.email }))
+          .filter((r: { email: string; name?: string }) =>
+            r.email &&
+            emailRegex.test(r.email) &&
+            r.email.toLowerCase() !== clientEmail.toLowerCase()
+          )
+          .map((r: { email: string; name?: string }) => ({ email: r.email.trim().toLowerCase(), name: r.name || r.email }))
       : [];
 
     console.log('[send-invoice] To:', clientEmail, '| CC count:', validCc.length, '| CC:', JSON.stringify(validCc));

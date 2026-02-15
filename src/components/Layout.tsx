@@ -6,6 +6,7 @@ import UpgradeModal from './UpgradeModal';
 import OnboardingModal from './OnboardingModal';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { api, Project, Client, Invoice, Task, notificationsApi, Notification as AppNotification } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { DEFAULT_HOURLY_RATE, MIN_TIMER_SAVE_SECONDS, NOTIFICATIONS_LIMIT, SEARCH_RESULTS_PER_TYPE, SEARCH_DEBOUNCE_MS } from '../lib/constants';
 import { useDebounce } from '../hooks/useDebounce';
 import {
@@ -17,6 +18,7 @@ import { AiChatSidebar } from '../ai/components/AiChatSidebar';
 import { CommunicationsPanel } from './CommunicationsPanel';
 import { ReminderPopup } from './ReminderPopup';
 import type { AppReminder } from '../lib/api';
+import { cleanMentionMarkup } from '../lib/mentions';
 
 const mainNavItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -43,7 +45,7 @@ interface SearchResult {
 
 export default function Layout() {
   const { profile, signOut } = useAuth();
-  const { canViewFinancials, isAdmin, canView } = usePermissions();
+  const { canViewFinancials, canViewAllProjects, isAdmin, canView } = usePermissions();
   const { upgradeModalState, hideUpgradeModal } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
@@ -100,6 +102,36 @@ export default function Layout() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  // Notification types that require financial/sales access
+  const FINANCIAL_NOTIFICATION_TYPES = [
+    'proposal_viewed', 'proposal_signed',
+    'invoice_overdue', 'invoice_viewed', 'invoice_paid',
+    'collaboration_invited', 'collaboration_response_submitted', 'collaborators_ready',
+    'new_client_added',
+  ];
+
+  // Filter notifications for restricted users (Staff/Viewer)
+  const visibleNotifications = useMemo(() => {
+    if (canViewAllProjects && canViewFinancials) return notifications;
+    return notifications.filter(n => {
+      // Hide financial/sales notifications from non-financial users
+      if (!canViewFinancials && FINANCIAL_NOTIFICATION_TYPES.includes(n.type)) return false;
+      return true;
+    });
+  }, [notifications, canViewFinancials, canViewAllProjects]);
+
+  // Compute filtered unread count based on visible notifications
+  const filteredUnreadCount = useMemo(() =>
+    visibleNotifications.filter(n => !n.is_read).length,
+    [visibleNotifications]
+  );
+
+  // Unread mention count for the communication icon badge
+  const unreadMentionCount = useMemo(() =>
+    visibleNotifications.filter(n => n.type === 'mention' && !n.is_read).length,
+    [visibleNotifications]
+  );
+
   // Search cache - loaded once, searched locally
   const [searchCache, setSearchCache] = useState<{
     projects: Project[];
@@ -118,10 +150,55 @@ export default function Layout() {
 
   useEffect(() => {
     if (profile?.company_id) {
-      api.getProjects(profile.company_id).then(setProjects).catch(console.error);
+      // Load projects — for staff, only load assigned projects
+      (async () => {
+        try {
+          const allProjs = await api.getProjects(profile.company_id!);
+          if (!canViewAllProjects && profile?.id) {
+            const [staffProjects, assignedTasks] = await Promise.all([
+              api.getStaffProjects(profile.id).catch(() => []),
+              supabase
+                .from('tasks')
+                .select('project_id')
+                .eq('assigned_to', profile.id)
+                .then(({ data }) => data || [])
+                .catch(() => []),
+            ]);
+            const assignedIds = new Set([
+              ...(staffProjects || []).map((sp: any) => sp.project_id),
+              ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+            ]);
+            setProjects(allProjs.filter(p => assignedIds.has(p.id)));
+          } else {
+            setProjects(allProjs);
+          }
+        } catch (err) {
+          console.error('Failed to load projects for timer:', err);
+        }
+      })();
       loadNotifications();
     }
-  }, [profile?.company_id]);
+  }, [profile?.company_id, canViewAllProjects, profile?.id]);
+
+  // Real-time: update bell icon instantly when a new notification arrives
+  useEffect(() => {
+    if (!profile?.company_id || !profile?.id) return;
+    const channel = supabase
+      .channel(`notifications-${profile.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const notif = payload.new as Record<string, unknown>;
+          // Only reload if this notification is for the current user or company-wide
+          if (notif.user_id === profile.id || !notif.user_id) {
+            loadNotifications();
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.company_id, profile?.id]);
 
   async function loadNotifications() {
     if (!profile?.company_id) return;
@@ -245,10 +322,25 @@ export default function Layout() {
       if (!searchOpen || searchCache || !profile?.company_id) return;
 
       try {
-        const [projectsData, clientsData, invoicesData] = await Promise.all([
-          api.getProjects(profile.company_id),
-          api.getClients(profile.company_id),
-          api.getInvoices(profile.company_id),
+        // Gate search data on permissions to prevent data leaks
+        let projectsData;
+        if (canViewAllProjects) {
+          projectsData = await api.getProjects(profile.company_id);
+        } else {
+          const [allProjects, staffProjects, assignedTasks] = await Promise.all([
+            api.getProjects(profile.company_id),
+            api.getStaffProjects(profile.id).catch(() => []),
+            supabase.from('tasks').select('project_id').eq('assigned_to', profile.id).then(({ data }) => data || []).catch(() => []),
+          ]);
+          const assignedIds = new Set([
+            ...(staffProjects || []).map((sp: any) => sp.project_id),
+            ...(assignedTasks || []).map((t: any) => t.project_id).filter(Boolean),
+          ]);
+          projectsData = allProjects.filter(p => assignedIds.has(p.id));
+        }
+        const [clientsData, invoicesData] = await Promise.all([
+          canViewFinancials ? api.getClients(profile.company_id) : Promise.resolve([]),
+          canViewFinancials ? api.getInvoices(profile.company_id) : Promise.resolve([]),
         ]);
         setSearchCache({ projects: projectsData, clients: clientsData, invoices: invoicesData });
       } catch (error) {
@@ -257,7 +349,7 @@ export default function Layout() {
     };
 
     loadSearchCache();
-  }, [searchOpen, profile?.company_id, searchCache]);
+  }, [searchOpen, profile?.company_id, searchCache, canViewAllProjects, canViewFinancials]);
 
   // Invalidate cache when company changes or navigating to refresh data
   useEffect(() => {
@@ -275,16 +367,18 @@ export default function Layout() {
       results.push({ id: p.id, type: 'project', title: p.name, subtitle: p.client?.name, path: `/projects/${p.id}` });
     });
 
-    searchCache.clients.filter(c => c.name.toLowerCase().includes(query) || c.display_name?.toLowerCase().includes(query)).slice(0, SEARCH_RESULTS_PER_TYPE).forEach(c => {
-      results.push({ id: c.id, type: 'client', title: c.name, subtitle: c.email, path: '/sales' });
-    });
+    if (canViewFinancials) {
+      searchCache.clients.filter(c => c.name.toLowerCase().includes(query) || c.display_name?.toLowerCase().includes(query)).slice(0, SEARCH_RESULTS_PER_TYPE).forEach(c => {
+        results.push({ id: c.id, type: 'client', title: c.name, subtitle: c.email, path: '/sales' });
+      });
 
-    searchCache.invoices.filter(i => i.invoice_number?.toLowerCase().includes(query) || i.client?.name?.toLowerCase().includes(query)).slice(0, SEARCH_RESULTS_PER_TYPE).forEach(i => {
-      results.push({ id: i.id, type: 'invoice', title: i.invoice_number || 'Invoice', subtitle: i.client?.name, path: '/invoicing' });
-    });
+      searchCache.invoices.filter(i => i.invoice_number?.toLowerCase().includes(query) || i.client?.name?.toLowerCase().includes(query)).slice(0, SEARCH_RESULTS_PER_TYPE).forEach(i => {
+        results.push({ id: i.id, type: 'invoice', title: i.invoice_number || 'Invoice', subtitle: i.client?.name, path: '/invoicing' });
+      });
+    }
 
     return results;
-  }, [debouncedSearchQuery, searchCache]);
+  }, [debouncedSearchQuery, searchCache, canViewFinancials]);
 
   const formatTimer = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -590,6 +684,11 @@ export default function Layout() {
                 title="Communications"
               >
                 <MessageSquare className="w-5 h-5 text-neutral-600" />
+                {unreadMentionCount > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-[#476E66] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {unreadMentionCount > 9 ? '9+' : unreadMentionCount}
+                  </span>
+                )}
               </button>
 
               {/* Notifications */}
@@ -599,9 +698,9 @@ export default function Layout() {
                   className="relative p-1.5 hover:bg-neutral-100 rounded-lg transition-colors"
                 >
                   <Bell className="w-5 h-5 text-neutral-600" />
-                  {unreadCount > 0 && (
+                  {filteredUnreadCount > 0 && (
                     <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                      {filteredUnreadCount > 9 ? '9+' : filteredUnreadCount}
                     </span>
                   )}
                 </button>
@@ -610,7 +709,7 @@ export default function Layout() {
                   <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl z-50 overflow-hidden" style={{ boxShadow: 'var(--shadow-dropdown)' }}>
                     <div className="p-4 border-b border-neutral-100 flex items-center justify-between">
                       <h3 className="font-semibold text-neutral-900 text-sm">Notifications</h3>
-                      {unreadCount > 0 && (
+                      {filteredUnreadCount > 0 && (
                         <button
                           onClick={handleMarkAllAsRead}
                           className="text-xs text-[#476E66] hover:underline"
@@ -620,12 +719,12 @@ export default function Layout() {
                       )}
                     </div>
                     <div className="max-h-80 overflow-y-auto">
-                      {notifications.length === 0 ? (
+                      {visibleNotifications.length === 0 ? (
                         <div className="p-6 text-center text-neutral-500 text-sm">
                           No notifications yet
                         </div>
                       ) : (
-                        notifications.map((notif) => (
+                        visibleNotifications.map((notif) => (
                           <div
                             key={notif.id}
                             onClick={() => handleNotificationClick(notif)}
@@ -635,7 +734,7 @@ export default function Layout() {
                               <div className={`w-2 h-2 rounded-full mt-2 ${!notif.is_read ? 'bg-[#476E66]' : 'bg-transparent'}`} />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-neutral-900 truncate">{notif.title}</p>
-                                <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                                <p className="text-xs text-neutral-500 mt-0.5 line-clamp-2">{notif.message ? cleanMentionMarkup(notif.message) : ''}</p>
                                 <p className="text-xs text-neutral-400 mt-1">
                                   {notif.created_at ? `${new Date(notif.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${new Date(notif.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}` : ''}
                                 </p>
@@ -834,13 +933,15 @@ export default function Layout() {
         onClose={() => setAiChatOpen(false)}
       />
 
-      {/* Global Upgrade Modal */}
-      <UpgradeModal
-        isOpen={upgradeModalState.isOpen}
-        onClose={hideUpgradeModal}
-        limitType={upgradeModalState.limitType}
-        currentCount={upgradeModalState.currentCount}
-      />
+      {/* Global Upgrade Modal — only shown to admins */}
+      {isAdmin && (
+        <UpgradeModal
+          isOpen={upgradeModalState.isOpen}
+          onClose={hideUpgradeModal}
+          limitType={upgradeModalState.limitType}
+          currentCount={upgradeModalState.currentCount}
+        />
+      )}
 
       {/* Onboarding Modal for new users */}
       <OnboardingModal
